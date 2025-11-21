@@ -1,0 +1,402 @@
+{
+  "entities": {
+    "Event": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Event",
+      "type": "object",
+      "description": "Represents an event in Côte d'Ivoire.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the event."
+        },
+        "organizerId": {
+          "type": "string",
+          "description": "Reference to the Organizer who created the event. (Relationship: Organizer 1:N Event)"
+        },
+        "categoryId": {
+          "type": "string",
+          "description": "Reference to the Category of the event. (Relationship: Category 1:N Event)"
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the event."
+        },
+        "description": {
+          "type": "string",
+          "description": "Detailed description of the event."
+        },
+        "location": {
+          "type": "string",
+          "description": "Location of the event."
+        },
+        "dateTime": {
+          "type": "string",
+          "description": "Date and time of the event.",
+          "format": "date-time"
+        },
+        "ticketPrice": {
+          "type": "number",
+          "description": "Price of a ticket for the event."
+        },
+        "availableTickets": {
+          "type": "number",
+          "description": "Number of tickets currently available."
+        },
+        "ticketTypeIds": {
+          "type": "array",
+          "description": "References to TicketTypes. (Relationship: TicketType N:N Event)",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "organizerId",
+        "categoryId",
+        "name",
+        "description",
+        "location",
+        "dateTime",
+        "ticketPrice",
+        "availableTickets"
+      ]
+    },
+    "Organizer": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Organizer",
+      "type": "object",
+      "description": "Represents an event organizer.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the organizer."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the organizer."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the organizer."
+        },
+        "contactEmail": {
+          "type": "string",
+          "description": "Contact email address of the organizer.",
+          "format": "email"
+        },
+        "contactPhone": {
+          "type": "string",
+          "description": "Contact phone number of the organizer."
+        },
+        "profilePictureUrl": {
+          "type": "string",
+          "description": "URL of the organizer's profile picture.",
+          "format": "uri"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description",
+        "contactEmail",
+        "contactPhone"
+      ]
+    },
+    "Category": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Category",
+      "type": "object",
+      "description": "Represents a category of events.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the category."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the category."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the category."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ]
+    },
+    "Ticket": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Ticket",
+      "type": "object",
+      "description": "Represents a ticket purchased for an event.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the ticket."
+        },
+        "userId": {
+          "type": "string",
+          "description": "Reference to the User who purchased the ticket. (Relationship: User 1:N Ticket)"
+        },
+        "eventId": {
+          "type": "string",
+          "description": "Reference to the Event the ticket is for. (Relationship: Event 1:N Ticket)"
+        },
+        "ticketTypeId": {
+          "type": "string",
+          "description": "Reference to the type of ticket. (Relationship: TicketType 1:N Ticket)"
+        },
+        "purchaseDate": {
+          "type": "string",
+          "description": "Date the ticket was purchased.",
+          "format": "date-time"
+        },
+        "price": {
+          "type": "number",
+          "description": "Price paid for the ticket."
+        },
+        "ticketNumber": {
+          "type": "string",
+          "description": "Unique ticket number or barcode."
+        }
+      },
+      "required": [
+        "id",
+        "userId",
+        "eventId",
+        "purchaseDate",
+        "price",
+        "ticketNumber"
+      ]
+    },
+    "User": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "User",
+      "type": "object",
+      "description": "Represents a user of the application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the user."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the user."
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address of the user.",
+          "format": "email"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "email"
+      ]
+    },
+    "TicketType": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "TicketType",
+      "type": "object",
+      "description": "Represents the type of ticket that can be used for an event.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the ticket type."
+        },
+        "name": {
+          "type": "string",
+          "description": "The name of the ticket type."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the type of ticket."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "description"
+      ]
+    },
+    "PercentageConfiguration": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PercentageConfiguration",
+      "type": "object",
+      "description": "Configuration entity for percentages.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the configuration."
+        },
+        "name": {
+          "type": "string",
+          "description": "Name of the percentage configuration (e.g., VAT, service fee)."
+        },
+        "percentage": {
+          "type": "number",
+          "description": "The percentage value (e.g., 0.1 for 10%)."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of what the percentage is applied to."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "percentage",
+        "description"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "User",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Stores user profile information. This path enforces ownership, allowing only the user to read and write their own data.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/tickets/{ticketId}",
+        "definition": {
+          "entityName": "Ticket",
+          "schema": {
+            "$ref": "#/backend/entities/Ticket"
+          },
+          "description": "Stores tickets purchased by a user. This path enforces ownership, ensuring only the user can manage their tickets.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            },
+            {
+              "name": "ticketId",
+              "description": "The unique identifier for the ticket."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/organizers/{organizerId}",
+        "definition": {
+          "entityName": "Organizer",
+          "schema": {
+            "$ref": "#/backend/entities/Organizer"
+          },
+          "description": "Stores organizer profile information. Organizers can manage their own profile data.",
+          "params": [
+            {
+              "name": "organizerId",
+              "description": "The unique identifier for the organizer."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/events/{eventId}",
+        "definition": {
+          "entityName": "Event",
+          "schema": {
+            "$ref": "#/backend/entities/Event"
+          },
+          "description": "Stores events. Publicly readable, but only the organizer can create, update, or delete their own events.",
+          "params": [
+            {
+              "name": "eventId",
+              "description": "The unique identifier for the event."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/categories/{categoryId}",
+        "definition": {
+          "entityName": "Category",
+          "schema": {
+            "$ref": "#/backend/entities/Category"
+          },
+          "description": "Stores event categories. Accessible to all users for read operations. Write access should be restricted to admins.",
+          "params": [
+            {
+              "name": "categoryId",
+              "description": "The unique identifier for the category."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/ticketTypes/{ticketTypeId}",
+        "definition": {
+          "entityName": "TicketType",
+          "schema": {
+            "$ref": "#/backend/entities/TicketType"
+          },
+          "description": "Stores ticket types.  Accessible to all users for read operations. Write access should be restricted to admins.",
+          "params": [
+            {
+              "name": "ticketTypeId",
+              "description": "The unique identifier for the ticket type."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/percentageConfigurations/{configId}",
+        "definition": {
+          "entityName": "PercentageConfiguration",
+          "schema": {
+            "$ref": "#/backend/entities/PercentageConfiguration"
+          },
+          "description": "Stores percentage configurations (e.g., VAT, service fee). Read/write access restricted to admins.",
+          "params": [
+            {
+              "name": "configId",
+              "description": "The unique identifier for the percentage configuration."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/roles_admin/{userId}",
+        "definition": {
+          "entityName": "RoleAdmin",
+          "schema": {
+            "$ref": "#/backend/entities/User"
+          },
+          "description": "Collection used for storing admin user IDs. Existence of a document indicates admin role.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore data structure is designed to support the \"Ivoire Events\" application, focusing on event listing, ticket purchasing, event creation, and recommendations. The design emphasizes authorization independence, clarity, and scalability. User-owned data is stored under the `/users/{userId}` path, collaborative data utilizes membership maps, and global roles are managed via dedicated collections. Authorization independence is achieved through denormalization of authorization-relevant data, particularly within subcollections of user-owned documents. This eliminates the need for `get()` calls in security rules, ensuring atomic operations. QAPs are supported via structural segregation (e.g. storing event drafts and published events in different collections with unique security requirements) and the consistent application of ownership and membership models."
+  }
+}

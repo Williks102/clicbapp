@@ -1,0 +1,50 @@
+[
+  {
+    "id": "hero-1",
+    "description": "A vibrant concert in Abidjan at night with a large crowd and colorful stage lights.",
+    "imageUrl": "https://images.unsplash.com/photo-1603910234616-3b5f4a6be2b4?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxjb25jZXJ0JTIwY3Jvd2R8ZW58MHx8fHwxNzYzNTg3MTEyfDA&ixlib=rb-4.1.0&q=80&w=1080",
+    "imageHint": "concert crowd"
+  },
+  {
+    "id": "event-1",
+    "description": "Asa performing on stage at a music festival.",
+    "imageUrl": "https://images.unsplash.com/photo-1520095972714-909e91b038e5?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw4fHxtdXNpYyUyMGZlc3RpdmFsfGVufDB8fHx8MTc2MzQ2MTMxM3ww&ixlib=rb-4.1.0&q=80&w=1080",
+    "imageHint": "music festival"
+  },
+  {
+    "id": "event-2",
+    "description": "A modern art exhibition with people admiring paintings.",
+    "imageUrl": "https://images.unsplash.com/photo-1656129974517-7da8bb940a1d?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxhcnQlMjBleGhpYml0aW9ufGVufDB8fHx8MTc2MzU3MzA5MHww&ixlib=rb-4.1.0&q=80&w=1080",
+    "imageHint": "art exhibition"
+  },
+  {
+    "id": "event-3",
+    "description": "A plate of delicious Ivorian food at a culinary festival.",
+    "imageUrl": "https://images.unsplash.com/photo-1509315811345-672d83ef2fbc?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw2fHxmb29kJTIwZmVzdGl2YWx8ZW58MHx8fHwxNzYzNTExNzIyfDA&ixlib=rb-4.1.0&q=80&w=1080",
+    "imageHint": "food festival"
+  },
+  {
+    "id": "event-4",
+    "description": "A large conference room with attendees listening to a speaker.",
+    "imageUrl": "https://images.unsplash.com/photo-1560439514-4e9645039924?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxidXNpbmVzcyUyMGNvbmZlcmVuY2V8ZW58MHx8fHwxNzYzNTg4NjAyfDA&ixlib=rb-4.1.0&q=80&w=1080",
+    "imageHint": "business conference"
+  },
+  {
+    "id": "event-5",
+    "description": "A traditional dance performance with performers in colorful costumes.",
+    "imageUrl": "https://images.unsplash.com/photo-1623026989633-fd0f1978c48f?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8dHJhZGl0aW9uYWwlMjBkYW5jZXxlbnwwfHx8fDE3NjM1ODg2MDJ8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "imageHint": "traditional dance"
+  },
+  {
+    "id": "organizer-1",
+    "description": "A profile picture of an event organizer.",
+    "imageUrl": "https://images.unsplash.com/photo-1595211877493-41a4e5f236b3?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw5fHxwcm9mZXNzaW9uYWwlMjBoZWFkc2hvdHxlbnwwfHx8fDE3NjM1Nzg2NDJ8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "imageHint": "professional headshot"
+  },
+  {
+    "id": "organizer-2",
+    "description": "A profile picture of another event organizer.",
+    "imageUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxjb3Jwb3JhdGUlMjBwb3J0cmFpdHxlbnwwfHx8fDE3NjM1ODg2MDJ8MA&ixlib=rb-4.1.0&q=80&w=1080",
+    "imageHint": "corporate portrait"
+  }
+]

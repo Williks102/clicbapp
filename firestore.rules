@@ -1,0 +1,175 @@
+/**
+ * Core Philosophy: This ruleset implements a security model with three primary access levels:
+ * 1.  User-Owned Data: User profiles and their associated tickets are strictly private. Only the authenticated owner of the data can perform any action on it. This is enforced for all paths under `/users/{userId}`.
+ * 2.  Public-Read, Owner-Write Data: Collections like `organizers` and `events` are publicly readable by anyone, allowing users to browse event details. However, only the authenticated organizer who created the content can modify or delete it.
+ * 3.  Role-Based Access Control (RBAC): Global data like `categories`, `ticketTypes`, and `percentageConfigurations` is managed by administrators. The presence of a user's UID in the `/roles_admin` collection grants them administrative privileges for write operations on these collections.
+ *
+ * Data Structure:
+ * - /users/{userId} -> tickets/{ticketId}: Private data owned by a specific user.
+ * - /organizers/{organizerId}: Public data managed by a specific organizer (who is also a user).
+ * - /events/{eventId}: Public data, writable only by the owning organizer.
+ * - /categories, /ticketTypes: Publicly readable master data, writable only by admins.
+ * - /percentageConfigurations: Private configuration data, readable and writable only by admins.
+ * - /roles_admin: A locked-down collection that serves as the source of truth for identifying admin users.
+ *
+ * Key Security Decisions:
+ * - Admin Role Management: The `/roles_admin` collection is read-only via security rules. Admins must be added or removed manually through the Firebase Console to prevent any client-side escalation of privileges.
+ * - No User/Organizer Listing: Top-level listing of `/users` and `/organizers` collections is disabled to protect user privacy and prevent data scraping.
+ * - Default Deny: Any path not explicitly matched is denied access. Permissions that are not explicitly granted are also denied.
+ *
+ * Denormalization for Authorization:
+ * To ensure fast and secure rules, authorization data is denormalized. For example, a document in the `/users/{userId}/tickets` subcollection must contain a `userId` field that matches the `{userId}` in the path. Similarly, an `event` document contains an `organizerId`. This avoids costly and slow `get()` calls in rules, making authorization checks efficient.
+ *
+ * Structural Segregation:
+ * While not yet implemented, this ruleset is designed to easily support structural segregation. For example, if "draft" events were needed, they could be placed in a separate, private collection with stricter rules, while public events remain in `/events/{eventId}`.
+ */
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions for concise and readable rules
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isExistingOwner(resourceId) {
+        return isSignedIn() && resource != null && request.auth.uid == resource.data[resourceId];
+    }
+
+    /**
+     * Checks if the requesting user has an admin role.
+     * The role is granted if a document with the user's UID exists in the /roles_admin collection.
+     */
+    function isAdmin() {
+      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+    }
+
+    function isAdminAndExists() {
+      return isAdmin() && resource != null;
+    }
+
+    /**
+     * @description   Protects a user's private profile document.
+     * @path          /users/{userId}
+     * @allow         A user (auth.uid='user123') can (create) their own profile at `/users/user123`.
+     * @deny          Another user (auth.uid='user456') cannot (get) the profile at `/users/user123`.
+     * @principle     Restricts access to a user's own data tree.
+     */
+    match /users/{userId} {
+      allow get: if isOwner(userId);
+      allow list: if false; // Prevent listing all users
+      allow create: if isOwner(userId) && request.resource.data.id == userId;
+      allow update: if isOwner(userId) && request.resource.data.id == resource.data.id;
+      allow delete: if isOwner(userId);
+
+      /**
+       * @description   Manages tickets purchased by a specific user.
+       * @path          /users/{userId}/tickets/{ticketId}
+       * @allow         A user (auth.uid='user123') can (list) their own tickets at `/users/user123/tickets`.
+       * @deny          Another user (auth.uid='user456') cannot (create) a ticket at `/users/user123/tickets/new_ticket`.
+       * @principle     Enforces strict ownership within a user's private data subcollection.
+       */
+      match /tickets/{ticketId} {
+        allow get: if isOwner(userId);
+        allow list: if isOwner(userId);
+        allow create: if isOwner(userId) && request.resource.data.userId == userId;
+        allow update: if isOwner(userId) && request.resource.data.userId == resource.data.userId;
+        allow delete: if isOwner(userId);
+      }
+    }
+
+    /**
+     * @description   Manages organizer profiles. Profiles are public, but only the owner can manage them.
+     * @path          /organizers/{organizerId}
+     * @allow         Any user (signed in or not) can (get) an organizer's profile.
+     * @deny          A user (auth.uid='user456') cannot (update) the profile at `/organizers/organizer123`.
+     * @principle     Public read access with owner-only writes. The organizerId is assumed to be a user's UID.
+     */
+    match /organizers/{organizerId} {
+      allow get: if true;
+      allow list: if false; // Prevent scraping all organizers
+      allow create: if isOwner(organizerId) && request.resource.data.id == organizerId;
+      allow update: if isOwner(organizerId) && request.resource.data.id == resource.data.id;
+      allow delete: if isOwner(organizerId);
+    }
+    
+    /**
+     * @description   Manages events. Events are public, but only the owner can manage them.
+     * @path          /events/{eventId}
+     * @allow         Any user can read events.
+     * @deny          A non-owner cannot create, update, or delete an event.
+     * @principle     Public read access, with writes restricted to the owning organizer.
+     */
+    match /events/{eventId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isOwner(request.resource.data.organizerId);
+      allow update: if isExistingOwner('organizerId');
+      allow delete: if isExistingOwner('organizerId');
+    }
+
+    /**
+     * @description   Stores event categories. Data is public, but writable only by admins.
+     * @path          /categories/{categoryId}
+     * @allow         Any user (signed in or not) can (list) all categories.
+     * @deny          A non-admin user cannot (create) a new category.
+     * @principle     Role-Based Access Control for administrative data management.
+     */
+    match /categories/{categoryId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isAdmin();
+      allow update: if isAdminAndExists();
+      allow delete: if isAdminAndExists();
+    }
+
+    /**
+     * @description   Stores ticket types. Data is public, but writable only by admins.
+     * @path          /ticketTypes/{ticketTypeId}
+     * @allow         Any user (signed in or not) can (get) a ticket type.
+     * @deny          A non-admin user cannot (update) an existing ticket type.
+     * @principle     Role-Based Access Control for administrative data management.
+     */
+    match /ticketTypes/{ticketTypeId} {
+      allow get: if true;
+      allow list: if true;
+      allow create: if isAdmin();
+      allow update: if isAdminAndExists();
+      allow delete: if isAdminAndExists();
+    }
+
+    /**
+     * @description   Stores sensitive configurations. Access is restricted entirely to admins.
+     * @path          /percentageConfigurations/{configId}
+     * @allow         An admin user can (get) a configuration document.
+     * @deny          Any non-admin user cannot (list) or (get) any configuration.
+     * @principle     Strict Role-Based Access Control for sensitive system parameters.
+     */
+    match /percentageConfigurations/{configId} {
+      allow get: if isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdminAndExists();
+      allow delete: if isAdminAndExists();
+    }
+
+    /**
+     * @description   Source of truth for admin roles. This collection should ONLY be modified via the Firebase Console.
+     * @path          /roles_admin/{userId}
+     * @allow         An admin user can (get) their own role document to verify their status.
+     * @deny          All write operations are denied to prevent client-side privilege escalation.
+     * @principle     Secure, server-side only management of user roles.
+     */
+    match /roles_admin/{userId} {
+      allow get: if isAdmin();
+      allow list: if false; // Prevent enumeration of admins
+      allow create: if false;
+      allow update: if false;
+      allow delete: if false;
+    }
+  }
+}
