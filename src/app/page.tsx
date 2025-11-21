@@ -21,20 +21,21 @@ import Link from 'next/link';
 import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
 import { collection, query } from 'firebase/firestore';
 import type { Event } from '@/lib/types';
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 
-const categoryFilters = [
-    { name: 'Tous', icon: Tag },
-    { name: 'Concert', icon: Music },
-    { name: 'Sport', icon: Gamepad2 },
-    { name: 'Conférence', icon: Mic },
-    { name: 'Festival', icon: PartyPopper },
-    { name: 'Gastronomie', icon: Utensils },
-];
+const categoryIcons: { [key: string]: React.ElementType } = {
+    Concert: Music,
+    Sport: Gamepad2,
+    Conférence: Mic,
+    Festival: PartyPopper,
+    Gastronomie: Utensils,
+    "Art & Culture": Clapperboard,
+    Tous: Tag
+};
 
 
 export default function Home() {
@@ -47,6 +48,25 @@ export default function Home() {
     [areServicesAvailable, firestore]
   );
   const { data: events, isLoading } = useCollection<Event>(eventsQuery);
+
+  const categoryFilters = useMemo(() => {
+    if (!events) return [];
+    const categoriesWithEvents = new Set(events.map(event => event.category));
+    const filters = [{ name: 'Tous', icon: Tag }];
+    
+    // Use a predefined order or sort them alphabetically
+    const sortedCategories = Array.from(categoriesWithEvents).sort();
+
+    sortedCategories.forEach(category => {
+      filters.push({
+        name: category,
+        icon: categoryIcons[category] || Ticket
+      });
+    });
+
+    return filters;
+  }, [events]);
+
 
   const filteredEvents =
     activeFilter === 'Tous'
