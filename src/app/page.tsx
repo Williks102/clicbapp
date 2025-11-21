@@ -2,6 +2,8 @@
 'use client';
 import {
   useEffect,
+  useState,
+  useMemo
 } from 'react';
 import {
   Calendar,
@@ -22,10 +24,9 @@ import EventCard from '@/components/event-card';
 import MainNav from '@/components/main-nav';
 import Footer from '@/components/footer';
 import Link from 'next/link';
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirebase } from '@/firebase';
 import { collection, query } from 'firebase/firestore';
 import type { Event } from '@/lib/types';
-import { useState, useMemo } from 'react';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -49,7 +50,7 @@ export default function Home() {
   // 🔍 Log de débogage
   console.log('[Home Page] 🔥 areServicesAvailable:', areServicesAvailable);
 
-  const eventsQuery = useMemoFirebase(
+  const eventsQuery = useMemo(
     () => (areServicesAvailable ? query(collection(firestore, 'events')) : null),
     [areServicesAvailable, firestore]
   );

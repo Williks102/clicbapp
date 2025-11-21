@@ -28,10 +28,11 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { useCollection, useFirestore, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirestore } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Event } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useMemo } from 'react';
 
 export default function MyEventsPage() {
   // const { user, isUserLoading } = useUser(); // To be replaced by NextAuth session
@@ -39,7 +40,7 @@ export default function MyEventsPage() {
   const user = { uid: 'temp-user-id' }; // Placeholder
   const firestore = useFirestore();
 
-  const myEventsQuery = useMemoFirebase(
+  const myEventsQuery = useMemo(
     () => (firestore && user ? query(collection(firestore, 'events'), where('organizerId', '==', user.uid)) : null),
     [firestore, user]
   );

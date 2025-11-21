@@ -110,19 +110,10 @@ export const useFirebaseApp = (): FirebaseApp => {
   return firebaseApp;
 };
 
-type MemoFirebase <T> = T & {__memo?: boolean};
 
-export function useMemoFirebase<T>(factory: () => T, deps: DependencyList): T | (MemoFirebase<T>) {
+export function useMemoFirebase<T>(factory: () => T, deps: DependencyList): T {
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  const memoized = useMemo(factory, deps);
-  
-  if(typeof memoized !== 'object' || memoized === null) return memoized;
-  
-  try {
-    (memoized as MemoFirebase<T>).__memo = true;
-  } catch {}
-  
-  return memoized;
+  return useMemo(factory, deps);
 }
 
 // The useUser hook is removed as NextAuth will provide its own session management hook.

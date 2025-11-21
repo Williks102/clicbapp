@@ -2,7 +2,7 @@
 'use client';
 
 import Image from 'next/image';
-import { notFound } from 'next/navigation';
+import { notFound, useParams } from 'next/navigation';
 import { Globe, Mail } from 'lucide-react';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -10,10 +10,11 @@ import { Card } from '@/components/ui/card';
 import MainNav from '@/components/main-nav';
 import Footer from '@/components/footer';
 import EventCard from '@/components/event-card';
-import { useDoc, useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useDoc, useCollection, useFirebase } from '@/firebase';
 import { doc, collection, query, where } from 'firebase/firestore';
 import type { Organizer, Event } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useMemo } from 'react';
 
 type OrganizerPageProps = {
   params: {
@@ -21,16 +22,17 @@ type OrganizerPageProps = {
   };
 };
 
-export default function OrganizerPage({ params }: OrganizerPageProps) {
+export default function OrganizerPage() {
+  const params = useParams();
   const { areServicesAvailable, firestore } = useFirebase();
 
-  const organizerRef = useMemoFirebase(
-    () => (areServicesAvailable ? doc(firestore, 'organizers', params.id) : null),
+  const organizerRef = useMemo(
+    () => (areServicesAvailable ? doc(firestore, 'organizers', params.id as string) : null),
     [areServicesAvailable, firestore, params.id]
   );
   const { data: organizer, isLoading: isOrganizerLoading } = useDoc<Organizer>(organizerRef);
 
-  const eventsQuery = useMemoFirebase(
+  const eventsQuery = useMemo(
     () => (areServicesAvailable ? query(
       collection(firestore, 'events'),
       where('organizerId', '==', params.id)
@@ -39,7 +41,7 @@ export default function OrganizerPage({ params }: OrganizerPageProps) {
   );
   const { data: organizerEvents, isLoading: areEventsLoading } = useCollection<Event>(eventsQuery);
 
-  const isLoading = !areServicesAvailable || isOrganizerLoading;
+  const isLoading = isOrganizerLoading;
 
   if (!isLoading && !organizer) {
     notFound();

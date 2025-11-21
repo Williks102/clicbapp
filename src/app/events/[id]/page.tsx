@@ -4,7 +4,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { Calendar, MapPin, Ticket } from 'lucide-react';
 import { notFound, useRouter, useParams } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Button } from '@/components/ui/button';
@@ -24,7 +24,7 @@ import { useState } from 'react';
 import { TicketTier, Organizer, Event } from '@/lib/types';
 import CheckoutForm from '@/components/checkout-form';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useDoc, useFirebase, useMemoFirebase } from '@/firebase';
+import { useDoc, useFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -43,7 +43,7 @@ export default function EventPage() {
   console.log('[Event Page] 🔥 areServicesAvailable:', areServicesAvailable);
   console.log('[Event Page] 📋 Event ID:', id);
 
-  const eventRef = useMemoFirebase(
+  const eventRef = useMemo(
     () => (areServicesAvailable && id ? doc(firestore, `events/${id}`) : null),
     [areServicesAvailable, firestore, id]
   );
@@ -54,7 +54,7 @@ export default function EventPage() {
   console.log('[Event Page] ⏳ Event loading:', isEventLoading);
   console.log('[Event Page] ❌ Event error:', eventError);
   
-  const organizerRef = useMemoFirebase(
+  const organizerRef = useMemo(
     () => (areServicesAvailable && event ? doc(firestore, `organizers/${event.organizerId}`) : null),
     [areServicesAvailable, firestore, event]
   );
@@ -66,7 +66,7 @@ export default function EventPage() {
   
   // ✅ CORRECTION: Ne considérer isLoading que pour l'événement principal
   // L'organisateur peut charger après sans bloquer l'affichage
-  const isLoading = !areServicesAvailable || isEventLoading;
+  const isLoading = isEventLoading;
 
   // ✅ CORRECTION: Vérifier explicitement si le document n'existe pas
   useEffect(() => {

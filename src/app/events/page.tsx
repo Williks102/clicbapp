@@ -18,7 +18,7 @@ import Footer from '@/components/footer';
 import EventCard from '@/components/event-card';
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
-import { useCollection, useFirebase, useMemoFirebase } from '@/firebase';
+import { useCollection, useFirebase } from '@/firebase';
 import { collection, query } from 'firebase/firestore';
 import type { Event } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -42,7 +42,7 @@ export default function EventsPage() {
   // 🔍 Log de débogage
   console.log('[Events Page] 🔥 areServicesAvailable:', areServicesAvailable);
 
-  const eventsQuery = useMemoFirebase(
+  const eventsQuery = useMemo(
     () => (areServicesAvailable ? query(collection(firestore, 'events')) : null),
     [areServicesAvailable, firestore]
   );
