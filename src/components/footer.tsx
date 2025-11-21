@@ -3,7 +3,7 @@ import Link from 'next/link';
 const Footer = () => {
   const currentYear = new Date().getFullYear();
   return (
-    <footer className="border-t bg-card">
+    <footer className="border-t bg-gray-100">
       <div className="container mx-auto px-4 py-8">
         <div className="grid grid-cols-1 gap-8 md:grid-cols-4">
           <div className="space-y-4">
@@ -12,7 +12,7 @@ const Footer = () => {
                 xmlns="http://www.w3.org/2000/svg"
                 width="24"
                 height="24"
-                viewBox="0 0 24 24"
+                viewBox="0 0 24"
                 fill="none"
                 stroke="currentColor"
                 strokeWidth="2"
