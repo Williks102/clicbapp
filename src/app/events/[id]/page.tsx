@@ -1,10 +1,10 @@
-
 'use client';
 
 import Image from 'next/image';
 import Link from 'next/link';
 import { Calendar, MapPin, Ticket } from 'lucide-react';
 import { notFound, useRouter, useParams } from 'next/navigation';
+import { useEffect } from 'react';
 
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Button } from '@/components/ui/button';
@@ -20,7 +20,7 @@ import Footer from '@/components/footer';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { TicketTier, Organizer, Event } from '@/lib/types';
 import CheckoutForm from '@/components/checkout-form';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -39,11 +39,20 @@ export default function EventPage() {
 
   const { areServicesAvailable, firestore } = useFirebase();
 
+  // 🔍 Log de débogage
+  console.log('[Event Page] 🔥 areServicesAvailable:', areServicesAvailable);
+  console.log('[Event Page] 📋 Event ID:', id);
+
   const eventRef = useMemoFirebase(
     () => (areServicesAvailable && id ? doc(firestore, `events/${id}`) : null),
     [areServicesAvailable, firestore, id]
   );
-  const { data: event, isLoading: isEventLoading } = useDoc<Event>(eventRef);
+  const { data: event, isLoading: isEventLoading, error: eventError } = useDoc<Event>(eventRef);
+  
+  // 🔍 Log de débogage pour l'événement
+  console.log('[Event Page] 📊 Event data:', event);
+  console.log('[Event Page] ⏳ Event loading:', isEventLoading);
+  console.log('[Event Page] ❌ Event error:', eventError);
   
   const organizerRef = useMemoFirebase(
     () => (areServicesAvailable && event ? doc(firestore, `organizers/${event.organizerId}`) : null),
@@ -51,17 +60,21 @@ export default function EventPage() {
   );
   const { data: organizer, isLoading: isOrganizerLoading } = useDoc<Organizer>(organizerRef);
   
-  // Corrected loading logic: Only block for the main event data.
+  // 🔍 Log de débogage pour l'organisateur
+  console.log('[Event Page] 👤 Organizer data:', organizer);
+  console.log('[Event Page] ⏳ Organizer loading:', isOrganizerLoading);
+  
+  // ✅ CORRECTION: Ne considérer isLoading que pour l'événement principal
+  // L'organisateur peut charger après sans bloquer l'affichage
   const isLoading = !areServicesAvailable || isEventLoading;
 
-  // Effect to handle not found case after loading is complete
+  // ✅ CORRECTION: Vérifier explicitement si le document n'existe pas
   useEffect(() => {
-    if (!isLoading && !event && areServicesAvailable) {
-      console.log(`Event with id '${id}' not found after loading. Triggering 404.`);
+    if (!isEventLoading && !event && areServicesAvailable) {
+      console.log('[Event Page] ⚠️ Event not found, calling notFound()');
       notFound();
     }
-  }, [isLoading, event, areServicesAvailable, id]);
-
+  }, [isEventLoading, event, areServicesAvailable]);
 
   const image = event ? PlaceHolderImages.find((img) => img.id === event.image) : null;
   const organizerAvatar = organizer ? PlaceHolderImages.find(
@@ -137,20 +150,7 @@ export default function EventPage() {
                   </CardContent>
                 </Card>
 
-                {isOrganizerLoading ? (
-                  <Card className="mt-8">
-                    <CardHeader>
-                      <Skeleton className="h-8 w-1/4" />
-                    </CardHeader>
-                    <CardContent className="flex items-center gap-4">
-                      <Skeleton className="h-16 w-16 rounded-full" />
-                      <div className="space-y-2 flex-1">
-                        <Skeleton className="h-6 w-1/3" />
-                        <Skeleton className="h-4 w-full" />
-                      </div>
-                    </CardContent>
-                  </Card>
-                ) : organizer && (
+                {organizer && (
                   <Card className="mt-8">
                     <CardHeader>
                       <CardTitle className="font-headline">
@@ -199,23 +199,26 @@ export default function EventPage() {
                     {event.tickets.map((ticket) => (
                       <div
                         key={ticket.id}
-                        className="rounded-lg border p-4 transition-shadow hover:shadow-md"
+                        className="flex items-center justify-between rounded-lg border p-4"
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <p className="font-semibold">{ticket.name}</p>
-                            <p className="text-sm text-muted-foreground">
-                              {ticket.quantity} restants
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="font-bold text-primary">
-                              {ticket.price.toLocaleString('fr-FR')} FCFA
-                            </p>
-                            <Button size="sm" className="mt-1" onClick={() => handleBuyClick(ticket)}>
-                              Acheter
-                            </Button>
-                          </div>
+                        <div>
+                          <p className="font-semibold">{ticket.name}</p>
+                          <p className="text-sm text-muted-foreground">
+                            {ticket.quantity > 0
+                              ? `${ticket.quantity} disponibles`
+                              : 'Épuisé'}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <p className="font-bold">
+                            {ticket.price.toLocaleString('fr-FR')} FCFA
+                          </p>
+                          <Button
+                            onClick={() => handleBuyClick(ticket)}
+                            disabled={ticket.quantity === 0}
+                          >
+                            Acheter
+                          </Button>
                         </div>
                       </div>
                     ))}
@@ -225,40 +228,44 @@ export default function EventPage() {
             </div>
           </div>
         </div>
-      </main>
-      )}
-      <Footer />
-       {isMobile && event && selectedTicket && (
+        
+        {/* Mobile Checkout Sheet */}
         <Sheet open={isSheetOpen} onOpenChange={setIsSheetOpen}>
-          <SheetContent side="bottom" className="h-[90vh] p-0">
-            <ScrollArea className="h-full">
-              <SheetHeader className="p-4 text-left">
-                <SheetTitle className="font-headline">Finaliser votre commande</SheetTitle>
-              </SheetHeader>
-              <div className="p-4 pt-0">
-                 <CheckoutForm event={event} ticket={selectedTicket} />
-              </div>
+          <SheetContent side="bottom" className="h-[90vh]">
+            <SheetHeader>
+              <SheetTitle>Finaliser l'achat</SheetTitle>
+            </SheetHeader>
+            <ScrollArea className="h-[calc(90vh-80px)] pr-4">
+              {selectedTicket && event && (
+                <CheckoutForm 
+                  event={event} 
+                  ticket={selectedTicket}
+                />
+              )}
             </ScrollArea>
           </SheetContent>
         </Sheet>
+      </main>
       )}
+      <Footer />
     </div>
   );
 }
 
-
 function EventPageSkeleton() {
   return (
-     <main className="flex-1">
-      <Skeleton className="h-[40vh] w-full" />
+    <main className="flex-1">
+      <section className="relative h-[40vh] w-full bg-secondary">
+        <Skeleton className="h-full w-full" />
+      </section>
       <div className="container mx-auto -mt-24 px-4 pb-16">
         <div className="relative z-10">
-          <div className="mb-8">
-            <Skeleton className="mb-2 h-6 w-24" />
+          <div className="mb-8 space-y-2">
+            <Skeleton className="h-6 w-24" />
             <Skeleton className="h-12 w-3/4" />
           </div>
           <div className="grid grid-cols-1 gap-8 lg:grid-cols-3 lg:gap-12">
-            <div className="lg:col-span-2 space-y-8">
+            <div className="lg:col-span-2">
               <Card>
                 <CardHeader>
                   <Skeleton className="h-8 w-1/3" />
@@ -266,30 +273,18 @@ function EventPageSkeleton() {
                 <CardContent className="space-y-4">
                   <Skeleton className="h-4 w-full" />
                   <Skeleton className="h-4 w-full" />
-                  <Skeleton className="h-4 w-2/3" />
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4">
+                  <Skeleton className="h-4 w-3/4" />
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <Skeleton className="h-6 w-full" />
                     <Skeleton className="h-6 w-full" />
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardHeader>
-                  <Skeleton className="h-8 w-1/4" />
-                </CardHeader>
-                <CardContent className="flex items-center gap-4">
-                  <Skeleton className="h-16 w-16 rounded-full" />
-                  <div className="space-y-2 flex-1">
-                    <Skeleton className="h-6 w-1/3" />
-                    <Skeleton className="h-4 w-full" />
                   </div>
                 </CardContent>
               </Card>
             </div>
             <div className="lg:col-span-1">
-              <Card className="sticky top-24">
+              <Card>
                 <CardHeader>
-                  <Skeleton className="h-8 w-1/2" />
+                  <Skeleton className="h-8 w-2/3" />
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <Skeleton className="h-20 w-full" />
@@ -303,5 +298,3 @@ function EventPageSkeleton() {
     </main>
   );
 }
-
-    
