@@ -1,12 +1,10 @@
 import Image from 'next/image';
 import Link from 'next/link';
-import { Calendar, MapPin, ArrowRight } from 'lucide-react';
+import { Calendar, MapPin, Ticket } from 'lucide-react';
 import type { Event } from '@/lib/types';
 import {
   Card,
   CardContent,
-  CardFooter,
-  CardHeader,
 } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -19,54 +17,64 @@ type EventCardProps = {
 
 export default function EventCard({ event }: EventCardProps) {
   const image = PlaceHolderImages.find((img) => img.id === event.image);
+  const minPrice = event.tickets.length > 0 ? Math.min(...event.tickets.map(t => t.price)) : 0;
 
   return (
-    <Card className="flex h-full transform flex-col overflow-hidden shadow-md transition-transform duration-300 hover:-translate-y-2 hover:shadow-xl">
-      <CardHeader className="relative h-48 w-full p-0">
-        {image ? (
-          <Image
-            src={image.imageUrl}
-            alt={event.name}
-            fill
-            className="object-cover"
-            data-ai-hint={image.imageHint}
-          />
-        ) : (
-          <div className="h-full w-full bg-secondary" />
-        )}
-        <div className="absolute right-2 top-2">
-          <Badge variant="secondary">{event.category}</Badge>
+    <Card className="flex h-full transform flex-col overflow-hidden shadow-md transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
+      <Link href={`/events/${event.id}`} className="block">
+        <div className="relative h-56 w-full">
+          {image ? (
+            <Image
+              src={image.imageUrl}
+              alt={event.name}
+              fill
+              className="object-cover"
+              data-ai-hint={image.imageHint}
+            />
+          ) : (
+            <div className="h-full w-full bg-secondary" />
+          )}
+           <div className="absolute inset-0 bg-gradient-to-t from-black/70 to-transparent" />
+           <Badge variant="secondary" className="absolute left-2 top-2">{event.category}</Badge>
         </div>
-      </CardHeader>
+      </Link>
       <CardContent className="flex flex-1 flex-col p-4">
         <h3 className="mb-2 font-headline text-lg font-semibold leading-tight">
           <Link href={`/events/${event.id}`} className="hover:text-primary">
             {event.name}
           </Link>
         </h3>
-        <div className="mb-4 flex items-center text-sm text-muted-foreground">
-          <Calendar className="mr-2 h-4 w-4" />
-          <span>
-            {new Date(event.date).toLocaleDateString('fr-FR', {
-              weekday: 'long',
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-            })}
-          </span>
-        </div>
-        <div className="flex items-center text-sm text-muted-foreground">
-          <MapPin className="mr-2 h-4 w-4" />
-          <span>{event.location}</span>
+        <div className="mt-auto space-y-3">
+            <div className="flex items-center text-sm text-muted-foreground">
+                <Calendar className="mr-2 h-4 w-4 shrink-0" />
+                <span>
+                    {new Date(event.date).toLocaleDateString('fr-FR', {
+                    month: 'long',
+                    day: 'numeric',
+                    })}
+                    , {new Date(event.date).toLocaleTimeString('fr-FR', {
+                        hour: '2-digit',
+                        minute: '2-digit',
+                        hour12: false
+                    }).replace(':', 'h')}
+                </span>
+            </div>
+            <div className="flex items-center text-sm text-muted-foreground">
+                <MapPin className="mr-2 h-4 w-4 shrink-0" />
+                <span className="truncate">{event.location}</span>
+            </div>
+            <div className="flex items-center justify-between pt-2">
+                <div className="flex items-center font-semibold">
+                    <Ticket className="mr-2 h-4 w-4 text-primary" />
+                    <span className="text-muted-foreground">À partir de </span>
+                    <span className="ml-1 text-base text-foreground">{minPrice.toLocaleString('fr-FR')} FCFA</span>
+                </div>
+                <Button asChild size="sm" variant="outline">
+                    <Link href={`/events/${event.id}`}>Voir</Link>
+                </Button>
+            </div>
         </div>
       </CardContent>
-      <CardFooter className="p-4 pt-0">
-        <Button asChild variant="outline" className="w-full">
-          <Link href={`/events/${event.id}`}>
-            Voir les détails <ArrowRight className="ml-2 h-4 w-4" />
-          </Link>
-        </Button>
-      </CardFooter>
     </Card>
   );
 }
@@ -74,17 +82,18 @@ export default function EventCard({ event }: EventCardProps) {
 EventCard.Skeleton = function EventCardSkeleton() {
   return (
     <Card className="flex h-full flex-col overflow-hidden">
-      <CardHeader className="relative h-48 w-full p-0">
-        <Skeleton className="h-full w-full" />
-      </CardHeader>
-      <CardContent className="flex-1 p-4">
+      <Skeleton className="h-56 w-full" />
+      <CardContent className="flex flex-1 flex-col p-4">
         <Skeleton className="mb-2 h-6 w-3/4" />
-        <Skeleton className="mb-4 h-4 w-full" />
-        <Skeleton className="h-4 w-1/2" />
+        <div className="mt-auto space-y-3">
+           <Skeleton className="h-4 w-full" />
+           <Skeleton className="h-4 w-2/3" />
+           <div className="flex items-center justify-between pt-2">
+                <Skeleton className="h-6 w-1/2" />
+                <Skeleton className="h-9 w-16" />
+            </div>
+        </div>
       </CardContent>
-      <CardFooter className="p-4 pt-0">
-        <Skeleton className="h-10 w-full" />
-      </CardFooter>
     </Card>
   );
 };
