@@ -1,6 +1,9 @@
 
 'use client';
 import {
+  useEffect,
+} from 'react';
+import {
   Calendar,
   Ticket,
   Users,
@@ -56,6 +59,17 @@ export default function Home() {
   console.log('[Home Page] 📊 Events data:', events);
   console.log('[Home Page] ⏳ Is loading:', isLoading);
   console.log('[Home Page] ❌ Error:', error);
+
+  // 🔍 Log pour vérifier les IDs des événements chargés
+  useEffect(() => {
+    if (events) {
+      console.log('📋 Événements chargés:', events.map(e => ({ id: e.id, name: e.name })));
+      if (events.length > 0) {
+        console.log('✅ Premier événement:', events[0]);
+        console.log('🔗 Lien vers le premier événement: /events/' + events[0].id);
+      }
+    }
+  }, [events]);
 
 
   const categoryFilters = useMemo(() => {
