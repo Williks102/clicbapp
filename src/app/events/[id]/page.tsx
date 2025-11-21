@@ -4,7 +4,7 @@
 import Image from 'next/image';
 import Link from 'next/link';
 import { Calendar, MapPin, Ticket } from 'lucide-react';
-import { notFound, useRouter } from 'next/navigation';
+import { notFound, useRouter, useParams } from 'next/navigation';
 
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Button } from '@/components/ui/button';
@@ -29,18 +29,13 @@ import { doc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 
 
-type EventPageProps = {
-  params: {
-    id: string;
-  };
-};
-
-export default function EventPage({ params }: EventPageProps) {
+export default function EventPage() {
   const isMobile = useIsMobile();
   const router = useRouter();
+  const params = useParams();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<TicketTier | null>(null);
-  const { id } = params;
+  const id = params.id as string;
 
   const { areServicesAvailable, firestore } = useFirebase();
 
@@ -289,3 +284,5 @@ function EventPageSkeleton() {
     </main>
   );
 }
+
+    
