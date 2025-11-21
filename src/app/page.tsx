@@ -40,7 +40,7 @@ export default function Home() {
     <div className="flex min-h-screen flex-col">
       <MainNav />
       <main className="flex-1">
-        <section className="relative h-[50vh] w-full text-white">
+        <section className="relative h-[60vh] w-full text-white">
           {heroImage && (
             <Image
               src={heroImage.imageUrl}
@@ -68,7 +68,7 @@ export default function Home() {
         </section>
 
         <div className="relative z-10 bg-background">
-          <div className="container mx-auto -mt-12 px-4">
+          <div className="container mx-auto -mt-20 px-4">
             <div className="rounded-lg border bg-card p-4 shadow-lg md:p-6">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-4">
                 <div className="relative">
