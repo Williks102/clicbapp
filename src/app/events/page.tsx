@@ -38,12 +38,21 @@ export default function EventsPage() {
   const { areServicesAvailable, firestore } = useFirebase();
   const isMobile = useIsMobile();
   const [activeFilter, setActiveFilter] = useState('Tous');
+  
+  // 🔍 Log de débogage
+  console.log('[Events Page] 🔥 areServicesAvailable:', areServicesAvailable);
 
   const eventsQuery = useMemoFirebase(
     () => (areServicesAvailable ? query(collection(firestore, 'events')) : null),
     [areServicesAvailable, firestore]
   );
-  const { data: events, isLoading } = useCollection<Event>(eventsQuery);
+  const { data: events, isLoading, error } = useCollection<Event>(eventsQuery);
+
+  // 🔍 Logs de débogage
+  console.log('[Events Page] 📊 Events data:', events);
+  console.log('[Events Page] ⏳ Is loading:', isLoading);
+  console.log('[Events Page] ❌ Error:', error);
+
 
   const categoryFilters = useMemo(() => {
     if (!events) return [];

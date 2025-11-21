@@ -43,11 +43,20 @@ export default function Home() {
   const isMobile = useIsMobile();
   const [activeFilter, setActiveFilter] = useState('Tous');
 
+  // 🔍 Log de débogage
+  console.log('[Home Page] 🔥 areServicesAvailable:', areServicesAvailable);
+
   const eventsQuery = useMemoFirebase(
     () => (areServicesAvailable ? query(collection(firestore, 'events')) : null),
     [areServicesAvailable, firestore]
   );
-  const { data: events, isLoading } = useCollection<Event>(eventsQuery);
+  const { data: events, isLoading, error } = useCollection<Event>(eventsQuery);
+
+  // 🔍 Logs de débogage
+  console.log('[Home Page] 📊 Events data:', events);
+  console.log('[Home Page] ⏳ Is loading:', isLoading);
+  console.log('[Home Page] ❌ Error:', error);
+
 
   const categoryFilters = useMemo(() => {
     if (!events) return [];
