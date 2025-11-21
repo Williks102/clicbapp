@@ -20,7 +20,7 @@ import Footer from '@/components/footer';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { TicketTier, Organizer, Event } from '@/lib/types';
 import CheckoutForm from '@/components/checkout-form';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -40,7 +40,7 @@ export default function EventPage() {
   const { areServicesAvailable, firestore } = useFirebase();
 
   const eventRef = useMemoFirebase(
-    () => (areServicesAvailable ? doc(firestore, `events/${id}`) : null),
+    () => (areServicesAvailable && id ? doc(firestore, `events/${id}`) : null),
     [areServicesAvailable, firestore, id]
   );
   const { data: event, isLoading: isEventLoading } = useDoc<Event>(eventRef);
@@ -51,11 +51,17 @@ export default function EventPage() {
   );
   const { data: organizer, isLoading: isOrganizerLoading } = useDoc<Organizer>(organizerRef);
   
-  const isLoading = !areServicesAvailable || isEventLoading || isOrganizerLoading;
+  // Corrected loading logic: Only block for the main event data.
+  const isLoading = !areServicesAvailable || isEventLoading;
 
-  if (!isLoading && !event) {
-    notFound();
-  }
+  // Effect to handle not found case after loading is complete
+  useEffect(() => {
+    if (!isLoading && !event && areServicesAvailable) {
+      console.log(`Event with id '${id}' not found after loading. Triggering 404.`);
+      notFound();
+    }
+  }, [isLoading, event, areServicesAvailable, id]);
+
 
   const image = event ? PlaceHolderImages.find((img) => img.id === event.image) : null;
   const organizerAvatar = organizer ? PlaceHolderImages.find(
@@ -131,7 +137,20 @@ export default function EventPage() {
                   </CardContent>
                 </Card>
 
-                {organizer && (
+                {isOrganizerLoading ? (
+                  <Card className="mt-8">
+                    <CardHeader>
+                      <Skeleton className="h-8 w-1/4" />
+                    </CardHeader>
+                    <CardContent className="flex items-center gap-4">
+                      <Skeleton className="h-16 w-16 rounded-full" />
+                      <div className="space-y-2 flex-1">
+                        <Skeleton className="h-6 w-1/3" />
+                        <Skeleton className="h-4 w-full" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ) : organizer && (
                   <Card className="mt-8">
                     <CardHeader>
                       <CardTitle className="font-headline">
