@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -27,7 +28,7 @@ export default function MainNav() {
 
   const navLinks = [
     { href: '/', label: 'Accueil' },
-    { href: '/#events', label: 'Événements' },
+    { href: '/events', label: 'Événements' },
     { href: '/#contact', label: 'Contact' },
   ];
 
@@ -67,7 +68,7 @@ export default function MainNav() {
               href={link.href}
               className={cn(
                 'transition-colors hover:text-primary',
-                pathname === link.href ? 'text-primary' : 'text-muted-foreground'
+                (pathname === link.href || (link.href === '/events' && pathname.startsWith('/events/'))) ? 'text-primary' : 'text-muted-foreground'
               )}
             >
               {link.label}
@@ -119,7 +120,7 @@ export default function MainNav() {
                       xmlns="http://www.w3.org/2000/svg"
                       width="24"
                       height="24"
-                      viewBox="0 0 24 24"
+                      viewBox="0 0 24"
                       fill="none"
                       stroke="currentColor"
                       strokeWidth="2"
