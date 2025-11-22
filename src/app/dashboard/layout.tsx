@@ -42,16 +42,20 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useEffect } from 'react';
+import { signOut } from 'next-auth/react';
+import { useSession } from 'next-auth/react';
 
 function DashboardHeader() {
   const { toggleSidebar } = useSidebar();
   const { toast } = useToast();
+  const router = useRouter();
 
   const handleLogout = async () => {
-    // Logout logic will be handled by NextAuth
+    await signOut({ redirect: false });
     toast({
       title: 'Déconnexion réussie',
     });
+    router.push('/login');
   };
 
   const organizerAvatar = PlaceHolderImages.find((i) => i.id === 'organizer-1');
@@ -220,6 +224,22 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login');
+    }
+  }, [status, router]);
+
+  if (status === 'loading') {
+    return (
+      <div className="flex h-screen items-center justify-center">
+        <Skeleton className="h-10 w-48" />
+      </div>
+    );
+  }
 
   return (
     <SidebarProvider>
@@ -230,7 +250,7 @@ export default function DashboardLayout({
               xmlns="http://www.w3.org/2000/svg"
               width="24"
               height="24"
-              viewBox="0 0 24"
+              viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"

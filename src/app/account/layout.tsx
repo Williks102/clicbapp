@@ -34,6 +34,7 @@ import {
 import { useIsMobile } from '@/hooks/use-mobile';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { useToast } from '@/hooks/use-toast';
+import { signOut } from 'next-auth/react';
 
 function AccountHeader() {
   const { toggleSidebar } = useSidebar();
@@ -42,7 +43,7 @@ function AccountHeader() {
   const { toast } = useToast();
 
   const handleLogout = async () => {
-    // Logout logic will be handled by NextAuth
+    await signOut({ redirect: false });
     toast({
       title: 'Déconnexion réussie',
     });
@@ -158,7 +159,7 @@ export default function AccountLayout({
               xmlns="http://www.w3.org/2000/svg"
               width="24"
               height="24"
-              viewBox="0 0 24"
+              viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
               strokeWidth="2"

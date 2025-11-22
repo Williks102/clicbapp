@@ -39,20 +39,20 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useAuth } from '@/firebase';
-import { signOut } from 'firebase/auth';
+import { signOut as nextAuthSignOut } from 'next-auth/react';
 import { useToast } from '@/hooks/use-toast';
-
+import { useSession } from 'next-auth/react';
+import { useEffect } from 'react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 function AdminHeader() {
   const { toggleSidebar } = useSidebar();
   const adminAvatar = PlaceHolderImages.find((i) => i.id === 'organizer-2');
-  const auth = useAuth();
   const router = useRouter();
   const { toast } = useToast();
 
   const handleLogout = async () => {
-    await signOut(auth);
+    await nextAuthSignOut({ redirect: false });
     toast({
       title: 'Déconnexion réussie',
     });
@@ -212,6 +212,19 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+    const { data: session, status } = useSession();
+    const router = useRouter();
+
+    useEffect(() => {
+        if (status === 'unauthenticated') {
+            router.push('/login');
+        }
+    }, [status, router]);
+
+    if (status === 'loading') {
+        return <div className="flex h-screen items-center justify-center"><Skeleton className="h-10 w-48" /></div>
+    }
+
   return (
     <SidebarProvider>
       <Sidebar>
