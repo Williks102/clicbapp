@@ -1,4 +1,4 @@
-
+// src/auth.ts
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { signInWithEmailAndPassword } from 'firebase/auth';
@@ -13,6 +13,14 @@ const firebaseAuth = getAuth(authApp);
 
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
+  // Configuration de session
+  session: {
+    strategy: 'jwt',
+  },
+  
+  // Secret pour JWT
+  secret: process.env.AUTH_SECRET,
+  
   providers: [
     Credentials({
       name: 'Credentials',
@@ -22,6 +30,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials.password) {
+          console.error('Missing email or password');
           return null;
         }
 
@@ -33,6 +42,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           );
 
           if (userCredential.user) {
+            // L'objet retourné ici sera la propriété 'user' dans le callback 'jwt'
             return {
               id: userCredential.user.uid,
               email: userCredential.user.email,
@@ -41,22 +51,29 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           }
           return null;
         } catch (error) {
-          console.error('Auth error:', error);
+          console.error('Firebase auth error:', error);
+          // Retourner null pour indiquer un échec d'authentification
           return null;
         }
       },
     }),
   ],
+  
   pages: {
     signIn: '/login',
+    error: '/login', // Rediriger vers la page de connexion en cas d'erreur
   },
+  
   callbacks: {
+    // Le token JWT est créé avec les informations de 'authorize'
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
       }
       return token;
     },
+    
+    // La session client est créée à partir du token JWT
     async session({ session, token }) {
       if (session.user) {
         session.user.id = token.id as string;
@@ -64,4 +81,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       return session;
     },
   },
+  
+  debug: process.env.NODE_ENV === 'development', // Active les logs en développement
 });
