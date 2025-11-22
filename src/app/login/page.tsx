@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState } from 'react';
@@ -33,28 +32,34 @@ export default function LoginPage() {
     setIsLoading(true);
     setError(null);
 
-    const result = await signIn('credentials', {
-      redirect: false,
-      email,
-      password,
-    });
-
-    setIsLoading(false);
-
-    if (result?.ok) {
-      toast({
-        title: 'Connexion réussie',
-        description: 'Vous êtes maintenant connecté.',
+    try {
+      const result = await signIn('credentials', {
+        redirect: false,
+        email,
+        password,
+        callbackUrl: '/dashboard',
       });
-      // Redirect to a protected page, e.g., dashboard
-      router.push('/dashboard');
-    } else {
-      setError('Email ou mot de passe incorrect.');
-      toast({
-        title: 'Erreur de connexion',
-        description: 'Veuillez vérifier vos identifiants.',
-        variant: 'destructive',
-      });
+
+      if (result?.error) {
+        console.error('SignIn error:', result.error);
+        setError('Email ou mot de passe incorrect.');
+        toast({
+          title: 'Erreur de connexion',
+          description: 'Veuillez vérifier vos identifiants.',
+          variant: 'destructive',
+        });
+      } else if (result?.ok) {
+        toast({
+          title: 'Connexion réussie',
+          description: 'Vous êtes maintenant connecté.',
+        });
+        router.push('/dashboard');
+      }
+    } catch (error) {
+      console.error('Login error:', error);
+      setError('Une erreur est survenue.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
