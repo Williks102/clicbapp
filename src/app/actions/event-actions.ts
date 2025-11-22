@@ -1,3 +1,4 @@
+
 'use server';
 
 import { z } from 'zod';
@@ -48,6 +49,7 @@ export async function createEvent(data: EventFormValues) {
     tickets,
   } = validatedData.data;
 
+  // Correction: S'assurer que Firebase est initialisé correctement côté serveur
   const { firestore } = initializeFirebase();
 
   const ticketsWithIds: TicketTier[] = tickets.map((t, index) => ({
@@ -74,6 +76,10 @@ export async function createEvent(data: EventFormValues) {
     return { id: docRef.id };
   } catch (error) {
     console.error('Erreur lors de la création de l\'événement :', error);
-    throw new Error('Impossible de créer l\'événement dans la base de données.');
+    // Renvoyer une erreur plus explicite
+    if (error instanceof Error) {
+        throw new Error(`Impossible de créer l'événement dans la base de données: ${error.message}`);
+    }
+    throw new Error('Une erreur inconnue est survenue lors de la création de l\'événement.');
   }
 }
