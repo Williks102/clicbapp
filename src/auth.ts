@@ -8,7 +8,7 @@ import { firebaseConfig } from './firebase/config';
 
 // Correction : Initialiser une instance Firebase distincte pour l'authentification côté serveur
 // pour éviter d'utiliser l'instance côté client.
-const authApp = getApps().find(app => app.name === 'auth') || initializeApp(firebaseConfig, 'auth');
+const authApp = getApps().find(app => app.name === 'auth-server') || initializeApp(firebaseConfig, 'auth-server');
 const firebaseAuth = getAuth(authApp);
 
 
@@ -65,4 +65,3 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     },
   },
 });
-

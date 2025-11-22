@@ -35,7 +35,8 @@ export async function createEvent(data: EventFormValues) {
 
   const validatedData = formSchema.safeParse(data);
   if (!validatedData.success) {
-    throw new Error('Données du formulaire invalides.');
+    const errorMessages = validatedData.error.errors.map(e => e.message).join(', ');
+    throw new Error(`Données du formulaire invalides: ${errorMessages}`);
   }
 
   const {
@@ -67,9 +68,10 @@ export async function createEvent(data: EventFormValues) {
 
   try {
     const eventsCol = collection(firestore, 'events');
-    await addDoc(eventsCol, newEvent);
+    const docRef = await addDoc(eventsCol, newEvent);
 
     revalidatePath('/dashboard/events');
+    return { id: docRef.id };
   } catch (error) {
     console.error('Erreur lors de la création de l\'événement :', error);
     throw new Error('Impossible de créer l\'événement dans la base de données.');

@@ -21,16 +21,85 @@ import {
 } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
+import { useSession, signOut } from 'next-auth/react';
+import { Avatar, AvatarFallback, AvatarImage } from './ui/avatar';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from './ui/dropdown-menu';
+import { LogOut } from 'lucide-react';
 
 export default function MainNav() {
   const isMobile = useIsMobile();
   const pathname = usePathname();
+  const { data: session, status } = useSession();
 
   const navLinks = [
     { href: '/', label: 'Accueil' },
     { href: '/events', label: 'Événements' },
     { href: '/#contact', label: 'Contact' },
   ];
+
+  const UserMenu = () => {
+    if (status === 'loading') {
+      return null; // ou un skeleton
+    }
+
+    if (session) {
+      return (
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button
+              variant="outline"
+              size="icon"
+              className="overflow-hidden rounded-full"
+            >
+              <Avatar>
+                <AvatarFallback>
+                  {session.user?.name?.charAt(0) ||
+                    session.user?.email?.charAt(0) ||
+                    'U'}
+                </AvatarFallback>
+              </Avatar>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuLabel>Mon Compte</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/account">Mes Billets</Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem asChild>
+              <Link href="/dashboard">Tableau de bord</Link>
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => signOut({ callbackUrl: '/' })}
+              className="text-destructive"
+            >
+              <LogOut className="mr-2 h-4 w-4" />
+              Déconnexion
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      );
+    }
+
+    return (
+      <>
+        <Button variant="ghost" asChild>
+          <Link href="/login">Connexion</Link>
+        </Button>
+        <Button asChild>
+          <Link href="/login">Créer un compte</Link>
+        </Button>
+      </>
+    );
+  };
 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur-sm">
@@ -68,7 +137,11 @@ export default function MainNav() {
               href={link.href}
               className={cn(
                 'transition-colors hover:text-primary',
-                (pathname === link.href || (link.href === '/events' && pathname.startsWith('/events/'))) ? 'text-primary' : 'text-muted-foreground'
+                pathname === link.href ||
+                  (link.href === '/events' &&
+                    pathname.startsWith('/events/'))
+                  ? 'text-primary'
+                  : 'text-muted-foreground'
               )}
             >
               {link.label}
@@ -76,34 +149,7 @@ export default function MainNav() {
           ))}
         </nav>
         <div className="ml-auto hidden items-center gap-4 md:flex">
-          <div className="relative w-64">
-            <Input
-              type="search"
-              placeholder="Rechercher un événement..."
-              className="pr-10"
-            />
-            <Button
-              type="submit"
-              size="icon"
-              variant="ghost"
-              className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:bg-primary/10"
-            >
-              <Search className="h-4 w-4" />
-              <span className="sr-only">Rechercher</span>
-            </Button>
-          </div>
-          <Button variant="ghost" size="icon">
-            <ShoppingCart className="h-5 w-5" />
-            <span className="sr-only">Panier</span>
-          </Button>
-          <Button variant="ghost" asChild>
-            <Link href="/login">Connexion</Link>
-          </Button>
-          <Button asChild>
-            <Link href="/account">
-              Créer un compte
-            </Link>
-          </Button>
+          <UserMenu />
         </div>
         {isMobile && (
           <div className="ml-auto md:hidden">
@@ -154,9 +200,11 @@ export default function MainNav() {
                       </Link>
                     </SheetClose>
                   </nav>
-                  <Button asChild className="mt-auto">
-                    <Link href="/account">Créer un compte</Link>
-                  </Button>
+                  {status !== 'authenticated' && (
+                    <Button asChild className="mt-auto">
+                      <Link href="/login">Créer un compte</Link>
+                    </Button>
+                  )}
                 </div>
               </SheetContent>
             </Sheet>
