@@ -2,7 +2,18 @@
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { auth as firebaseAuth } from '@/firebase'; // Assurez-vous que c'est la bonne instance
+import { getApps, initializeApp, getApp } from 'firebase/app';
+import { getAuth } from 'firebase/auth';
+import { firebaseConfig } from './firebase/config';
+
+// Correction : Initialiser une instance Firebase distincte pour l'authentification côté serveur
+// pour éviter d'utiliser l'instance côté client.
+const authApp = getApps().length
+  ? getApp('auth')
+  : initializeApp(firebaseConfig, 'auth');
+
+const firebaseAuth = getAuth(authApp);
+
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   providers: [
