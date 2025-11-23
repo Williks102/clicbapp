@@ -18,6 +18,8 @@ import MainNav from '@/components/main-nav';
 import Footer from '@/components/footer';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import type { User } from '@/lib/types';
+
 
 export default function LoginPage() {
   const router = useRouter();
@@ -37,27 +39,37 @@ export default function LoginPage() {
         redirect: false,
         email,
         password,
-        callbackUrl: '/dashboard',
       });
 
       if (result?.error) {
-        console.error('SignIn error:', result.error);
-        setError('Email ou mot de passe incorrect.');
-        toast({
-          title: 'Erreur de connexion',
-          description: 'Veuillez vérifier vos identifiants.',
-          variant: 'destructive',
-        });
-      } else if (result?.ok) {
+        throw new Error(result.error);
+      }
+
+      if (result?.ok) {
+        // Fetch session to get user role
+        const sessionRes = await fetch('/api/auth/session');
+        const session = await sessionRes.json();
+        
         toast({
           title: 'Connexion réussie',
           description: 'Vous êtes maintenant connecté.',
         });
-        router.push('/dashboard');
+
+        // Redirect based on role
+        if (session?.user?.role === 'admin') {
+          router.push('/admin');
+        } else {
+          router.push('/dashboard');
+        }
       }
     } catch (error) {
       console.error('Login error:', error);
-      setError('Une erreur est survenue.');
+      setError('Email ou mot de passe incorrect.');
+       toast({
+          title: 'Erreur de connexion',
+          description: 'Veuillez vérifier vos identifiants.',
+          variant: 'destructive',
+        });
     } finally {
       setIsLoading(false);
     }
@@ -71,7 +83,7 @@ export default function LoginPage() {
           <CardHeader>
             <CardTitle className="font-headline text-2xl">Connexion</CardTitle>
             <CardDescription>
-              Accédez à votre tableau de bord organisateur.
+              Accédez à votre tableau de bord.
             </CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
@@ -114,3 +126,4 @@ export default function LoginPage() {
     </div>
   );
 }
+```

@@ -5,54 +5,69 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getApps, initializeApp, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { firebaseConfig } from './firebase/config';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
 
-// Correction : Initialiser une instance Firebase distincte pour l'authentification côté serveur
-// pour éviter d'utiliser l'instance côté client.
-const authApp = getApps().find(app => app.name === 'auth-server') || initializeApp(firebaseConfig, 'auth-server');
+// Initialiser Firebase pour l'authentification côté serveur
+const authApp = getApps().find(app => app.name === 'auth-server') || 
+  initializeApp(firebaseConfig, 'auth-server');
 const firebaseAuth = getAuth(authApp);
-
+const firestore = getFirestore(authApp);
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
-  // Configuration de session
   session: {
     strategy: 'jwt',
+    maxAge: 30 * 24 * 60 * 60, // 30 jours
   },
   
-  // Secret pour JWT
   secret: process.env.AUTH_SECRET,
   
   providers: [
     Credentials({
+      id: 'credentials',
       name: 'Credentials',
       credentials: {
         email: { label: 'Email', type: 'email' },
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials.password) {
-          console.error('Missing email or password');
-          return null;
-        }
-
         try {
+          if (!credentials?.email || !credentials?.password) {
+            throw new Error('Missing credentials');
+          }
+
           const userCredential = await signInWithEmailAndPassword(
             firebaseAuth,
-            credentials.email as string,
-            credentials.password as string
+            String(credentials.email),
+            String(credentials.password)
           );
 
           if (userCredential.user) {
-            // L'objet retourné ici sera la propriété 'user' dans le callback 'jwt'
-            return {
-              id: userCredential.user.uid,
-              email: userCredential.user.email,
-              name: userCredential.user.displayName,
-            };
+            // Récupérer le rôle de l'utilisateur depuis Firestore
+            const userDocRef = doc(firestore, 'users', userCredential.user.uid);
+            const userDoc = await getDoc(userDocRef);
+
+            if (userDoc.exists()) {
+              const userData = userDoc.data();
+              return {
+                id: userCredential.user.uid,
+                email: userCredential.user.email,
+                name: userCredential.user.displayName,
+                role: userData.role || 'customer', // Ajout du rôle
+              };
+            } else {
+                // Si l'utilisateur n'est pas dans la collection 'users', on lui donne un rôle par défaut
+                return {
+                    id: userCredential.user.uid,
+                    email: userCredential.user.email,
+                    name: userCredential.user.displayName,
+                    role: 'customer'
+                }
+            }
           }
+          
           return null;
         } catch (error) {
-          console.error('Firebase auth error:', error);
-          // Retourner null pour indiquer un échec d'authentification
+          console.error('Authorize error:', error);
           return null;
         }
       },
@@ -61,26 +76,33 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   
   pages: {
     signIn: '/login',
-    error: '/login', // Rediriger vers la page de connexion en cas d'erreur
+    error: '/login',
   },
   
   callbacks: {
-    // Le token JWT est créé avec les informations de 'authorize'
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
+        token.email = user.email;
+        token.name = user.name;
+        // @ts-ignore
+        token.role = user.role; // Ajout du rôle au token
       }
       return token;
     },
     
-    // La session client est créée à partir du token JWT
     async session({ session, token }) {
-      if (session.user) {
+      if (token && session.user) {
         session.user.id = token.id as string;
+        session.user.email = token.email as string;
+        session.user.name = token.name as string;
+        // @ts-ignore
+        session.user.role = token.role as string; // Ajout du rôle à la session
       }
       return session;
     },
   },
   
-  debug: process.env.NODE_ENV === 'development', // Active les logs en développement
+  debug: process.env.NODE_ENV === 'development',
 });
+```
