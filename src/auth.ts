@@ -5,7 +5,7 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getApps, initializeApp, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { firebaseConfig } from './firebase/config';
-import { getFirestore, doc, getDoc }from 'firebase/firestore';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { v4 as uuidv4 } from 'uuid';
 
 // Initialiser Firebase pour l'authentification côté serveur
@@ -56,13 +56,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 role: userData.role || 'customer', // Ajout du rôle
               };
             } else {
-                // Si l'utilisateur n'est pas dans la collection 'users', on lui donne un rôle par défaut
-                return {
-                    id: userCredential.user.uid,
-                    email: userCredential.user.email,
-                    name: userCredential.user.displayName,
-                    role: 'customer'
-                }
+              // Si l'utilisateur n'est pas dans la collection 'users', on lui donne un rôle par défaut
+              return {
+                id: userCredential.user.uid,
+                email: userCredential.user.email,
+                name: userCredential.user.displayName,
+                role: 'customer'
+              }
             }
           }
           
