@@ -31,9 +31,11 @@ export default function ElectronicTicket({
 }: ElectronicTicketProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const ticketRef = useRef<HTMLDivElement>(null);
-  const image = PlaceHolderImages.find((img) => img.id === event.image);
   const [isDownloading, setIsDownloading] = useState(false);
   const { toast } = useToast();
+
+  const isExternalImage = event.image.startsWith('http');
+  const image = isExternalImage ? { imageUrl: event.image, imageHint: 'event image' } : PlaceHolderImages.find((img) => img.id === event.image);
 
   const qrCodeData = JSON.stringify({
     eventId: event.id,

@@ -1,4 +1,5 @@
 
+
 import Image from 'next/image';
 import Link from 'next/link';
 import { Calendar, MapPin, Ticket } from 'lucide-react';
@@ -10,6 +11,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from './ui/button';
 import { Skeleton } from './ui/skeleton';
+import { PlaceHolderImages } from '@/lib/placeholder-images';
 
 type EventCardProps = {
   event: Event;
@@ -17,19 +19,21 @@ type EventCardProps = {
 
 export default function EventCard({ event }: EventCardProps) {
   const minPrice = event.tickets.length > 0 ? Math.min(...event.tickets.map(t => t.price)) : 0;
+  
   const isExternalImage = event.image.startsWith('http');
+  const image = isExternalImage ? { imageUrl: event.image, imageHint: 'event image' } : PlaceHolderImages.find((img) => img.id === event.image);
 
   return (
     <Card className="flex h-full transform flex-col overflow-hidden shadow-md transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
       <Link href={`/events/${event.id}`} className="block">
         <div className="relative h-56 w-full">
-          {event.image ? (
+          {image ? (
             <Image
-              src={event.image}
+              src={image.imageUrl}
               alt={event.name}
               fill
               className="object-cover"
-              {...(!isExternalImage && { 'data-ai-hint': 'event image' })}
+              data-ai-hint={image.imageHint}
             />
           ) : (
             <div className="h-full w-full bg-secondary" />
