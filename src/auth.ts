@@ -46,8 +46,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             const userDoc = querySnapshot.docs[0];
             const userData = userDoc.data();
 
-            // NOTE: Pour que cela fonctionne, vous devez stocker un hash du mot de passe dans Firestore.
-            // Le mot de passe 'password123' a été hashé et est utilisé ici pour la démo.
             // Le hash correspond à 'password123' : $2a$10$3s/gU6.ExyvNyREU5GjP/.S5sP7t5gWJ7GZa1UqfspgU7Sg5OqVpS
             const passwordHash = userData.passwordHash || '$2a$10$3s/gU6.ExyvNyREU5GjP/.S5sP7t5gWJ7GZa1UqfspgU7Sg5OqVpS';
 
@@ -81,7 +79,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   
   cookies: {
     sessionToken: {
-      name: `__Secure-next-auth.session-token`,
+      name: process.env.NODE_ENV === 'production' 
+      ? `__Secure-next-auth.session-token`
+      : `next-auth.session-token`,
       options: {
         httpOnly: true,
         sameSite: 'lax',
@@ -91,6 +91,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }
   },
   useSecureCookies: process.env.NODE_ENV === 'production',
+  trustHost: true,
   
   callbacks: {
     async jwt({ token, user }) {
