@@ -1,3 +1,4 @@
+
 'use client';
 
 import Image from 'next/image';
@@ -39,20 +40,11 @@ export default function EventPage() {
 
   const { areServicesAvailable, firestore } = useFirebase();
 
-  // 🔍 Log de débogage
-  console.log('[Event Page] 🔥 areServicesAvailable:', areServicesAvailable);
-  console.log('[Event Page] 📋 Event ID:', id);
-
   const eventRef = useMemo(
     () => (areServicesAvailable && id ? doc(firestore, `events/${id}`) : null),
     [areServicesAvailable, firestore, id]
   );
   const { data: event, isLoading: isEventLoading, error: eventError } = useDoc<Event>(eventRef);
-  
-  // 🔍 Log de débogage pour l'événement
-  console.log('[Event Page] 📊 Event data:', event);
-  console.log('[Event Page] ⏳ Event loading:', isEventLoading);
-  console.log('[Event Page] ❌ Event error:', eventError);
   
   const organizerRef = useMemo(
     () => (areServicesAvailable && event ? doc(firestore, `organizers/${event.organizerId}`) : null),
@@ -60,23 +52,14 @@ export default function EventPage() {
   );
   const { data: organizer, isLoading: isOrganizerLoading } = useDoc<Organizer>(organizerRef);
   
-  // 🔍 Log de débogage pour l'organisateur
-  console.log('[Event Page] 👤 Organizer data:', organizer);
-  console.log('[Event Page] ⏳ Organizer loading:', isOrganizerLoading);
-  
-  // ✅ CORRECTION: Ne considérer isLoading que pour l'événement principal
-  // L'organisateur peut charger après sans bloquer l'affichage
   const isLoading = isEventLoading;
 
-  // ✅ CORRECTION: Vérifier explicitement si le document n'existe pas
   useEffect(() => {
     if (!isEventLoading && !event && areServicesAvailable) {
-      console.log('[Event Page] ⚠️ Event not found, calling notFound()');
       notFound();
     }
   }, [isEventLoading, event, areServicesAvailable]);
 
-  const image = event ? PlaceHolderImages.find((img) => img.id === event.image) : null;
   const organizerAvatar = organizer ? PlaceHolderImages.find(
     (img) => img.id === organizer.avatar
   ) : null;
@@ -91,6 +74,8 @@ export default function EventPage() {
     }
   };
 
+  const isExternalImage = event?.image?.startsWith('http');
+
   return (
     <div className="flex min-h-screen flex-col">
       <MainNav />
@@ -99,13 +84,13 @@ export default function EventPage() {
       ) : event && (
         <main className="flex-1">
         <section className="relative h-[40vh] w-full bg-secondary">
-          {image && (
+          {event.image && (
             <Image
-              src={image.imageUrl}
+              src={event.image}
               alt={event.name}
               fill
               className="object-cover"
-              data-ai-hint={image.imageHint}
+              {...(!isExternalImage && { 'data-ai-hint': 'event image' })}
             />
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-transparent" />

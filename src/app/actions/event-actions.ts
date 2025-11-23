@@ -4,10 +4,13 @@
 import { z } from 'zod';
 import { auth } from '@/auth';
 import { initializeFirebase } from '@/firebase';
-import { addDoc, collection } from 'firebase/firestore';
+import { addDoc, collection }s from 'firebase/firestore';
+import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { revalidatePath } from 'next/cache';
 import type { Event, TicketTier } from '@/lib/types';
 import type { EventFormValues } from '@/app/dashboard/events/create/page';
+import { v4 as uuidv4 } from 'uuid';
+
 
 const ticketSchema = z.object({
   name: z.string().min(1, 'Le nom du billet est requis.'),
@@ -28,7 +31,7 @@ const formSchema = z.object({
 });
 
 
-export async function createEvent(data: EventFormValues) {
+export async function createEvent(data: EventFormValues, formData: FormData) {
   const session = await auth();
   if (!session?.user?.id) {
     throw new Error('Vous devez être connecté pour créer un événement.');
@@ -49,8 +52,20 @@ export async function createEvent(data: EventFormValues) {
     tickets,
   } = validatedData.data;
 
-  // Correction: S'assurer que Firebase est initialisé correctement côté serveur
-  const { firestore } = initializeFirebase();
+  const { firestore, firebaseApp } = initializeFirebase();
+  const storage = getStorage(firebaseApp);
+  
+  let imageUrl = 'event-1'; // Default image
+
+  const imageFile = formData.get('image') as File;
+  if (imageFile && imageFile.size > 0) {
+      const fileExtension = imageFile.name.split('.').pop();
+      const imageRef = ref(storage, `events/${uuidv4()}.${fileExtension}`);
+      
+      const snapshot = await uploadBytes(imageRef, imageFile);
+      imageUrl = await getDownloadURL(snapshot.ref);
+  }
+
 
   const ticketsWithIds: TicketTier[] = tickets.map((t, index) => ({
     ...t,
@@ -65,7 +80,7 @@ export async function createEvent(data: EventFormValues) {
     description: eventDescription,
     organizerId: session.user.id,
     tickets: ticketsWithIds,
-    image: 'event-1', // Default image, can be changed later
+    image: imageUrl, 
   };
 
   try {
@@ -76,7 +91,6 @@ export async function createEvent(data: EventFormValues) {
     return { id: docRef.id };
   } catch (error) {
     console.error('Erreur lors de la création de l\'événement :', error);
-    // Renvoyer une erreur plus explicite
     if (error instanceof Error) {
         throw new Error(`Impossible de créer l'événement dans la base de données: ${error.message}`);
     }

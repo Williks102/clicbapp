@@ -1,3 +1,4 @@
+
 /**
  * Core Philosophy: This ruleset implements a security model with three primary access levels:
  * 1.  User-Owned Data: User profiles and their associated tickets are strictly private. Only the authenticated owner of the data can perform any action on it. This is enforced for all paths under `/users/{userId}`.
@@ -24,6 +25,7 @@
  * While not yet implemented, this ruleset is designed to easily support structural segregation. For example, if "draft" events were needed, they could be placed in a separate, private collection with stricter rules, while public events remain in `/events/{eventId}`.
  */
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
 
@@ -170,6 +172,22 @@ service cloud.firestore {
       allow create: if false;
       allow update: if false;
       allow delete: if false;
+    }
+  }
+}
+
+// Firebase Storage Rules
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Rule for event images
+    // Allow public read access to all event images.
+    // Allow authenticated users to write (upload, update, delete) to the 'events' folder.
+    // Ensure the uploaded file is an image and its size is less than 5MB.
+    match /events/{imageId} {
+      allow read: if true;
+      allow write: if request.auth != null 
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
     }
   }
 }
