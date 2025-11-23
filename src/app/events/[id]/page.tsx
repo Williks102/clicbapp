@@ -74,7 +74,11 @@ export default function EventPage() {
     }
   };
 
-  const isExternalImage = event?.image?.startsWith('http');
+  const image = event 
+    ? event.image.startsWith('http')
+      ? { imageUrl: event.image, imageHint: 'event image' }
+      : PlaceHolderImages.find((img) => img.id === event.image)
+    : null;
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -84,13 +88,13 @@ export default function EventPage() {
       ) : event && (
         <main className="flex-1">
         <section className="relative h-[40vh] w-full bg-secondary">
-          {event.image && (
+          {image && (
             <Image
-              src={event.image}
+              src={image.imageUrl}
               alt={event.name}
               fill
               className="object-cover"
-              {...(!isExternalImage && { 'data-ai-hint': 'event image' })}
+              data-ai-hint={image.imageHint}
             />
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-background via-background/70 to-transparent" />
