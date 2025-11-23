@@ -5,7 +5,7 @@ import Credentials from 'next-auth/providers/credentials';
 import { getApps, initializeApp, getApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { firebaseConfig } from './firebase/config';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 // Initialiser Firebase pour l'accès à Firestore côté serveur
 const authApp = getApps().length ? getApp() : initializeApp(firebaseConfig, `auth-server-${Date.now()}`);
