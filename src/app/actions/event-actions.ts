@@ -4,7 +4,7 @@
 import { z } from 'zod';
 import { auth } from '@/auth';
 import { initializeFirebase } from '@/firebase';
-import { addDoc, collection }s from 'firebase/firestore';
+import { addDoc, collection } from 'firebase/firestore';
 import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { revalidatePath } from 'next/cache';
 import type { Event, TicketTier } from '@/lib/types';
