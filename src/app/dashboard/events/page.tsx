@@ -33,16 +33,16 @@ import { collection, query, where } from 'firebase/firestore';
 import type { Event } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useMemo } from 'react';
+import { useSession } from 'next-auth/react';
 
 export default function MyEventsPage() {
-  // const { user, isUserLoading } = useUser(); // To be replaced by NextAuth session
-  const isUserLoading = false;
-  const user = { uid: 'temp-user-id' }; // Placeholder
+  const { data: session, status } = useSession();
+  const isUserLoading = status === 'loading';
   const firestore = useFirestore();
 
   const myEventsQuery = useMemo(
-    () => (firestore && user ? query(collection(firestore, 'events'), where('organizerId', '==', user.uid)) : null),
-    [firestore, user]
+    () => (firestore && session?.user?.id ? query(collection(firestore, 'events'), where('organizerId', '==', session.user.id)) : null),
+    [firestore, session]
   );
   const { data: myEvents, isLoading: areEventsLoading } = useCollection<Event>(myEventsQuery);
 
