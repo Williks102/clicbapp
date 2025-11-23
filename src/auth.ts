@@ -10,8 +10,8 @@ import { getFirestore, doc, getDoc } from 'firebase/firestore';
 // Initialiser Firebase pour l'authentification côté serveur
 const authApp = getApps().find(app => app.name === 'auth-server') || 
   initializeApp(firebaseConfig, 'auth-server');
-const firebaseAuth = getAuth(authApp);
 const firestore = getFirestore(authApp);
+const firebaseAuth = getAuth(authApp);
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   session: {
