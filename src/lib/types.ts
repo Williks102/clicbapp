@@ -1,3 +1,4 @@
+
 export type TicketTier = {
   id: string;
   name: string;
@@ -49,4 +50,5 @@ export type User = {
   avatar?: string;
   bio?: string;
   createdAt: string;
+  passwordHash?: string;
 }

@@ -5,6 +5,7 @@ import Credentials from 'next-auth/providers/credentials';
 import { getApps, initializeApp, getApp } from 'firebase/app';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
 import { firebaseConfig } from './firebase/config';
+import bcrypt from 'bcrypt';
 
 // Initialiser Firebase pour l'accès à Firestore côté serveur
 const authApp = getApps().length ? getApp() : initializeApp(firebaseConfig, `auth-server-${Date.now()}`);
@@ -45,10 +46,12 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             const userDoc = querySnapshot.docs[0];
             const userData = userDoc.data();
 
-            // NOTE: Ceci est une simplification pour le développement.
-            // Dans une application réelle, vous devriez stocker un hash du mot de passe
-            // et le comparer ici en utilisant une librairie comme bcrypt.
-            const isPasswordValid = credentials.password === 'password123' || process.env.NODE_ENV !== 'production';
+            // NOTE: Pour que cela fonctionne, vous devez stocker un hash du mot de passe dans Firestore.
+            // Le mot de passe 'password123' a été hashé et est utilisé ici pour la démo.
+            // Le hash correspond à 'password123' : $2a$10$3s/gU6.ExyvNyREU5GjP/.S5sP7t5gWJ7GZa1UqfspgU7Sg5OqVpS
+            const passwordHash = userData.passwordHash || '$2a$10$3s/gU6.ExyvNyREU5GjP/.S5sP7t5gWJ7GZa1UqfspgU7Sg5OqVpS';
+
+            const isPasswordValid = await bcrypt.compare(credentials.password as string, passwordHash);
 
             if (isPasswordValid) {
                 return {
@@ -75,6 +78,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     signIn: '/login',
     error: '/login',
   },
+  
+  cookies: {
+    sessionToken: {
+      name: `__Secure-next-auth.session-token`,
+      options: {
+        httpOnly: true,
+        sameSite: 'lax',
+        path: '/',
+        secure: process.env.NODE_ENV === 'production'
+      }
+    }
+  },
+  useSecureCookies: process.env.NODE_ENV === 'production',
   
   callbacks: {
     async jwt({ token, user }) {

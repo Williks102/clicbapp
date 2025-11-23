@@ -43,7 +43,18 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
-        throw new Error(result.error);
+        if (result.error === 'CredentialsSignin') {
+            setError('Email ou mot de passe incorrect.');
+        } else {
+            setError('Une erreur est survenue. Veuillez réessayer.');
+        }
+        toast({
+          title: 'Erreur de connexion',
+          description: 'Veuillez vérifier vos identifiants.',
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
       }
 
       if (result?.ok) {
@@ -59,8 +70,10 @@ export default function LoginPage() {
         // Redirect based on role
         if (session?.user?.role === 'admin') {
           router.push('/admin');
-        } else {
+        } else if (session?.user?.role === 'organizer') {
           router.push('/dashboard');
+        } else {
+          router.push('/account');
         }
       }
     } catch (error) {
