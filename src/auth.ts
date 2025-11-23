@@ -5,7 +5,8 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getApps, initializeApp, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { firebaseConfig } from './firebase/config';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc }from 'firebase/firestore';
+import { v4 as uuidv4 } from 'uuid';
 
 // Initialiser Firebase pour l'authentification côté serveur
 const authApp = getApps().find(app => app.name === 'auth-server') || 
