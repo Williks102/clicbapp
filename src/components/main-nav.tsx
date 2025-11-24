@@ -95,7 +95,7 @@ export default function MainNav() {
           <Link href="/login">Connexion</Link>
         </Button>
         <Button asChild>
-          <Link href="/login">Créer un compte</Link>
+          <Link href="/signup">Créer un compte</Link>
         </Button>
       </>
     );
@@ -202,7 +202,7 @@ export default function MainNav() {
                   </nav>
                   {status !== 'authenticated' && (
                     <Button asChild className="mt-auto">
-                      <Link href="/login">Créer un compte</Link>
+                      <Link href="/signup">Créer un compte</Link>
                     </Button>
                   )}
                 </div>
