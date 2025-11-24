@@ -3,14 +3,31 @@
 
 import { z } from 'zod';
 import { auth } from '@/auth';
-import { initializeFirebase } from '@/firebase';
-import { addDoc, collection } from 'firebase/firestore';
-import { getStorage, ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import admin from 'firebase-admin';
+import { getStorage } from 'firebase-admin/storage';
 import { revalidatePath } from 'next/cache';
 import type { Event, TicketTier } from '@/lib/types';
 import type { EventFormValues } from '@/app/dashboard/events/create/page';
 import { v4 as uuidv4 } from 'uuid';
 
+if (!admin.apps.length) {
+  try {
+    const serviceAccount = {
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    };
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      storageBucket: `${serviceAccount.projectId}.appspot.com`,
+    });
+  } catch (error) {
+    console.error("Erreur d'initialisation de Firebase Admin dans event-actions:", error);
+  }
+}
+
+const firestore = admin.firestore();
+const storage = getStorage().bucket();
 
 const ticketSchema = z.object({
   name: z.string().min(1, 'Le nom du billet est requis.'),
@@ -51,19 +68,26 @@ export async function createEvent(data: EventFormValues, formData: FormData) {
     eventDescription,
     tickets,
   } = validatedData.data;
-
-  const { firestore, firebaseApp } = initializeFirebase();
-  const storage = getStorage(firebaseApp);
   
   let imageUrl = 'event-1'; // Default image
 
   const imageFile = formData.get('image') as File;
   if (imageFile && imageFile.size > 0) {
       const fileExtension = imageFile.name.split('.').pop();
-      const imageRef = ref(storage, `events/${uuidv4()}.${fileExtension}`);
+      const imageFileName = `events/${uuidv4()}.${fileExtension}`;
+      const file = storage.file(imageFileName);
+
+      const buffer = Buffer.from(await imageFile.arrayBuffer());
       
-      const snapshot = await uploadBytes(imageRef, imageFile);
-      imageUrl = await getDownloadURL(snapshot.ref);
+      await file.save(buffer, {
+          metadata: {
+            contentType: imageFile.type,
+          },
+      });
+
+      // Rendre le fichier public et obtenir l'URL
+      await file.makePublic();
+      imageUrl = file.publicUrl();
   }
 
 
@@ -84,8 +108,8 @@ export async function createEvent(data: EventFormValues, formData: FormData) {
   };
 
   try {
-    const eventsCol = collection(firestore, 'events');
-    const docRef = await addDoc(eventsCol, newEvent);
+    const eventsCol = firestore.collection('events');
+    const docRef = await eventsCol.add(newEvent);
 
     revalidatePath('/dashboard/events');
     return { id: docRef.id };
