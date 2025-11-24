@@ -10,7 +10,15 @@ import admin from 'firebase-admin';
 // The SDK will automatically use the credentials from environment variables if they are set.
 if (!admin.apps.length) {
   try {
-    admin.initializeApp();
+    const serviceAccount = {
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+    };
+
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
   } catch (error) {
     console.error('Firebase admin initialization error', error);
   }
