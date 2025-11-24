@@ -7,10 +7,9 @@ import admin from 'firebase-admin';
 import type { User } from '@/lib/types';
 
 // Initialize Firebase Admin SDK
-// This allows secure server-side access to Firestore, bypassing client-side security rules.
-// The SDK will automatically use the credentials from environment variables if they are set.
 if (!admin.apps.length) {
   try {
+    console.log('Initialisation de Firebase Admin...');
     const serviceAccount = {
       projectId: process.env.FIREBASE_PROJECT_ID,
       clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
@@ -24,6 +23,7 @@ if (!admin.apps.length) {
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
+    console.log('Firebase Admin initialisé avec succès.');
   } catch (error) {
     console.error('Erreur d\'initialisation de Firebase Admin:', error);
   }
@@ -48,13 +48,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
+        console.log('--- Début de l\'autorisation ---');
+        console.log('Identifiants reçus:', { email: credentials?.email });
+
         if (!credentials?.email || !credentials?.password) {
+            console.error('Identifiants manquants.');
             throw new Error('Identifiants manquants.');
         }
 
         try {
             const usersRef = firestore.collection("users");
             const q = usersRef.where("email", "==", credentials.email);
+            
+            console.log(`Recherche de l'utilisateur avec l'email: ${credentials.email}`);
             const querySnapshot = await q.get();
 
             if (querySnapshot.empty) {
@@ -64,16 +70,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
             const userDoc = querySnapshot.docs[0];
             const userData = userDoc.data() as User;
+            console.log('Utilisateur trouvé en BDD:', { id: userDoc.id, email: userData.email, role: userData.role });
 
             const passwordHash = userData.passwordHash;
             if (!passwordHash || typeof passwordHash !== 'string' || passwordHash.trim() === '') {
               console.log('Utilisateur sans mot de passe haché valide.');
               return null;
             }
+            console.log('Hash du mot de passe trouvé en BDD:', passwordHash);
 
+            console.log('Comparaison du mot de passe fourni avec le hash...');
             const isPasswordValid = await bcrypt.compare(credentials.password as string, passwordHash);
+            console.log('Le mot de passe est-il valide ?', isPasswordValid);
 
             if (isPasswordValid) {
+                console.log('Autorisation réussie. Retour de l\'objet utilisateur.');
                 return {
                     id: userDoc.id,
                     email: userData.email,
