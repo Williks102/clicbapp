@@ -145,13 +145,17 @@ export const categories: Category[] = [
     { id: 'cat-6', name: 'Community' },
 ];
 
+// Default password is 'password123'
+const defaultPasswordHash = '$2a$10$f/..G..I3z5S.0D0Z1C1YOXb.C2I.0F7Z.I.g.g.E3B4yY5fJ2dK.';
+
 export const users: User[] = [
   {
     id: 'usr-1',
     name: 'Aisha Koné',
     email: 'aisha.kone@example.com',
     role: 'customer',
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    passwordHash: defaultPasswordHash,
   },
   {
     id: 'org-1',
@@ -160,7 +164,8 @@ export const users: User[] = [
     role: 'organizer',
     avatar: 'organizer-1',
     bio: 'Bringing the biggest international and local artists to Côte d\'Ivoire. We specialize in large-scale concerts and festivals.',
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    passwordHash: defaultPasswordHash,
   },
   {
     id: 'org-2',
@@ -169,7 +174,8 @@ export const users: User[] = [
     role: 'organizer',
     avatar: 'organizer-2',
     bio: 'Fostering innovation and collaboration in the Ivorian tech scene through conferences, workshops, and networking events.',
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    passwordHash: defaultPasswordHash,
   },
   // New users for seeding
   {
@@ -178,7 +184,8 @@ export const users: User[] = [
     email: 'koffiw4@gmail.com',
     role: 'admin',
     avatar: 'organizer-2',
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    passwordHash: defaultPasswordHash,
   },
   {
     id: 'org-lagopauline', // This ID matches the organizer entry
@@ -187,6 +194,7 @@ export const users: User[] = [
     role: 'organizer',
     avatar: 'organizer-2',
     bio: 'Créatrice d\'événements culturels et artistiques uniques à Abidjan.',
-    createdAt: new Date().toISOString()
+    createdAt: new Date().toISOString(),
+    passwordHash: defaultPasswordHash,
   }
 ];
