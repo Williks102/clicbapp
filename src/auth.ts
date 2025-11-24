@@ -79,6 +79,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             }
             console.log('Hash du mot de passe trouvé en BDD:', passwordHash);
 
+            // LOG DE DÉBOGAGE TEMPORAIRE
+            console.log('Mot de passe reçu du formulaire:', credentials.password);
+
             console.log('Comparaison du mot de passe fourni avec le hash...');
             const isPasswordValid = await bcrypt.compare(credentials.password as string, passwordHash);
             console.log('Le mot de passe est-il valide ?', isPasswordValid);
