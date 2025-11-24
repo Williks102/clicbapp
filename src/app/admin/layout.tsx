@@ -126,79 +126,93 @@ function AdminNav() {
       <SidebarMenu>
         <SidebarMenuItem>
           <SidebarMenuButton
-            href="/admin"
             isActive={pathname === '/admin'}
             tooltip="Dashboard"
             onClick={handleLinkClick}
+            asChild
           >
-            <LayoutDashboard />
-            <span>Dashboard</span>
+            <Link href="/admin">
+                <LayoutDashboard />
+                <span>Dashboard</span>
+            </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton
-            href="/admin/events"
             isActive={pathname.startsWith('/admin/events')}
             tooltip="Events"
             onClick={handleLinkClick}
+            asChild
           >
-            <Calendar />
-            <span>Événements</span>
+            <Link href="/admin/events">
+                <Calendar />
+                <span>Événements</span>
+            </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton
-            href="/admin/sales"
             isActive={pathname === '/admin/sales'}
             tooltip="Ventes"
             onClick={handleLinkClick}
+            asChild
           >
-            <ShoppingCart />
-            <span>Ventes</span>
+             <Link href="/admin/sales">
+                <ShoppingCart />
+                <span>Ventes</span>
+            </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton
-            href="/admin/users"
             isActive={pathname === '/admin/users'}
             tooltip="Users"
             onClick={handleLinkClick}
+            asChild
           >
-            <Users />
-            <span>Utilisateurs</span>
+            <Link href="/admin/users">
+                <Users />
+                <span>Utilisateurs</span>
+            </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton
-            href="/admin/commissions"
             isActive={pathname === '/admin/commissions'}
             tooltip="Commissions"
             onClick={handleLinkClick}
+            asChild
           >
-            <Wallet />
-            <span>Commissions</span>
+            <Link href="/admin/commissions">
+                <Wallet />
+                <span>Commissions</span>
+            </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton
-            href="/admin/scanner"
             isActive={pathname === '/admin/scanner'}
             tooltip="Scanner"
             onClick={handleLinkClick}
+            asChild
           >
-            <QrCode />
-            <span>Scanner</span>
+            <Link href="/admin/scanner">
+                <QrCode />
+                <span>Scanner</span>
+            </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>
         <SidebarMenuItem>
           <SidebarMenuButton
-            href="/admin/settings"
             isActive={pathname === '/admin/settings'}
             tooltip="Settings"
             onClick={handleLinkClick}
+            asChild
           >
-            <Settings />
-            <span>Paramètres</span>
+            <Link href="/admin/settings">
+                <Settings />
+                <span>Paramètres</span>
+            </Link>
           </SidebarMenuButton>
         </SidebarMenuItem>
       </SidebarMenu>

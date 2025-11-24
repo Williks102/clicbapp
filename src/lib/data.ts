@@ -147,7 +147,7 @@ export const categories: Category[] = [
 ];
 
 // Default password is 'password123'
-const defaultPasswordHash = '$2a$10$f/..G..I3z5S.0D0Z1C1YOXb.C2I.0F7Z.I.g.g.E3B4yY5fJ2dK.';
+const defaultPasswordHash = '$2a$10$X16GWsykB9TVVWODQVfjYepVyW5.AHzYaKSSKBwCUzzBYgSF/EBsK';
 
 export const users: User[] = [
   {
