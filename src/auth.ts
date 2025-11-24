@@ -2,15 +2,27 @@
 // src/auth.ts
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { getApps, initializeApp, getApp } from 'firebase/app';
-import { getFirestore, doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { firebaseConfig } from './firebase/config';
 import bcrypt from 'bcryptjs';
+import admin from 'firebase-admin';
 
-// Initialiser Firebase pour l'accès à Firestore côté serveur
-const authApp = getApps().length ? getApp() : initializeApp(firebaseConfig, `auth-server-${Date.now()}`);
-const firestore = getFirestore(authApp);
+// Initialize Firebase Admin SDK
+// This allows secure server-side access to Firestore, bypassing client-side security rules.
+if (!admin.apps.length) {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        // Replace escaped newlines with actual newlines
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+      }),
+    });
+  } catch (error) {
+    console.error('Firebase admin initialization error', error);
+  }
+}
 
+const firestore = admin.firestore();
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   session: {
@@ -34,9 +46,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         }
 
         try {
-            const usersRef = collection(firestore, "users");
-            const q = query(usersRef, where("email", "==", credentials.email));
-            const querySnapshot = await getDocs(q);
+            const usersRef = firestore.collection("users");
+            const q = usersRef.where("email", "==", credentials.email);
+            const querySnapshot = await q.get();
 
             if (querySnapshot.empty) {
                 console.log('Aucun utilisateur trouvé avec cet email.');
@@ -46,8 +58,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             const userDoc = querySnapshot.docs[0];
             const userData = userDoc.data();
 
-            // Le hash correspond à 'password123' : $2a$10$3s/gU6.ExyvNyREU5GjP/.S5sP7t5gWJ7GZa1UqfspgU7Sg5OqVpS
-            const passwordHash = userData.passwordHash || '$2a$10$3s/gU6.ExyvNyREU5GjP/.S5sP7t5gWJ7GZa1UqfspgU7Sg5OqVpS';
+            const passwordHash = userData.passwordHash;
+            if (!passwordHash) {
+              console.log('Utilisateur sans mot de passe haché.');
+              return null;
+            }
 
             const isPasswordValid = await bcrypt.compare(credentials.password as string, passwordHash);
 
@@ -65,7 +80,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         } catch (error) {
           console.error("Erreur d'autorisation:", error);
-          // Renvoyer null pour indiquer un échec d'authentification
           return null;
         }
       },
