@@ -16,11 +16,15 @@ if (!admin.apps.length) {
       privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
     };
 
+    if (!serviceAccount.projectId || !serviceAccount.clientEmail || !serviceAccount.privateKey) {
+        throw new Error('Les variables d\'environnement Firebase Admin ne sont pas toutes définies.');
+    }
+
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
   } catch (error) {
-    console.error('Firebase admin initialization error', error);
+    console.error('Erreur d\'initialisation de Firebase Admin:', error);
   }
 }
 
