@@ -1,8 +1,8 @@
-
 // src/auth.ts
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import admin from 'firebase-admin';
+import bcrypt from 'bcryptjs';
 import type { User } from '@/lib/types';
 
 // Initialize Firebase Admin SDK
@@ -47,49 +47,44 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        console.log('--- Début de l\'autorisation ---');
-        console.log('Identifiants reçus:', { email: credentials?.email });
-
         if (!credentials?.email || !credentials?.password) {
-            console.error('Identifiants manquants.');
-            throw new Error('Identifiants manquants.');
+          throw new Error('Identifiants manquants.');
         }
 
         try {
-            const usersRef = firestore.collection("users");
-            const q = usersRef.where("email", "==", credentials.email);
-            
-            console.log(`Recherche de l'utilisateur avec l'email: ${credentials.email}`);
-            const querySnapshot = await q.get();
+          const usersRef = firestore.collection("users");
+          const q = usersRef.where("email", "==", credentials.email);
+          const querySnapshot = await q.get();
 
-            if (querySnapshot.empty) {
-                console.log('Aucun utilisateur trouvé avec cet email.');
-                return null;
-            }
+          if (querySnapshot.empty) {
+            console.log('Aucun utilisateur trouvé avec cet email.');
+            return null;
+          }
 
-            const userDoc = querySnapshot.docs[0];
-            const userData = userDoc.data() as User;
-            console.log('Utilisateur trouvé en BDD:', { id: userDoc.id, email: userData.email, role: userData.role });
+          const userDoc = querySnapshot.docs[0];
+          const userData = userDoc.data() as User;
 
-            // !!! SOLUTION DE CONTOURNEMENT TEMPORAIRE ET NON SÉCURISÉE !!!
-            // Nous vérifions simplement si un mot de passe a été fourni, sans le comparer.
-            // Cela permet de tester le reste du flux d'authentification.
-            const isPasswordPresent = (credentials.password as string).length > 0;
-            console.log(`[CONTOURNEMENT] Vérification de la présence du mot de passe: ${isPasswordPresent}`);
+          if (!userData.passwordHash) {
+            console.log('Utilisateur sans mot de passe haché.');
+            return null;
+          }
 
-            if (isPasswordPresent) {
-                console.log('Autorisation réussie (CONTOURNEMENT). Retour de l\'objet utilisateur.');
-                return {
-                    id: userDoc.id,
-                    email: userData.email,
-                    name: userData.name,
-                    role: userData.role || 'customer',
-                };
-            } else {
-                 console.log('Mot de passe non fourni.');
-                return null;
-            }
+          const isPasswordValid = await bcrypt.compare(
+            credentials.password as string,
+            userData.passwordHash
+          );
 
+          if (isPasswordValid) {
+            return {
+              id: userDoc.id,
+              email: userData.email,
+              name: userData.name,
+              role: userData.role || 'customer',
+            };
+          } else {
+            console.log('Mot de passe invalide.');
+            return null;
+          }
         } catch (error) {
           console.error("Erreur d'autorisation:", error);
           return null;
