@@ -4,6 +4,7 @@ import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import admin from 'firebase-admin';
+import type { User } from '@/lib/types';
 
 // Initialize Firebase Admin SDK
 // This allows secure server-side access to Firestore, bypassing client-side security rules.
@@ -62,11 +63,11 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             }
 
             const userDoc = querySnapshot.docs[0];
-            const userData = userDoc.data();
+            const userData = userDoc.data() as User;
 
             const passwordHash = userData.passwordHash;
-            if (!passwordHash) {
-              console.log('Utilisateur sans mot de passe haché.');
+            if (!passwordHash || typeof passwordHash !== 'string' || passwordHash.trim() === '') {
+              console.log('Utilisateur sans mot de passe haché valide.');
               return null;
             }
 
