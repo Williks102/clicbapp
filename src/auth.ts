@@ -7,6 +7,7 @@ import admin from 'firebase-admin';
 
 // Initialize Firebase Admin SDK
 // This allows secure server-side access to Firestore, bypassing client-side security rules.
+// The SDK will automatically use the credentials from environment variables if they are set.
 if (!admin.apps.length) {
   try {
     admin.initializeApp({
