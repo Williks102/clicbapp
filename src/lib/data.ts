@@ -1,3 +1,4 @@
+
 import type { Event, Organizer, Category, Sale, User } from './types';
 
 export const organizers: Organizer[] = [
