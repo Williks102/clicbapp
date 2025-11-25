@@ -132,8 +132,8 @@ export default function AdminEventsPage() {
                           {status === 'pending' && <DropdownMenuItem className="text-destructive" onClick={() => handleStatusChange(event.id, 'rejected')}>
                             Rejeter
                           </DropdownMenuItem>}
-                          <DropdownMenuItem>
-                            Modifier
+                          <DropdownMenuItem asChild>
+                           <Link href={`/dashboard/events/edit/${event.id}`}>Modifier</Link>
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
