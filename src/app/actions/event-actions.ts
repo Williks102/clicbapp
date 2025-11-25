@@ -2,36 +2,11 @@
 
 import { z } from 'zod';
 import { auth } from '@/auth';
-import admin from 'firebase-admin';
-import { getStorage } from 'firebase-admin/storage';
+import { firestore, storage } from '@/lib/firebase-admin';
 import { revalidatePath } from 'next/cache';
 import type { Event, TicketTier } from '@/lib/types';
 import type { EventFormValues } from '@/app/dashboard/events/create/page';
 import { v4 as uuidv4 } from 'uuid';
-
-if (!admin.apps.length) {
-  try {
-    const serviceAccount = {
-      projectId: process.env.FIREBASE_PROJECT_ID || 'studio-6644592922-93aa3', // Fallback to hardcoded ID
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    };
-
-    if (!serviceAccount.projectId || !serviceAccount.clientEmail || !serviceAccount.privateKey) {
-        throw new Error('Les variables d\'environnement Firebase Admin ne sont pas toutes définies.');
-    }
-
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      storageBucket: `${serviceAccount.projectId}.appspot.com`,
-    });
-  } catch (error) {
-    console.error("Erreur d'initialisation de Firebase Admin dans event-actions:", error);
-  }
-}
-
-const firestore = admin.firestore();
-const storage = getStorage().bucket();
 
 const ticketSchema = z.object({
   name: z.string().min(1, 'Le nom du billet est requis.'),
@@ -53,74 +28,101 @@ const formSchema = z.object({
 
 
 export async function createEvent(data: EventFormValues, formData: FormData) {
-  const session = await auth();
-  if (!session?.user?.id) {
-    throw new Error('Vous devez être connecté pour créer un événement.');
-  }
+  try {
+    console.log('[CREATE EVENT] 📝 Starting event creation...');
+    
+    // 1. Vérifier la session
+    const session = await auth();
+    if (!session?.user?.id) {
+      throw new Error('Vous devez être connecté pour créer un événement.');
+    }
+    console.log('[CREATE EVENT] ✅ User authenticated:', session.user.id);
 
-  const validatedData = formSchema.safeParse(data);
-  if (!validatedData.success) {
-    const errorMessages = validatedData.error.errors.map(e => e.message).join(', ');
-    throw new Error(`Données du formulaire invalides: ${errorMessages}`);
-  }
+    // 2. Valider les données
+    const validatedData = formSchema.safeParse(data);
+    if (!validatedData.success) {
+      const errorMessages = validatedData.error.errors.map(e => e.message).join(', ');
+      console.error('[CREATE EVENT] ❌ Validation failed:', errorMessages);
+      throw new Error(`Données du formulaire invalides: ${errorMessages}`);
+    }
+    console.log('[CREATE EVENT] ✅ Data validated');
 
-  const {
-    eventName,
-    eventCategory,
-    eventDate,
-    eventLocation,
-    eventDescription,
-    tickets,
-  } = validatedData.data;
-  
-  let imageUrl = 'event-1'; // Default image
+    const {
+      eventName,
+      eventCategory,
+      eventDate,
+      eventLocation,
+      eventDescription,
+      tickets,
+    } = validatedData.data;
+    
+    let imageUrl = 'event-1'; // Default image
 
-  const imageFile = formData.get('image') as File;
-  if (imageFile && imageFile.size > 0) {
-      const fileExtension = imageFile.name.split('.').pop();
-      const imageFileName = `events/${uuidv4()}.${fileExtension}`;
-      const file = storage.file(imageFileName);
+    // 3. Gérer l'upload de l'image
+    const imageFile = formData.get('image') as File;
+    if (imageFile && imageFile.size > 0) {
+      try {
+        console.log('[CREATE EVENT] 📤 Uploading image:', imageFile.name, `(${imageFile.size} bytes)`);
+        
+        const fileExtension = imageFile.name.split('.').pop();
+        const imageFileName = `events/${uuidv4()}.${fileExtension}`;
+        const file = storage.file(imageFileName);
 
-      const buffer = Buffer.from(await imageFile.arrayBuffer());
-      
-      await file.save(buffer, {
+        const buffer = Buffer.from(await imageFile.arrayBuffer());
+        
+        await file.save(buffer, {
           metadata: {
             contentType: imageFile.type,
           },
-      });
+        });
 
-      // Rendre le fichier public et obtenir l'URL
-      await file.makePublic();
-      imageUrl = file.publicUrl();
-  }
+        // Rendre le fichier public et obtenir l'URL
+        await file.makePublic();
+        imageUrl = file.publicUrl();
+        
+        console.log('[CREATE EVENT] ✅ Image uploaded:', imageUrl);
+      } catch (uploadError) {
+        console.error('[CREATE EVENT] ⚠️ Image upload failed:', uploadError);
+        // Continue avec l'image par défaut si l'upload échoue
+        console.log('[CREATE EVENT] ℹ️ Using default image');
+      }
+    } else {
+      console.log('[CREATE EVENT] ℹ️ No image provided, using default');
+    }
 
+    // 4. Préparer les données de l'événement
+    const ticketsWithIds: TicketTier[] = tickets.map((t, index) => ({
+      ...t,
+      id: `tkt-${Date.now()}-${index}`,
+    }));
 
-  const ticketsWithIds: TicketTier[] = tickets.map((t, index) => ({
-    ...t,
-    id: `tkt-${Date.now()}-${index}`,
-  }));
+    const newEvent: Omit<Event, 'id'> = {
+      name: eventName,
+      category: eventCategory,
+      date: new Date(eventDate).toISOString(),
+      location: eventLocation,
+      description: eventDescription,
+      organizerId: session.user.id,
+      tickets: ticketsWithIds,
+      image: imageUrl, 
+    };
 
-  const newEvent: Omit<Event, 'id'> = {
-    name: eventName,
-    category: eventCategory,
-    date: new Date(eventDate).toISOString(),
-    location: eventLocation,
-    description: eventDescription,
-    organizerId: session.user.id,
-    tickets: ticketsWithIds,
-    image: imageUrl, 
-  };
+    console.log('[CREATE EVENT] 💾 Saving to Firestore...');
 
-  try {
+    // 5. Sauvegarder dans Firestore
     const eventsCol = firestore.collection('events');
     const docRef = await eventsCol.add(newEvent);
 
+    console.log('[CREATE EVENT] ✅ Event created with ID:', docRef.id);
+
     revalidatePath('/dashboard/events');
     return { id: docRef.id };
+    
   } catch (error) {
-    console.error('Erreur lors de la création de l\'événement :', error);
+    console.error('[CREATE EVENT] ❌ Fatal error:', error);
+    
     if (error instanceof Error) {
-        throw new Error(`Impossible de créer l'événement dans la base de données: ${error.message}`);
+      throw new Error(`Erreur création événement: ${error.message}`);
     }
     throw new Error('Une erreur inconnue est survenue lors de la création de l\'événement.');
   }

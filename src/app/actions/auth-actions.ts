@@ -1,41 +1,8 @@
 'use server';
 
-import admin from 'firebase-admin';
+import admin, { firestore, firebaseAuth as auth } from '@/lib/firebase-admin';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
-
-// Initialiser Firebase Admin (si pas déjà fait)
-if (!admin.apps.length) {
-  try {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
-        const serviceAccount = JSON.parse(
-            Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf-8')
-        );
-        admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount),
-        });
-    } else {
-        const serviceAccount = {
-            projectId: process.env.FIREBASE_PROJECT_ID,
-            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-            privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        };
-
-        if (!serviceAccount.projectId || !serviceAccount.clientEmail || !serviceAccount.privateKey) {
-            throw new Error('Firebase Admin environment variables are not fully defined.');
-        }
-
-        admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount),
-        });
-    }
-  } catch (error) {
-    console.error("Erreur d'initialisation de Firebase Admin dans auth-actions:", error);
-  }
-}
-
-const db = admin.firestore();
-const auth = admin.auth();
 
 // Schéma de validation
 const signupSchema = z.object({
@@ -61,7 +28,7 @@ export async function createUserAccount(data: SignupFormData): Promise<SignupRes
     const validatedData = signupSchema.parse(data);
 
     // Vérifier si l'email existe déjà dans Firestore
-    const existingUserQuery = await db.collection('users')
+    const existingUserQuery = await firestore.collection('users')
       .where('email', '==', validatedData.email)
       .limit(1)
       .get();
@@ -111,13 +78,13 @@ export async function createUserAccount(data: SignupFormData): Promise<SignupRes
       ...(validatedData.role === 'organizer' ? { bio: '' } : {}),
     };
 
-    await db.collection('users').doc(firebaseUser.uid).set(userData);
+    await firestore.collection('users').doc(firebaseUser.uid).set(userData);
     console.log('[SIGNUP] ✅ Document Firestore créé');
 
     // Étape 3 : Si c'est un organizer, créer aussi dans la collection organizers (pour affichage public)
     if (validatedData.role === 'organizer') {
       console.log('[SIGNUP] 👤 Création du profil organisateur public...');
-      await db.collection('organizers').doc(firebaseUser.uid).set({
+      await firestore.collection('organizers').doc(firebaseUser.uid).set({
         id: firebaseUser.uid,
         name: validatedData.name,
         bio: '',
@@ -152,7 +119,7 @@ export async function createUserAccount(data: SignupFormData): Promise<SignupRes
 // Action pour vérifier si un email est déjà utilisé (utile pour validation en temps réel)
 export async function checkEmailAvailability(email: string): Promise<boolean> {
   try {
-    const usersQuery = await db.collection('users')
+    const usersQuery = await firestore.collection('users')
       .where('email', '==', email)
       .limit(1)
       .get();

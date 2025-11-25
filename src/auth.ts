@@ -1,42 +1,8 @@
 // src/auth.ts
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import admin from 'firebase-admin';
+import admin, { firestore } from '@/lib/firebase-admin';
 import type { User } from '@/lib/types';
-
-// Initialize Firebase Admin SDK
-if (!admin.apps.length) {
-  try {
-    if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
-        const serviceAccount = JSON.parse(
-            Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf-8')
-        );
-        admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount),
-        });
-        console.log('Firebase Admin initialized successfully from Base64.');
-    } else {
-         const serviceAccount = {
-            projectId: process.env.FIREBASE_PROJECT_ID,
-            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-            privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-        };
-
-        if (!serviceAccount.projectId || !serviceAccount.clientEmail || !serviceAccount.privateKey) {
-            throw new Error('Firebase Admin environment variables are not fully defined.');
-        }
-
-        admin.initializeApp({
-            credential: admin.credential.cert(serviceAccount),
-        });
-        console.log('Firebase Admin initialized successfully from individual variables.');
-    }
-  } catch (error) {
-    console.error('Error initializing Firebase Admin:', error);
-  }
-}
-
-const firestore = admin.firestore();
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   session: {
@@ -101,8 +67,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   cookies: {
     sessionToken: {
       name: process.env.NODE_ENV === 'production' 
-      ? `__Secure-next-auth.session-token`
-      : `next-auth.session-token`,
+        ? `__Secure-next-auth.session-token`
+        : `next-auth.session-token`,
       options: {
         httpOnly: true,
         sameSite: 'lax',
