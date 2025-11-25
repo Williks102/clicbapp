@@ -1,4 +1,3 @@
-
 // src/auth.ts
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
@@ -8,21 +7,32 @@ import type { User } from '@/lib/types';
 // Initialize Firebase Admin SDK
 if (!admin.apps.length) {
   try {
-    const serviceAccount = {
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    };
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+        const serviceAccount = JSON.parse(
+            Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf-8')
+        );
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+        });
+        console.log('Firebase Admin initialized successfully from Base64.');
+    } else {
+         const serviceAccount = {
+            projectId: process.env.FIREBASE_PROJECT_ID,
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+            privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        };
 
-    if (!serviceAccount.projectId || !serviceAccount.clientEmail || !serviceAccount.privateKey) {
-        throw new Error('Les variables d\'environnement Firebase Admin ne sont pas toutes définies.');
+        if (!serviceAccount.projectId || !serviceAccount.clientEmail || !serviceAccount.privateKey) {
+            throw new Error('Firebase Admin environment variables are not fully defined.');
+        }
+
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+        });
+        console.log('Firebase Admin initialized successfully from individual variables.');
     }
-
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
   } catch (error) {
-    console.error('Erreur d\'initialisation de Firebase Admin:', error);
+    console.error('Error initializing Firebase Admin:', error);
   }
 }
 
@@ -46,7 +56,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) {
-          throw new Error('Identifiants manquants.');
+          return null;
         }
 
         try {

@@ -1,4 +1,3 @@
-
 'use server';
 
 import { z } from 'zod';
@@ -12,20 +11,30 @@ import { v4 as uuidv4 } from 'uuid';
 
 if (!admin.apps.length) {
   try {
-    const serviceAccount = {
-      projectId: process.env.FIREBASE_PROJECT_ID || 'studio-6644592922-93aa3', // Fallback to hardcoded ID
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-    };
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_BASE64) {
+        const serviceAccount = JSON.parse(
+            Buffer.from(process.env.FIREBASE_SERVICE_ACCOUNT_BASE64, 'base64').toString('utf-8')
+        );
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+            storageBucket: `${serviceAccount.project_id}.appspot.com`,
+        });
+    } else {
+        const serviceAccount = {
+            projectId: process.env.FIREBASE_PROJECT_ID || 'studio-6644592922-93aa3',
+            clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+            privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+        };
 
-    if (!serviceAccount.projectId || !serviceAccount.clientEmail || !serviceAccount.privateKey) {
-        throw new Error('Les variables d\'environnement Firebase Admin ne sont pas toutes définies.');
+        if (!serviceAccount.projectId || !serviceAccount.clientEmail || !serviceAccount.privateKey) {
+            throw new Error('Firebase Admin environment variables are not fully defined.');
+        }
+
+        admin.initializeApp({
+            credential: admin.credential.cert(serviceAccount),
+            storageBucket: `${serviceAccount.projectId}.appspot.com`,
+        });
     }
-
-    admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      storageBucket: `${serviceAccount.projectId}.appspot.com`,
-    });
   } catch (error) {
     console.error("Erreur d'initialisation de Firebase Admin dans event-actions:", error);
   }
