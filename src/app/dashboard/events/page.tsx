@@ -128,7 +128,9 @@ export default function MyEventsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem>Modifier</DropdownMenuItem>
+                        <DropdownMenuItem asChild>
+                        <Link href={`/dashboard/events/edit/${event.id}`}>Modifier</Link>
+                        </DropdownMenuItem>
                         <DropdownMenuItem asChild>
                            <Link href={`/events/${event.id}`}>Voir</Link>
                         </DropdownMenuItem>
