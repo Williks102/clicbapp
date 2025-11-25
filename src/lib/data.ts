@@ -146,9 +146,6 @@ export const categories: Category[] = [
     { id: 'cat-6', name: 'Community' },
 ];
 
-// Default password is 'password123'
-const defaultPasswordHash = '$2a$10$X16GWsykB9TVVWODQVfjYepVyW5.AHzYaKSSKBwCUzzBYgSF/EBsK';
-
 export const users: User[] = [
   {
     id: 'usr-1',
@@ -156,7 +153,6 @@ export const users: User[] = [
     email: 'aisha.kone@example.com',
     role: 'customer',
     createdAt: new Date().toISOString(),
-    passwordHash: defaultPasswordHash,
   },
   {
     id: 'org-1',
@@ -166,7 +162,6 @@ export const users: User[] = [
     avatar: 'organizer-1',
     bio: 'Bringing the biggest international and local artists to Côte d\'Ivoire. We specialize in large-scale concerts and festivals.',
     createdAt: new Date().toISOString(),
-    passwordHash: defaultPasswordHash,
   },
   {
     id: 'org-2',
@@ -176,9 +171,7 @@ export const users: User[] = [
     avatar: 'organizer-2',
     bio: 'Fostering innovation and collaboration in the Ivorian tech scene through conferences, workshops, and networking events.',
     createdAt: new Date().toISOString(),
-    passwordHash: defaultPasswordHash,
   },
-  // New users for seeding
   {
     id: 'admin-koffiw4', // This ID will be replaced by the real UID from Auth
     name: 'Admin Koffi',
@@ -186,16 +179,14 @@ export const users: User[] = [
     role: 'admin',
     avatar: 'organizer-2',
     createdAt: new Date().toISOString(),
-    passwordHash: defaultPasswordHash,
   },
   {
     id: 'org-lagopauline', // This ID matches the organizer entry
     name: 'Pauline Lago',
-    email: 'lagopauline@gmail.com',
+    email: 'lagopauline28@gmail.com',
     role: 'organizer',
     avatar: 'organizer-2',
     bio: 'Créatrice d\'événements culturels et artistiques uniques à Abidjan.',
     createdAt: new Date().toISOString(),
-    passwordHash: defaultPasswordHash,
   }
 ];

@@ -2,7 +2,7 @@
 'use server';
 
 import admin from 'firebase-admin';
-import bcrypt from 'bcryptjs';
+import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 
 // Initialiser Firebase Admin (si pas déjà fait)
@@ -92,18 +92,13 @@ export async function createUserAccount(data: SignupFormData): Promise<SignupRes
       };
     }
 
-    // Étape 2 : Générer le hash du mot de passe pour Firestore
-    console.log('[SIGNUP] 🔐 Génération du hash bcrypt...');
-    const passwordHash = await bcrypt.hash(validatedData.password, 10);
-
-    // Étape 3 : Créer le document dans Firestore
+    // Étape 2 : Créer le document dans Firestore
     console.log('[SIGNUP] 💾 Création du document Firestore...');
     const userData = {
       id: firebaseUser.uid,
       name: validatedData.name,
       email: validatedData.email,
       role: validatedData.role,
-      passwordHash: passwordHash,
       createdAt: new Date().toISOString(),
       ...(validatedData.role === 'organizer' ? { bio: '' } : {}),
     };
@@ -111,7 +106,7 @@ export async function createUserAccount(data: SignupFormData): Promise<SignupRes
     await db.collection('users').doc(firebaseUser.uid).set(userData);
     console.log('[SIGNUP] ✅ Document Firestore créé');
 
-    // Étape 4 : Si c'est un organizer, créer aussi dans la collection organizers (pour affichage public)
+    // Étape 3 : Si c'est un organizer, créer aussi dans la collection organizers (pour affichage public)
     if (validatedData.role === 'organizer') {
       console.log('[SIGNUP] 👤 Création du profil organisateur public...');
       await db.collection('organizers').doc(firebaseUser.uid).set({
