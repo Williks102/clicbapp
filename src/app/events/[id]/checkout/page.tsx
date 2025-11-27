@@ -1,12 +1,10 @@
-
-
 'use client';
 
+import { useMemo, Suspense } from 'react';
 import Link from 'next/link';
-import { useSearchParams, usePathname, useRouter } from 'next/navigation';
+import { useSearchParams, useParams } from 'next/navigation';
 import { notFound } from 'next/navigation';
-import { ChevronLeft } from 'lucide-react';
-import { events } from '@/lib/data';
+import { ChevronLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -18,19 +16,51 @@ import {
 import MainNav from '@/components/main-nav';
 import Footer from '@/components/footer';
 import CheckoutForm from '@/components/checkout-form';
-import { Suspense } from 'react';
+import { useDoc, useFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import type { Event } from '@/lib/types';
 
 function CheckoutPageComponent() {
+  const params = useParams();
   const searchParams = useSearchParams();
-  const pathname = usePathname();
-  const eventId = pathname.split('/')[2];
-
+  const eventId = params.id as string;
   const ticketId = searchParams.get('ticketId');
 
-  const event = events.find((e) => e.id === eventId);
+  const { areServicesAvailable, firestore } = useFirebase();
+
+  // Charger l'événement depuis Firestore
+  const eventRef = useMemo(
+    () => (areServicesAvailable && eventId ? doc(firestore, `events/${eventId}`) : null),
+    [areServicesAvailable, firestore, eventId]
+  );
+  const { data: event, isLoading, error } = useDoc<Event>(eventRef);
+
+  // Trouver le ticket sélectionné
   const ticket = event?.tickets.find((t) => t.id === ticketId);
 
-  if (!event || !ticket) {
+  // États de chargement et d'erreur
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <MainNav />
+        <main className="flex-1 bg-secondary/50 py-12">
+          <div className="container mx-auto max-w-3xl px-4">
+            <Card>
+              <CardContent className="py-12">
+                <div className="flex flex-col items-center justify-center gap-4">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="text-muted-foreground">Chargement...</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!event || !ticket || error) {
     notFound();
   }
 
@@ -68,8 +98,25 @@ function CheckoutPageComponent() {
 
 export default function CheckoutPage() {
   return (
-    <Suspense fallback={<div>Chargement...</div>}>
+    <Suspense fallback={
+      <div className="flex min-h-screen flex-col">
+        <MainNav />
+        <main className="flex-1 bg-secondary/50 py-12">
+          <div className="container mx-auto max-w-3xl px-4">
+            <Card>
+              <CardContent className="py-12">
+                <div className="flex flex-col items-center justify-center gap-4">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="text-muted-foreground">Chargement...</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    }>
       <CheckoutPageComponent />
     </Suspense>
-  )
+  );
 }
