@@ -1,4 +1,3 @@
-
 export type TicketTier = {
   id: string;
   name: string;
@@ -50,4 +49,11 @@ export type User = {
   avatar?: string;
   bio?: string;
   createdAt: string;
+  notificationPreferences?: {
+    emailNotifications: boolean;
+    platformUpdates: boolean;
+  };
+  disabled?: boolean;      // ✅ AJOUTÉ - Pour activer/désactiver le compte
+  deleted?: boolean;       // ✅ AJOUTÉ - Pour soft delete
+  deletedAt?: string;      // ✅ AJOUTÉ - Date de suppression
 }

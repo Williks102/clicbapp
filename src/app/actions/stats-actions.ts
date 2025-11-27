@@ -2,7 +2,7 @@
 
 import { auth } from '@/auth';
 import { firestore } from '@/lib/firebase-admin';
-import type { Sale, Event } from '@/lib/types';
+import type { Sale, Event, Organizer } from '@/lib/types';
 
 // ==================== TYPES ====================
 
@@ -250,14 +250,14 @@ export async function getAdminStats(): Promise<AdminStats | null> {
       });
     });
 
-    const organizersData = organizersSnapshot.docs.map(doc => ({
+    const organizersData: Organizer[] = organizersSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
-    }));
+    } as Organizer));
 
     const topOrganizers = Array.from(organizerSalesMap.entries())
       .map(([organizerId, data]) => {
-        const organizer = organizersData.find((o: any) => o.id === organizerId);
+        const organizer = organizersData.find((o) => o.id === organizerId);
         return {
           organizerId,
           organizerName: organizer?.name || 'Organisateur inconnu',
