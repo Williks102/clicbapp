@@ -127,3 +127,114 @@ export async function createEvent(data: EventFormValues, formData: FormData) {
     throw new Error('Une erreur inconnue est survenue lors de la création de l\'événement.');
   }
 }
+export async function updateEvent(eventId: string, data: EventFormValues, formData: FormData) {
+  try {
+    console.log('[UPDATE EVENT] 📝 Starting event update...', eventId);
+    
+    // 1. Vérifier la session
+    const session = await auth();
+    if (!session?.user?.id) {
+      throw new Error('Vous devez être connecté pour modifier un événement.');
+    }
+    console.log('[UPDATE EVENT] ✅ User authenticated:', session.user.id);
+
+    // 2. Vérifier que l'événement existe et appartient à l'utilisateur
+    const eventDoc = await firestore.collection('events').doc(eventId).get();
+    if (!eventDoc.exists) {
+      throw new Error('Événement introuvable.');
+    }
+
+    const eventData = eventDoc.data() as Event;
+    if (eventData.organizerId !== session.user.id) {
+      throw new Error('Vous n\'êtes pas autorisé à modifier cet événement.');
+    }
+
+    // 3. Valider les données
+    const validatedData = formSchema.safeParse(data);
+    if (!validatedData.success) {
+      const errorMessages = validatedData.error.errors.map(e => e.message).join(', ');
+      console.error('[UPDATE EVENT] ❌ Validation failed:', errorMessages);
+      throw new Error(`Données du formulaire invalides: ${errorMessages}`);
+    }
+    console.log('[UPDATE EVENT] ✅ Data validated');
+
+    const {
+      eventName,
+      eventCategory,
+      eventDate,
+      eventLocation,
+      eventDescription,
+      tickets,
+    } = validatedData.data;
+    
+    let imageUrl = eventData.image; // Garder l'image actuelle par défaut
+
+    // 4. Gérer l'upload de la nouvelle image (si fournie)
+    const imageFile = formData.get('image') as File;
+    if (imageFile && imageFile.size > 0) {
+      try {
+        console.log('[UPDATE EVENT] 📤 Uploading new image:', imageFile.name, `(${imageFile.size} bytes)`);
+        
+        const fileExtension = imageFile.name.split('.').pop();
+        const imageFileName = `events/${uuidv4()}.${fileExtension}`;
+        const file = storage.file(imageFileName);
+
+        const buffer = Buffer.from(await imageFile.arrayBuffer());
+        
+        await file.save(buffer, {
+          metadata: {
+            contentType: imageFile.type,
+          },
+        });
+
+        // Rendre le fichier public et obtenir l'URL
+        await file.makePublic();
+        imageUrl = file.publicUrl();
+        
+        console.log('[UPDATE EVENT] ✅ New image uploaded:', imageUrl);
+      } catch (uploadError) {
+        console.error('[UPDATE EVENT] ⚠️ Image upload failed:', uploadError);
+        // Continue avec l'ancienne image si l'upload échoue
+        console.log('[UPDATE EVENT] ℹ️ Keeping existing image');
+      }
+    } else {
+      console.log('[UPDATE EVENT] ℹ️ No new image provided, keeping existing');
+    }
+
+    // 5. Préparer les données de mise à jour
+    const ticketsWithIds: TicketTier[] = tickets.map((t, index) => ({
+      ...t,
+      id: t.id || `tkt-${Date.now()}-${index}`, // Garder l'ID existant ou en créer un nouveau
+    }));
+
+    const updatedEvent: Partial<Event> = {
+      name: eventName,
+      category: eventCategory,
+      date: new Date(eventDate).toISOString(),
+      location: eventLocation,
+      description: eventDescription,
+      tickets: ticketsWithIds,
+      image: imageUrl,
+    };
+
+    console.log('[UPDATE EVENT] 💾 Updating in Firestore...');
+
+    // 6. Mettre à jour dans Firestore
+    await firestore.collection('events').doc(eventId).update(updatedEvent);
+
+    console.log('[UPDATE EVENT] ✅ Event updated successfully:', eventId);
+
+    revalidatePath('/dashboard/events');
+    revalidatePath(`/events/${eventId}`);
+    
+    return { id: eventId };
+    
+  } catch (error) {
+    console.error('[UPDATE EVENT] ❌ Fatal error:', error);
+    
+    if (error instanceof Error) {
+      throw new Error(`Erreur modification événement: ${error.message}`);
+    }
+    throw new Error('Une erreur inconnue est survenue lors de la modification de l\'événement.');
+  }
+}

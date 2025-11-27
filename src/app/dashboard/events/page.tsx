@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -128,8 +127,9 @@ export default function MyEventsPage() {
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
+                        {/* ✅ Lien Modifier ajouté */}
                         <DropdownMenuItem asChild>
-                        <Link href={`/dashboard/events/edit/${event.id}`}>Modifier</Link>
+                          <Link href={`/dashboard/events/${event.id}/edit`}>Modifier</Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
                            <Link href={`/events/${event.id}`}>Voir</Link>
