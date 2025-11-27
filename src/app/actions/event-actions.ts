@@ -8,7 +8,9 @@ import type { Event, TicketTier } from '@/lib/types';
 import type { EventFormValues } from '@/app/dashboard/events/create/page';
 import { v4 as uuidv4 } from 'uuid';
 
+// ✅ Schéma avec id optionnel pour gérer création ET modification
 const ticketSchema = z.object({
+  id: z.string().optional(), // ✅ Ajout de l'id optionnel
   name: z.string().min(1, 'Le nom du billet est requis.'),
   price: z.coerce.number().min(0, 'Le prix doit être positif.'),
   quantity: z.coerce.number().int().min(1, 'La quantité doit être au moins 1.'),
@@ -92,8 +94,10 @@ export async function createEvent(data: EventFormValues, formData: FormData) {
 
     // 4. Préparer les données de l'événement
     const ticketsWithIds: TicketTier[] = tickets.map((t, index) => ({
-      ...t,
-      id: `tkt-${Date.now()}-${index}`,
+      id: t.id || `tkt-${Date.now()}-${index}`, // ✅ Utilise l'id existant ou en crée un
+      name: t.name,
+      price: t.price,
+      quantity: t.quantity,
     }));
 
     const newEvent: Omit<Event, 'id'> = {
@@ -127,6 +131,8 @@ export async function createEvent(data: EventFormValues, formData: FormData) {
     throw new Error('Une erreur inconnue est survenue lors de la création de l\'événement.');
   }
 }
+
+// ✅ Fonction pour mettre à jour un événement existant
 export async function updateEvent(eventId: string, data: EventFormValues, formData: FormData) {
   try {
     console.log('[UPDATE EVENT] 📝 Starting event update...', eventId);
@@ -203,8 +209,10 @@ export async function updateEvent(eventId: string, data: EventFormValues, formDa
 
     // 5. Préparer les données de mise à jour
     const ticketsWithIds: TicketTier[] = tickets.map((t, index) => ({
-      ...t,
-      id: t.id || `tkt-${Date.now()}-${index}`, // Garder l'ID existant ou en créer un nouveau
+      id: t.id || `tkt-${Date.now()}-${index}`, // ✅ Garder l'ID existant ou en créer un nouveau
+      name: t.name,
+      price: t.price,
+      quantity: t.quantity,
     }));
 
     const updatedEvent: Partial<Event> = {
