@@ -1,7 +1,6 @@
-
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { format } from 'date-fns';
 import { fr } from 'date-fns/locale';
 import { Calendar as CalendarIcon, Download } from 'lucide-react';
@@ -31,27 +30,71 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { PageHeader } from '@/components/page-header';
-import { sales, events } from '@/lib/data';
 import { useToast } from '@/hooks/use-toast';
+import { useCollection, useFirestore } from '@/firebase';
+import { collection, query, where } from 'firebase/firestore';
+import type { Sale, Event } from '@/lib/types';
+import { useSession } from 'next-auth/react';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function SalesPage() {
+  const { data: session } = useSession();
+  const firestore = useFirestore();
+  const { toast } = useToast();
+  
   const [date, setDate] = useState<DateRange | undefined>({
     from: new Date(new Date().setDate(new Date().getDate() - 30)),
     to: new Date(),
   });
-  const { toast } = useToast();
-  
-  const filteredSales = sales.filter(sale => {
-    const purchaseDate = new Date(sale.purchaseDate);
-    if (!date?.from || !date?.to) return true;
-    return purchaseDate >= date.from && purchaseDate <= date.to;
-  });
+
+  // Charger les ventes de l'organisateur depuis Firestore
+  const salesQuery = useMemo(
+    () => (firestore && session?.user?.id 
+      ? query(collection(firestore, 'sales'), where('organizerId', '==', session.user.id)) 
+      : null),
+    [firestore, session]
+  );
+  const { data: sales, isLoading: isLoadingSales } = useCollection<Sale>(salesQuery);
+
+  // Charger tous les événements pour obtenir les noms
+  const eventsQuery = useMemo(
+    () => (firestore ? collection(firestore, 'events') : null),
+    [firestore]
+  );
+  const { data: events, isLoading: isLoadingEvents } = useCollection<Event>(eventsQuery);
+
+  const isLoading = isLoadingSales || isLoadingEvents;
+
+  // Filtrer les ventes par date
+  const filteredSales = useMemo(() => {
+    if (!sales) return [];
+    
+    return sales.filter(sale => {
+      const purchaseDate = new Date(sale.purchaseDate);
+      if (!date?.from || !date?.to) return true;
+      return purchaseDate >= date.from && purchaseDate <= date.to;
+    });
+  }, [sales, date]);
+
+  // Calculer le total
+  const totalRevenue = useMemo(() => {
+    return filteredSales.reduce((sum, sale) => sum + sale.totalPrice, 0);
+  }, [filteredSales]);
 
   const getEventName = (eventId: string) => {
-    return events.find(e => e.id === eventId)?.name || 'Événement inconnu';
+    return events?.find(e => e.id === eventId)?.name || 'Événement inconnu';
   };
 
   const handleExport = () => {
+    if (!filteredSales.length) {
+      toast({
+        title: 'Aucune donnée à exporter',
+        description: 'Il n\'y a pas de ventes pour la période sélectionnée.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     const headers = ['ID Commande', 'Client', 'Email', 'Événement', 'Quantité', 'Prix Total', 'Date'];
     const rows = filteredSales.map(sale => [
         sale.id,
@@ -81,6 +124,24 @@ export default function SalesPage() {
     });
   };
 
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          title="Gestion des Ventes"
+          description="Consultez et exportez les données de vos ventes."
+        />
+        <Card>
+          <CardHeader>
+            <Skeleton className="h-8 w-64" />
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-64 w-full" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
@@ -88,6 +149,34 @@ export default function SalesPage() {
         title="Gestion des Ventes"
         description="Consultez et exportez les données de vos ventes."
       />
+
+      {/* Statistiques */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardDescription>Total des ventes</CardDescription>
+            <CardTitle className="text-3xl font-bold">
+              {filteredSales.length}
+            </CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardDescription>Revenu total</CardDescription>
+            <CardTitle className="text-3xl font-bold text-primary">
+              {totalRevenue.toLocaleString('fr-FR')} FCFA
+            </CardTitle>
+          </CardHeader>
+        </Card>
+        <Card>
+          <CardHeader className="pb-3">
+            <CardDescription>Billets vendus</CardDescription>
+            <CardTitle className="text-3xl font-bold">
+              {filteredSales.reduce((sum, sale) => sum + sale.quantity, 0)}
+            </CardTitle>
+          </CardHeader>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader>
@@ -98,14 +187,14 @@ export default function SalesPage() {
                 Filtrez par période et exportez les données.
               </CardDescription>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex w-full flex-col items-stretch gap-4 sm:w-auto sm:flex-row sm:items-center">
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
                     id="date"
                     variant={'outline'}
                     className={cn(
-                      'w-[300px] justify-start text-left font-normal',
+                      'w-full justify-start text-left font-normal sm:w-[300px]',
                       !date && 'text-muted-foreground'
                     )}
                   >
@@ -135,7 +224,7 @@ export default function SalesPage() {
                   />
                 </PopoverContent>
               </Popover>
-              <Button onClick={handleExport}>
+              <Button onClick={handleExport} className="w-full sm:w-auto">
                 <Download className="mr-2 h-4 w-4" />
                 Exporter
               </Button>
@@ -143,46 +232,49 @@ export default function SalesPage() {
           </div>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Client</TableHead>
-                <TableHead>Événement</TableHead>
-                <TableHead className="text-right">Montant Total</TableHead>
-                <TableHead className="text-right">Date d'achat</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredSales.length > 0 ? (
-                filteredSales.map((sale) => (
+          {filteredSales.length > 0 ? (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Client</TableHead>
+                  <TableHead className="hidden md:table-cell">Événement</TableHead>
+                  <TableHead className="hidden sm:table-cell text-right">Quantité</TableHead>
+                  <TableHead className="text-right">Montant Total</TableHead>
+                  <TableHead className="hidden lg:table-cell text-right">Date</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredSales.map((sale) => (
                   <TableRow key={sale.id}>
                     <TableCell>
                       <div className="font-medium">{sale.customerName}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {sale.customerEmail}
+                      <div className="text-sm text-muted-foreground md:hidden">
+                        {getEventName(sale.eventId)}
                       </div>
                     </TableCell>
-                    <TableCell>{getEventName(sale.eventId)}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="hidden md:table-cell">
+                      {getEventName(sale.eventId)}
+                    </TableCell>
+                    <TableCell className="hidden sm:table-cell text-right">
+                      {sale.quantity}
+                    </TableCell>
+                    <TableCell className="text-right font-medium">
                       {sale.totalPrice.toLocaleString('fr-FR')} FCFA
                     </TableCell>
-                    <TableCell className="text-right">
-                      {format(new Date(sale.purchaseDate), 'PPpp', { locale: fr })}
+                    <TableCell className="hidden lg:table-cell text-right text-muted-foreground">
+                      {format(new Date(sale.purchaseDate), 'dd/MM/yyyy HH:mm')}
                     </TableCell>
                   </TableRow>
-                ))
-              ) : (
-                <TableRow>
-                  <TableCell
-                    colSpan={4}
-                    className="h-24 text-center"
-                  >
-                    Aucune vente pour la période sélectionnée.
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
+                ))}
+              </TableBody>
+            </Table>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <p className="text-muted-foreground">
+                Aucune vente pour la période sélectionnée.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
