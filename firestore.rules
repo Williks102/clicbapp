@@ -57,69 +57,92 @@ service cloud.firestore {
     /**
      * @description   Protects a user's private profile document.
      * @path          /users/{userId}
-     * @allow         A user (auth.uid='user123') can (create) their own profile at `/users/user123`.
-     * @deny          Another user (auth.uid='user456') cannot (get) the profile at `/users/user123`.
-     * @principle     Restricts access to a user's own data tree.
+     * @allow         A user can read/write their own profile.
+     * @allow         Admins can list and read all users.
+     * @deny          Regular users cannot list all users.
      */
     match /users/{userId} {
-      allow get: if isOwner(userId);
-      allow list: if false; // Prevent listing all users
+      allow get: if isOwner(userId) || isAdmin();
+      allow list: if isAdmin(); // ✅ Admins peuvent lister les users
       allow create: if isOwner(userId) && request.resource.data.id == userId;
       allow update: if isOwner(userId) && request.resource.data.id == resource.data.id;
-      allow delete: if isOwner(userId);
+      allow delete: if isOwner(userId) || isAdmin();
 
       /**
        * @description   Manages tickets purchased by a specific user.
        * @path          /users/{userId}/tickets/{ticketId}
-       * @allow         A user (auth.uid='user123') can (list) their own tickets at `/users/user123/tickets`.
-       * @deny          Another user (auth.uid='user456') cannot (create) a ticket at `/users/user123/tickets/new_ticket`.
-       * @principle     Enforces strict ownership within a user's private data subcollection.
        */
       match /tickets/{ticketId} {
-        allow get: if isOwner(userId);
-        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) || isAdmin();
+        allow list: if isOwner(userId) || isAdmin();
         allow create: if isOwner(userId) && request.resource.data.userId == userId;
         allow update: if isOwner(userId) && request.resource.data.userId == resource.data.userId;
-        allow delete: if isOwner(userId);
+        allow delete: if isOwner(userId) || isAdmin();
       }
     }
 
     /**
-     * @description   Manages organizer profiles. Profiles are public, but only the owner can manage them.
+     * @description   Manages organizer profiles.
      * @path          /organizers/{organizerId}
-     * @allow         Any user (signed in or not) can (get) an organizer's profile.
-     * @deny          A user (auth.uid='user456') cannot (update) the profile at `/organizers/organizer123`.
-     * @principle     Public read access with owner-only writes. The organizerId is assumed to be a user's UID.
+     * @allow         Public read, owner write, admins can list.
      */
     match /organizers/{organizerId} {
       allow get: if true;
-      allow list: if false; // Prevent scraping all organizers
+      allow list: if isAdmin(); // ✅ Admins peuvent lister les organizers
       allow create: if isOwner(organizerId) && request.resource.data.id == organizerId;
       allow update: if isOwner(organizerId) && request.resource.data.id == resource.data.id;
-      allow delete: if isOwner(organizerId);
+      allow delete: if isOwner(organizerId) || isAdmin();
     }
     
     /**
-     * @description   Manages events. Events are public, but only the owner can manage them.
+     * @description   Manages events.
      * @path          /events/{eventId}
-     * @allow         Any user can read events.
-     * @deny          A non-owner cannot create, update, or delete an event.
-     * @principle     Public read access, with writes restricted to the owning organizer.
+     * @allow         Public read, owner write, admins can list all.
      */
     match /events/{eventId} {
       allow get: if true;
-      allow list: if true;
-      allow create: if isOwner(request.resource.data.organizerId);
-      allow update: if isExistingOwner('organizerId');
-      allow delete: if isExistingOwner('organizerId');
+      allow list: if true; // ✅ Public peut lister (pour homepage)
+      allow create: if isSignedIn() && isOwner(request.resource.data.organizerId);
+      allow update: if isExistingOwner('organizerId') || isAdmin();
+      allow delete: if isExistingOwner('organizerId') || isAdmin();
     }
 
     /**
-     * @description   Stores event categories. Data is public, but writable only by admins.
+     * @description   Manages sales/purchases.
+     * @path          /sales/{saleId}
+     * @allow         Organizer can read their own sales.
+     * @allow         Admins can read/list all sales.
+     * @allow         System can create sales (via server).
+     */
+    match /sales/{saleId} {
+      // Lecture : propriétaire de la vente OU organisateur de l'événement OU admin
+      allow get: if isSignedIn() && (
+        isExistingOwner('organizerId') || 
+        isAdmin()
+      );
+      
+      // List : organisateur peut lister ses ventes, admin peut tout lister
+      allow list: if isSignedIn() && (
+        request.auth.uid == resource.data.organizerId ||
+        isAdmin()
+      );
+      
+      // Création : n'importe quel utilisateur authentifié peut créer une vente
+      // (nécessaire pour le processus d'achat)
+      allow create: if isSignedIn() && 
+        request.resource.data.organizerId != null &&
+        request.resource.data.eventId != null;
+      
+      // Mise à jour : seulement admin
+      allow update: if isAdmin();
+      
+      // Suppression : seulement admin
+      allow delete: if isAdmin();
+    }
+
+    /**
+     * @description   Stores event categories.
      * @path          /categories/{categoryId}
-     * @allow         Any user (signed in or not) can (list) all categories.
-     * @deny          A non-admin user cannot (create) a new category.
-     * @principle     Role-Based Access Control for administrative data management.
      */
     match /categories/{categoryId} {
       allow get: if true;
@@ -130,11 +153,8 @@ service cloud.firestore {
     }
 
     /**
-     * @description   Stores ticket types. Data is public, but writable only by admins.
+     * @description   Stores ticket types.
      * @path          /ticketTypes/{ticketTypeId}
-     * @allow         Any user (signed in or not) can (get) a ticket type.
-     * @deny          A non-admin user cannot (update) an existing ticket type.
-     * @principle     Role-Based Access Control for administrative data management.
      */
     match /ticketTypes/{ticketTypeId} {
       allow get: if true;
@@ -145,11 +165,8 @@ service cloud.firestore {
     }
 
     /**
-     * @description   Stores sensitive configurations. Access is restricted entirely to admins.
+     * @description   Stores sensitive configurations.
      * @path          /percentageConfigurations/{configId}
-     * @allow         An admin user can (get) a configuration document.
-     * @deny          Any non-admin user cannot (list) or (get) any configuration.
-     * @principle     Strict Role-Based Access Control for sensitive system parameters.
      */
     match /percentageConfigurations/{configId} {
       allow get: if isAdmin();
@@ -160,34 +177,15 @@ service cloud.firestore {
     }
 
     /**
-     * @description   Source of truth for admin roles. This collection should ONLY be modified via the Firebase Console.
+     * @description   Source of truth for admin roles.
      * @path          /roles_admin/{userId}
-     * @allow         An admin user can (get) their own role document to verify their status.
-     * @deny          All write operations are denied to prevent client-side privilege escalation.
-     * @principle     Secure, server-side only management of user roles.
      */
     match /roles_admin/{userId} {
       allow get: if isAdmin();
-      allow list: if false; // Prevent enumeration of admins
+      allow list: if false;
       allow create: if false;
       allow update: if false;
       allow delete: if false;
-    }
-  }
-}
-
-// Firebase Storage Rules
-service firebase.storage {
-  match /b/{bucket}/o {
-    // Rule for event images
-    // Allow public read access to all event images.
-    // Allow authenticated users to write (upload, update, delete) to the 'events' folder.
-    // Ensure the uploaded file is an image and its size is less than 5MB.
-    match /events/{imageId} {
-      allow read: if true;
-      allow write: if request.auth != null 
-                   && request.resource.size < 5 * 1024 * 1024
-                   && request.resource.contentType.matches('image/.*');
     }
   }
 }

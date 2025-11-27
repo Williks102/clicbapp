@@ -1,7 +1,4 @@
-
-import { MoreHorizontal } from 'lucide-react';
 import { PageHeader } from '@/components/page-header';
-import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
@@ -18,96 +15,154 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { users } from '@/lib/data';
-import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
-import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { format } from 'date-fns';
+import { fr } from 'date-fns/locale';
+import { getAllUsers } from '@/app/actions/admin-actions';
+import { UserStatusToggle } from '@/components/admin/user-status-toggle';
 
-export default function AdminUsersPage() {
-  const organizerUsers = users.filter(u => u.role === 'organizer');
-  
+export default async function AdminUsersPage() {
+  // Charger les utilisateurs côté serveur
+  const users = await getAllUsers();
+
+  // Séparer par rôle
+  const organizers = users.filter(u => u.role === 'organizer');
+  const customers = users.filter(u => u.role === 'customer');
+  const admins = users.filter(u => u.role === 'admin');
+
   return (
     <div className="space-y-8">
       <PageHeader
         title="Gestion des Utilisateurs"
-        description="Gérez tous les comptes organisateurs de la plateforme."
+        description={`${users.length} utilisateur${users.length > 1 ? 's' : ''} inscrit${users.length > 1 ? 's' : ''}.`}
       />
+
+      {/* Statistiques */}
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Organisateurs</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{organizers.length}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Clients</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{customers.length}</div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm font-medium">Administrateurs</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{admins.length}</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Liste des utilisateurs */}
       <Card>
         <CardHeader>
-          <CardTitle>Liste des Organisateurs</CardTitle>
+          <CardTitle className="font-headline">Tous les Utilisateurs</CardTitle>
           <CardDescription>
-            Gérez les comptes, suspendez ou supprimez des organisateurs.
+            Liste complète des comptes enregistrés sur la plateforme.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Organisateur</TableHead>
-                <TableHead className="hidden sm:table-cell">Statut</TableHead>
-                <TableHead className="hidden md:table-cell">Date d'inscription</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {organizerUsers.map((user) => {
-                const avatar = user.avatar ? PlaceHolderImages.find(p => p.id === user.avatar) : null;
-                return (
-                <TableRow key={user.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                        <Avatar className='hidden h-8 w-8 sm:flex'>
-                            {avatar && <AvatarImage src={avatar.imageUrl} alt={user.name} />}
-                            <AvatarFallback>{user.name.charAt(0)}</AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <div className="font-medium">{user.name}</div>
-                          <div className="text-xs text-muted-foreground">{user.email}</div>
-                        </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="hidden sm:table-cell">
-                    <Badge variant={'default'} className={'bg-green-100 text-green-800'}>
-                      Actif
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    {new Date(user.createdAt).toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' })}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          aria-haspopup="true"
-                          size="icon"
-                          variant="ghost"
-                        >
-                          <MoreHorizontal className="h-4 w-4" />
-                          <span className="sr-only">Toggle menu</span>
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuLabel>Actions</DropdownMenuLabel>
-                        <DropdownMenuItem>Voir le profil</DropdownMenuItem>
-                        <DropdownMenuItem>
-                          Suspendre le compte
-                        </DropdownMenuItem>
-                         <DropdownMenuItem className="text-destructive">
-                          Supprimer
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </TableCell>
-                </TableRow>
-              )})}
-            </TableBody>
-          </Table>
+          {users.length === 0 ? (
+            <div className="py-12 text-center">
+              <p className="text-muted-foreground">
+                Aucun utilisateur enregistré.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nom</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Rôle</TableHead>
+                    <TableHead>Date d'inscription</TableHead>
+                    <TableHead>Statut</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {users.map((user) => {
+                    const createdAt = user.createdAt 
+                      ? new Date(user.createdAt)
+                      : null;
+
+                    return (
+                      <TableRow key={user.id}>
+                        <TableCell>
+                          <div>
+                            <p className="font-medium">{user.name}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {user.id.substring(0, 12)}...
+                            </p>
+                          </div>
+                        </TableCell>
+                        <TableCell>{user.email}</TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              user.role === 'admin'
+                                ? 'destructive'
+                                : user.role === 'organizer'
+                                ? 'default'
+                                : 'secondary'
+                            }
+                          >
+                            {user.role === 'admin'
+                              ? 'Admin'
+                              : user.role === 'organizer'
+                              ? 'Organisateur'
+                              : 'Client'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {createdAt
+                            ? format(createdAt, 'dd MMM yyyy', { locale: fr })
+                            : 'N/A'}
+                        </TableCell>
+                        <TableCell>
+                          {user.disabled ? (
+                            <Badge variant="outline" className="bg-red-50 text-red-700">
+                              Désactivé
+                            </Badge>
+                          ) : user.deleted ? (
+                            <Badge variant="outline" className="bg-gray-50 text-gray-700">
+                              Supprimé
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="bg-green-50 text-green-700">
+                              Actif
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <UserStatusToggle
+                            userId={user.id}
+                            userName={user.name}
+                            currentStatus={user.disabled || false}
+                            isDeleted={user.deleted || false}
+                          />
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
