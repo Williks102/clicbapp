@@ -90,6 +90,7 @@ export default function ScannerPage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-6">
+          {/* Zone de scan */}
           <div className="w-full max-w-sm overflow-hidden rounded-lg border">
             {isScanning ? (
               <QrScanner
@@ -108,6 +109,7 @@ export default function ScannerPage() {
             )}
           </div>
 
+          {/* Message d'erreur */}
           {scanError && (
              <Alert variant="destructive" className="w-full max-w-sm">
                 <AlertTriangle className="h-4 w-4" />
@@ -116,33 +118,65 @@ export default function ScannerPage() {
             </Alert>
           )}
 
+          {/* Résultat du scan */}
           {scanResult && (
-            <div className='w-full max-w-sm'>
+            <div className='w-full max-w-lg'>
               <Alert
                 variant={parsedData ? 'default' : 'destructive'}
                 className="flex flex-col items-center text-center"
               >
                 {parsedData ? (
-                  <CheckCircle className="mb-2 h-12 w-12 text-green-500" />
+                  <>
+                    <CheckCircle className="mb-2 h-12 w-12 text-green-500" />
+                    <AlertTitle className="mb-3 text-xl font-bold">
+                      Billet Valide ✅
+                    </AlertTitle>
+                    <AlertDescription className="w-full">
+                      <div className='space-y-3 text-left bg-secondary/50 rounded-lg p-4'>
+                        <div className="grid grid-cols-[120px_1fr] gap-2">
+                          <span className="font-semibold">Détenteur:</span>
+                          <span className="font-medium">{parsedData.holder}</span>
+                        </div>
+                        <div className="grid grid-cols-[120px_1fr] gap-2">
+                          <span className="font-semibold">Quantité:</span>
+                          <span className="font-medium">{parsedData.quantity} place(s)</span>
+                        </div>
+                        <div className="grid grid-cols-[120px_1fr] gap-2">
+                          <span className="font-semibold">N° Commande:</span>
+                          <span className="font-mono text-sm">{parsedData.purchaseId}</span>
+                        </div>
+                      </div>
+                      <div className="mt-4 rounded-lg bg-green-50 p-3 text-green-800 border border-green-200">
+                        <p className="font-semibold">✓ Le participant peut entrer</p>
+                      </div>
+                      
+                      {/* Données brutes (optionnel, pour debug) */}
+                      <details className="mt-4">
+                        <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground">
+                          Voir les données brutes
+                        </summary>
+                        <pre className="mt-2 rounded bg-muted p-2 text-xs w-full overflow-x-auto text-left">
+                          <code>{scanResult}</code>
+                        </pre>
+                      </details>
+                    </AlertDescription>
+                  </>
                 ) : (
-                  <XCircle className="mb-2 h-12 w-12 text-destructive" />
+                  <>
+                    <XCircle className="mb-2 h-12 w-12 text-destructive" />
+                    <AlertTitle className="mb-3 text-xl font-bold">
+                      Billet Invalide ❌
+                    </AlertTitle>
+                    <AlertDescription>
+                      <p className="mb-4">Ce QR code ne correspond pas à un billet valide.</p>
+                      <pre className="mt-2 rounded bg-muted p-2 text-xs w-full overflow-x-auto text-left">
+                        <code>{scanResult}</code>
+                      </pre>
+                    </AlertDescription>
+                  </>
                 )}
-                <AlertTitle className="mb-1 text-xl font-bold">
-                  {parsedData ? 'Billet Valide' : 'Billet Invalide'}
-                </AlertTitle>
-                <AlertDescription>
-                  {parsedData ? (
-                    <div className='text-sm text-left w-full space-y-1'>
-                        <p><strong>Détenteur:</strong> {parsedData.holder}</p>
-                        <p><strong>Nb de places:</strong> {parsedData.quantity}</p>
-                        <p>Le participant peut entrer.</p>
-                    </div>
-                  ) : 'Ce QR code ne correspond pas à un billet valide.'}
-                  <pre className="mt-2 rounded bg-muted p-2 text-xs w-full overflow-x-auto text-left">
-                    <code>{scanResult}</code>
-                  </pre>
-                </AlertDescription>
-                 <Button onClick={handleReset} className="mt-4">
+                
+                <Button onClick={handleReset} className="mt-6 w-full" size="lg">
                   Scanner un autre billet
                 </Button>
               </Alert>
