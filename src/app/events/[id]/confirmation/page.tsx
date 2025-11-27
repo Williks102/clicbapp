@@ -1,11 +1,9 @@
-
 'use client';
 
-import { Suspense } from 'react';
+import { Suspense, useMemo } from 'react';
 import Link from 'next/link';
-import { useSearchParams, notFound } from 'next/navigation';
-import { Home } from 'lucide-react';
-import { events } from '@/lib/data';
+import { useSearchParams, notFound, useParams } from 'next/navigation';
+import { Home, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
@@ -17,10 +15,19 @@ import {
 import MainNav from '@/components/main-nav';
 import Footer from '@/components/footer';
 import ElectronicTicket from '@/components/electronic-ticket';
+import { useDoc, useFirebase } from '@/firebase';
+import { doc } from 'firebase/firestore';
+import type { Event } from '@/lib/types';
 
 function ConfirmationPageComponent() {
+  const params = useParams();
   const searchParams = useSearchParams();
-  const eventId = searchParams.get('eventId');
+  
+  // L'eventId peut venir soit de l'URL params, soit des query params (compatibilité)
+  const eventIdFromParams = params.id as string;
+  const eventIdFromQuery = searchParams.get('eventId');
+  const eventId = eventIdFromParams || eventIdFromQuery;
+  
   const ticketId = searchParams.get('ticketId');
   const quantity = searchParams.get('quantity') || '1';
   const fullName = searchParams.get('fullName') || 'Acheteur Anonyme';
@@ -28,11 +35,42 @@ function ConfirmationPageComponent() {
   const orderId = searchParams.get('orderId');
   const ticketNumber = orderId ? `TKT-${orderId.split('-')[1]}` : 'TKT-DEMO';
 
+  const { areServicesAvailable, firestore } = useFirebase();
 
-  const event = events.find((e) => e.id === eventId);
+  // Charger l'événement depuis Firestore
+  const eventRef = useMemo(
+    () => (areServicesAvailable && eventId ? doc(firestore, `events/${eventId}`) : null),
+    [areServicesAvailable, firestore, eventId]
+  );
+  const { data: event, isLoading, error } = useDoc<Event>(eventRef);
+
+  // Trouver le ticket
   const ticket = event?.tickets.find((t) => t.id === ticketId);
 
-  if (!event || !ticket || !orderId) {
+  // État de chargement
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen flex-col">
+        <MainNav />
+        <main className="flex-1 bg-secondary/50 py-12">
+          <div className="container mx-auto max-w-2xl px-4">
+            <Card className="shadow-lg">
+              <CardContent className="py-12">
+                <div className="flex flex-col items-center justify-center gap-4">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="text-muted-foreground">Génération de votre billet...</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  // Vérification des données
+  if (!event || !ticket || !orderId || error) {
     notFound();
   }
 
@@ -44,7 +82,7 @@ function ConfirmationPageComponent() {
             <Card className="shadow-lg">
                 <CardHeader className="text-center">
                     <CardTitle className="font-headline text-3xl">
-                        Achat Réussi !
+                        Achat Réussi ! 🎉
                     </CardTitle>
                     <CardDescription>
                         Votre billet électronique a été généré. Une copie a été envoyée à {email}.
@@ -69,7 +107,6 @@ function ConfirmationPageComponent() {
                     </div>
                 </CardContent>
             </Card>
-
         </div>
       </main>
       <Footer />
@@ -77,10 +114,26 @@ function ConfirmationPageComponent() {
   );
 }
 
-
 export default function ConfirmationPage() {
   return (
-    <Suspense fallback={<div>Chargement de la confirmation...</div>}>
+    <Suspense fallback={
+      <div className="flex min-h-screen flex-col">
+        <MainNav />
+        <main className="flex-1 bg-secondary/50 py-12">
+          <div className="container mx-auto max-w-2xl px-4">
+            <Card className="shadow-lg">
+              <CardContent className="py-12">
+                <div className="flex flex-col items-center justify-center gap-4">
+                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                  <p className="text-muted-foreground">Chargement de la confirmation...</p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    }>
       <ConfirmationPageComponent />
     </Suspense>
   );
