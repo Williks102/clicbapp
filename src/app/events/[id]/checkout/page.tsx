@@ -35,10 +35,26 @@ function CheckoutPageComponent() {
   );
   const { data: event, isLoading, error } = useDoc<Event>(eventRef);
 
-  // Trouver le ticket sélectionné
-  const ticket = event?.tickets.find((t) => t.id === ticketId);
+  // ✅ DEBUG: Afficher les infos dans la console
+  console.log('🔍 === DEBUG CHECKOUT PAGE ===');
+  console.log('eventId:', eventId);
+  console.log('ticketId from URL:', ticketId);
+  console.log('event loaded:', event);
+  if (event) {
+    console.log('event.tickets:', event.tickets);
+    console.log('Searching for ticket with id:', ticketId);
+    event.tickets.forEach((t, index) => {
+      console.log(`  Ticket ${index}:`, {
+        id: t.id,
+        name: t.name,
+        matches: t.id === ticketId,
+      });
+    });
+  }
+  console.log('isLoading:', isLoading);
+  console.log('error:', error);
 
-  // États de chargement et d'erreur
+  // États de chargement
   if (isLoading) {
     return (
       <div className="flex min-h-screen flex-col">
@@ -60,7 +76,12 @@ function CheckoutPageComponent() {
     );
   }
 
-  if (!event || !ticket || error) {
+  // ✅ Vérifier seulement l'événement et le ticketId, PAS le ticket
+  if (!event || !ticketId || error) {
+    console.log('❌ Redirecting to notFound because:');
+    console.log('  event exists:', !!event);
+    console.log('  ticketId exists:', !!ticketId);
+    console.log('  error:', error);
     notFound();
   }
 
@@ -86,7 +107,8 @@ function CheckoutPageComponent() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <CheckoutForm event={event} ticket={ticket} />
+              {/* ✅ Laisser CheckoutForm gérer la recherche et l'affichage du "billet introuvable" */}
+              <CheckoutForm event={event} ticketId={ticketId} />
             </CardContent>
           </Card>
         </div>
@@ -99,21 +121,8 @@ function CheckoutPageComponent() {
 export default function CheckoutPage() {
   return (
     <Suspense fallback={
-      <div className="flex min-h-screen flex-col">
-        <MainNav />
-        <main className="flex-1 bg-secondary/50 py-12">
-          <div className="container mx-auto max-w-3xl px-4">
-            <Card>
-              <CardContent className="py-12">
-                <div className="flex flex-col items-center justify-center gap-4">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <p className="text-muted-foreground">Chargement...</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </main>
-        <Footer />
+      <div className="flex min-h-screen items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     }>
       <CheckoutPageComponent />

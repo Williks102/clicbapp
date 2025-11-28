@@ -228,7 +228,7 @@ export default function EventPage() {
               {selectedTicket && event && (
                 <CheckoutForm 
                   event={event} 
-                  ticket={selectedTicket}
+                  ticketId={selectedTicket.id}
                 />
               )}
             </ScrollArea>
