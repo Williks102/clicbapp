@@ -30,6 +30,8 @@ import { getAllEvents } from '@/app/actions/admin-actions';
 import Link from 'next/link';
 import { DeleteEventButton } from '@/components/admin/delete-event-button';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminEventsPage() {
   // Charger les événements côté serveur
   const events = await getAllEvents();

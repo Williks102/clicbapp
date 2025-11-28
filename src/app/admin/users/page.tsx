@@ -20,6 +20,8 @@ import { fr } from 'date-fns/locale';
 import { getAllUsers } from '@/app/actions/admin-actions';
 import { UserStatusToggle } from '@/components/admin/user-status-toggle';
 
+export const dynamic = 'force-dynamic';
+
 export default async function AdminUsersPage() {
   // Charger les utilisateurs côté serveur
   const users = await getAllUsers();
