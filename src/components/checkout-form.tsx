@@ -55,6 +55,7 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
     },
   });
 
+  // ✅ Early return si le billet n'existe pas
   if (!ticket) {
     return (
       <Card>
@@ -67,10 +68,14 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
     );
   }
 
+  // ✅ À partir d'ici, TypeScript sait que ticket est défini
   const quantity = form.watch('quantity');
   const totalPrice = ticket.price * quantity;
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
+    // ✅ Guard clause supplémentaire pour être sûr
+    if (!ticket) return;
+    
     setIsProcessing(true);
 
     try {
@@ -252,3 +257,5 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
     </Form>
   );
 }
+
+export default CheckoutForm;
