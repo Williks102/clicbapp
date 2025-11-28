@@ -108,6 +108,39 @@ service cloud.firestore {
     }
 
     /**
+ * @description   Manages ticket sales/purchases.
+ * @path          /sales/{saleId}
+ * @allow         Authenticated users can create sales (buy tickets).
+ * @allow         Customers can read their own sales (by email).
+ * @allow         Organizers can read sales for their events (by organizerId).
+ * @allow         Admins can read all sales.
+ * @deny          Only admins can update or delete sales (for refunds/cancellations).
+ * @principle     Customer privacy with organizer access to their event sales.
+ */
+match /sales/{saleId} {
+  // ✅ CREATE: Any authenticated user can create a sale (when purchasing)
+  allow create: if isSignedIn() 
+                && request.resource.data.customerEmail != null
+                && request.resource.data.eventId != null
+                && request.resource.data.organizerId != null;
+  
+  // ✅ GET: Customer (by email) OR Organizer (by organizerId) OR Admin
+  allow get: if isSignedIn() && (
+                  request.auth.token.email == resource.data.customerEmail  // Customer
+                  || request.auth.uid == resource.data.organizerId         // Organizer
+                  || isAdmin()                                             // Admin
+                );
+  
+  // ✅ LIST: Authenticated users only (filtered by where() client-side)
+  // Client-side queries MUST use where() to filter by customerEmail or organizerId
+  allow list: if isSignedIn();
+  
+  // ✅ UPDATE/DELETE: Admin only (for refunds, cancellations)
+  allow update: if isAdmin();
+  allow delete: if isAdmin();
+}
+
+    /**
      * @description   Manages sales/purchases.
      * @path          /sales/{saleId}
      * @allow         Organizer can read their own sales.
