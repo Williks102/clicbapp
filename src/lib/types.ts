@@ -53,7 +53,69 @@ export type User = {
     emailNotifications: boolean;
     platformUpdates: boolean;
   };
-  disabled?: boolean;      // ✅ AJOUTÉ - Pour activer/désactiver le compte
-  deleted?: boolean;       // ✅ AJOUTÉ - Pour soft delete
-  deletedAt?: string;      // ✅ AJOUTÉ - Date de suppression
+  disabled?: boolean;
+  deleted?: boolean;
+  deletedAt?: string;
 }
+
+// ==================== ACTION TYPES ====================
+
+/**
+ * Données requises pour créer un achat
+ */
+export type PurchaseData = {
+  eventId: string;
+  ticketId: string;
+  quantity: number;
+  fullName: string;
+  email: string;
+  totalPrice: number;
+};
+
+/**
+ * Résultat d'une action d'achat
+ */
+export type PurchaseResult = {
+  success: boolean;
+  error?: string;
+  saleId?: string;
+  message?: string;
+};
+
+/**
+ * Résultat générique d'une action serveur
+ */
+export type ActionResult = {
+  success: boolean;
+  error?: string;
+  message?: string;
+};
+
+/**
+ * Statistiques organisateur
+ */
+export type OrganizerStats = {
+  totalSales: number;
+  totalRevenue: number;
+  totalTicketsSold: number;
+  totalEvents: number;
+  salesByMonth: Array<{ month: string; sales: number; revenue: number }>;
+  topEvents: Array<{ eventId: string; eventName: string; sales: number; revenue: number }>;
+  recentSales: Sale[];
+};
+
+/**
+ * Statistiques admin
+ */
+export type AdminStats = {
+  totalSales: number;
+  totalRevenue: number;
+  totalTicketsSold: number;
+  totalEvents: number;
+  totalOrganizers: number;
+  totalCustomers: number;
+  salesByMonth: Array<{ month: string; sales: number; revenue: number }>;
+  topEvents: Array<{ eventId: string; eventName: string; sales: number; revenue: number }>;
+  topOrganizers: Array<{ organizerId: string; organizerName: string; sales: number; revenue: number }>;
+  recentSales: Sale[];
+};

@@ -1,140 +1,204 @@
-'use client';
-
-import { Suspense, useMemo } from 'react';
+import { notFound } from 'next/navigation';
 import Link from 'next/link';
-import { useSearchParams, notFound, useParams } from 'next/navigation';
-import { Home, Loader2 } from 'lucide-react';
+import { CheckCircle, Mail, Calendar, MapPin, Ticket } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription
 } from '@/components/ui/card';
-import MainNav from '@/components/main-nav';
-import Footer from '@/components/footer';
-import ElectronicTicket from '@/components/electronic-ticket';
-import { useDoc, useFirebase } from '@/firebase';
-import { doc } from 'firebase/firestore';
-import type { Event } from '@/lib/types';
+import { firestore } from '@/lib/firebase-admin';
+import type { Event, Sale } from '@/lib/types';
+import { ResendTicketButton } from '@/components/resend-ticket-button';
 
-function ConfirmationPageComponent() {
-  const params = useParams();
-  const searchParams = useSearchParams();
-  
-  // L'eventId peut venir soit de l'URL params, soit des query params (compatibilité)
-  const eventIdFromParams = params.id as string;
-  const eventIdFromQuery = searchParams.get('eventId');
-  const eventId = eventIdFromParams || eventIdFromQuery;
-  
-  const ticketId = searchParams.get('ticketId');
-  const quantity = searchParams.get('quantity') || '1';
-  const fullName = searchParams.get('fullName') || 'Acheteur Anonyme';
-  const email = searchParams.get('email') || '';
-  const orderId = searchParams.get('orderId');
-  const ticketNumber = orderId ? `TKT-${orderId.split('-')[1]}` : 'TKT-DEMO';
+type ConfirmationPageProps = {
+  params: { id: string };
+  searchParams: { saleId?: string; eventId?: string };
+};
 
-  const { areServicesAvailable, firestore } = useFirebase();
+export default async function ConfirmationPage({
+  params,
+  searchParams,
+}: ConfirmationPageProps) {
+  const eventId = searchParams.eventId || params.id;
+  const saleId = searchParams.saleId;
 
-  // Charger l'événement depuis Firestore
-  const eventRef = useMemo(
-    () => (areServicesAvailable && eventId ? doc(firestore, `events/${eventId}`) : null),
-    [areServicesAvailable, firestore, eventId]
-  );
-  const { data: event, isLoading, error } = useDoc<Event>(eventRef);
-
-  // Trouver le ticket
-  const ticket = event?.tickets.find((t) => t.id === ticketId);
-
-  // État de chargement
-  if (isLoading) {
-    return (
-      <div className="flex min-h-screen flex-col">
-        <MainNav />
-        <main className="flex-1 bg-secondary/50 py-12">
-          <div className="container mx-auto max-w-2xl px-4">
-            <Card className="shadow-lg">
-              <CardContent className="py-12">
-                <div className="flex flex-col items-center justify-center gap-4">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <p className="text-muted-foreground">Génération de votre billet...</p>
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
-
-  // Vérification des données
-  if (!event || !ticket || !orderId || error) {
+  if (!saleId) {
     notFound();
   }
 
-  return (
-    <div className="flex min-h-screen flex-col">
-      <MainNav />
-      <main className="flex-1 bg-secondary/50 py-12">
-        <div className="container mx-auto max-w-2xl px-4">
-            <Card className="shadow-lg">
-                <CardHeader className="text-center">
-                    <CardTitle className="font-headline text-3xl">
-                        Achat Réussi ! 🎉
-                    </CardTitle>
-                    <CardDescription>
-                        Votre billet électronique a été généré. Une copie a été envoyée à {email}.
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6 px-2 sm:px-6">
-                    <ElectronicTicket 
-                        event={event} 
-                        ticket={ticket} 
-                        quantity={parseInt(quantity, 10)}
-                        fullName={fullName}
-                        orderId={orderId}
-                        ticketNumber={ticketNumber}
-                    />
-                    <div className='text-center'>
-                        <Button size="lg" variant="outline" asChild>
-                            <Link href="/">
-                            <Home className="mr-2 h-5 w-5" />
-                            Retour à l'accueil
-                            </Link>
-                        </Button>
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
-      </main>
-      <Footer />
-    </div>
-  );
-}
+  // Récupérer la vente
+  const saleDoc = await firestore.collection('sales').doc(saleId).get();
 
-export default function ConfirmationPage() {
+  if (!saleDoc.exists) {
+    notFound();
+  }
+
+  const sale = { id: saleDoc.id, ...saleDoc.data() } as Sale;
+
+  // Récupérer l'événement
+  const eventDoc = await firestore.collection('events').doc(sale.eventId).get();
+
+  if (!eventDoc.exists) {
+    notFound();
+  }
+
+  const event = { id: eventDoc.id, ...eventDoc.data() } as Event;
+
+  // Trouver le ticket
+  const ticket = event.tickets.find(t => t.id === sale.ticketId);
+
+  const eventDate = new Date(event.date);
+  const formattedDate = eventDate.toLocaleDateString('fr-FR', {
+    weekday: 'long',
+    year: 'numeric',
+    month: 'long',
+    day: 'numeric',
+  });
+  const formattedTime = eventDate.toLocaleTimeString('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+
   return (
-    <Suspense fallback={
-      <div className="flex min-h-screen flex-col">
-        <MainNav />
-        <main className="flex-1 bg-secondary/50 py-12">
-          <div className="container mx-auto max-w-2xl px-4">
-            <Card className="shadow-lg">
-              <CardContent className="py-12">
-                <div className="flex flex-col items-center justify-center gap-4">
-                  <Loader2 className="h-8 w-8 animate-spin text-primary" />
-                  <p className="text-muted-foreground">Chargement de la confirmation...</p>
-                </div>
-              </CardContent>
-            </Card>
+    <div className="container max-w-3xl py-12">
+      <div className="mb-8 text-center">
+        <div className="mb-4 flex justify-center">
+          <div className="rounded-full bg-green-100 p-3">
+            <CheckCircle className="h-16 w-16 text-green-600" />
           </div>
-        </main>
-        <Footer />
+        </div>
+        <h1 className="mb-2 text-3xl font-bold">🎉 Achat Réussi !</h1>
+        <p className="text-lg text-muted-foreground">
+          Votre commande a été confirmée avec succès
+        </p>
       </div>
-    }>
-      <ConfirmationPageComponent />
-    </Suspense>
+
+      {/* Informations de la commande */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Détails de votre commande</CardTitle>
+          <CardDescription>
+            N° de commande : <span className="font-mono font-bold">{sale.id}</span>
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-3">
+            <div className="flex items-start gap-3">
+              <Ticket className="mt-1 h-5 w-5 text-primary" />
+              <div className="flex-1">
+                <p className="font-medium">{event.name}</p>
+                <p className="text-sm text-muted-foreground">{ticket?.name}</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <Calendar className="mt-1 h-5 w-5 text-primary" />
+              <div>
+                <p className="font-medium capitalize">{formattedDate}</p>
+                <p className="text-sm text-muted-foreground">{formattedTime}</p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <MapPin className="mt-1 h-5 w-5 text-primary" />
+              <p className="font-medium">{event.location}</p>
+            </div>
+          </div>
+
+          <div className="border-t pt-4">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Quantité</span>
+              <span className="font-medium">{sale.quantity} billet(s)</span>
+            </div>
+            <div className="flex justify-between text-lg font-bold">
+              <span>Total payé</span>
+              <span className="text-primary">
+                {sale.totalPrice.toLocaleString('fr-FR')} FCFA
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Instructions email */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Mail className="h-5 w-5 text-primary" />
+            Votre Billet Électronique
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="rounded-lg border border-green-200 bg-green-50 p-4">
+            <p className="mb-2 font-semibold text-green-800">
+              ✅ Billet envoyé à votre email !
+            </p>
+            <p className="text-sm text-green-700">
+              Un email de confirmation a été envoyé à{' '}
+              <strong>{sale.customerEmail}</strong>
+            </p>
+          </div>
+
+          <div className="space-y-2 text-sm">
+            <p className="font-medium">📧 Que faire ensuite ?</p>
+            <ol className="list-inside list-decimal space-y-1 text-muted-foreground">
+              <li>Vérifiez votre boîte de réception (et vos spams)</li>
+              <li>Ouvrez l'email contenant votre billet</li>
+              <li>Présentez le QR code à l'entrée de l'événement</li>
+            </ol>
+          </div>
+
+          <div className="flex gap-2">
+            <ResendTicketButton saleId={sale.id} email={sale.customerEmail} />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Informations importantes */}
+      <Card className="mb-6">
+        <CardHeader>
+          <CardTitle>Informations Importantes</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ul className="space-y-2 text-sm">
+            <li className="flex gap-2">
+              <span>⏰</span>
+              <span>Arrivez 15 minutes avant le début de l'événement</span>
+            </li>
+            <li className="flex gap-2">
+              <span>📱</span>
+              <span>
+                Présentez votre QR code sur votre téléphone ou imprimé
+              </span>
+            </li>
+            <li className="flex gap-2">
+              <span>🎫</span>
+              <span>
+                Ce billet est valable pour {sale.quantity} personne(s)
+              </span>
+            </li>
+            <li className="flex gap-2">
+              <span>💼</span>
+              <span>
+                Conservez votre email de confirmation en sécurité
+              </span>
+            </li>
+          </ul>
+        </CardContent>
+      </Card>
+
+      {/* Actions */}
+      <div className="flex flex-col gap-3 sm:flex-row">
+        <Button asChild className="flex-1">
+          <Link href="/account">Voir mes billets</Link>
+        </Button>
+        <Button asChild variant="outline" className="flex-1">
+          <Link href="/events">Découvrir d'autres événements</Link>
+        </Button>
+      </div>
+    </div>
   );
 }
