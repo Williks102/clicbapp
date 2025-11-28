@@ -330,7 +330,7 @@ async function sendTicketEmail(data: TicketEmailData) {
   `;
 
   await resend.emails.send({
-    from: 'ClicBillet <billets@monticket.online>',
+    from: 'ClicBillet <onboarding@resend.dev>',
     to,
     subject: `🎫 Votre billet pour ${event.name}`,
     html: emailHtml,
