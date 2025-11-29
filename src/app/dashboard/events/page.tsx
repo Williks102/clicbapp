@@ -129,7 +129,7 @@ export default function MyEventsPage() {
                         <DropdownMenuLabel>Actions</DropdownMenuLabel>
                         {/* ✅ Lien Modifier ajouté */}
                         <DropdownMenuItem asChild>
-                          <Link href={`/dashboard/events/${event.id}/edit`}>Modifier</Link>
+                          <Link href={`/dashboard/events/edit/${event.id}`}>Modifier</Link>
                         </DropdownMenuItem>
                         <DropdownMenuItem asChild>
                            <Link href={`/events/${event.id}`}>Voir</Link>
