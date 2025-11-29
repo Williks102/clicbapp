@@ -4,6 +4,7 @@
 
 import { useState, useRef } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
+import { CloudinaryUploadWidget } from '@/components/cloudinary-upload-widget';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
@@ -70,15 +71,13 @@ const formSchema = z.object({
     .string()
     .optional(),
   tickets: z.array(ticketSchema).min(1, 'Au moins un type de billet est requis.'),
-  image: z.any().optional(), // File upload
+  image: z.string().url().optional()
 });
 
 export type EventFormValues = z.infer<typeof formSchema>;
 
 export default function CreateEventPage() {
   const [isGenerating, setIsGenerating] = useState(false);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
 
   const form = useForm<EventFormValues>({
@@ -88,6 +87,7 @@ export default function CreateEventPage() {
       eventCategory: '',
       eventDate: '',
       eventLocation: '',
+      image: '',
       eventDescription: '',
       tickets: [{ name: 'Standard', price: 10000, quantity: 100 }],
     },
@@ -142,33 +142,13 @@ export default function CreateEventPage() {
     }
   };
 
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-        if (file.size > 5 * 1024 * 1024) { // 5MB limit
-            toast({
-                title: "Fichier trop volumineux",
-                description: "Veuillez choisir une image de moins de 5MB.",
-                variant: "destructive"
-            });
-            return;
-        }
-        const reader = new FileReader();
-        reader.onloadend = () => {
-            setImagePreview(reader.result as string);
-        };
-        reader.readAsDataURL(file);
-    }
-  };
+  
 
   async function onSubmit(data: EventFormValues) {
-    const formData = new FormData();
-    if (fileInputRef.current?.files?.[0]) {
-        formData.append('image', fileInputRef.current.files[0]);
-    }
+    
 
     try {
-      await createEvent(data, formData);
+      await createEvent(data);
 
       toast({
         title: 'Événement créé avec succès !',
@@ -276,53 +256,22 @@ export default function CreateEventPage() {
               </div>
               
               <FormField
-                control={form.control}
-                name="image"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Image de l'événement</FormLabel>
-                    <FormControl>
-                      <div className="flex items-center gap-4">
-                        <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-md border border-dashed flex items-center justify-center">
-                          {imagePreview ? (
-                            <>
-                              <Image src={imagePreview} alt="Aperçu" layout="fill" objectFit="cover" />
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                size="icon"
-                                className="absolute right-1 top-1 h-6 w-6 z-10"
-                                onClick={() => {
-                                    setImagePreview(null);
-                                    if (fileInputRef.current) fileInputRef.current.value = '';
-                                    field.onChange(null);
-                                }}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </>
-                          ) : (
-                            <Upload className="h-8 w-8 text-muted-foreground" />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <Input
-                            type="file"
-                            accept="image/png, image/jpeg, image/webp"
-                            ref={fileInputRef}
-                            onChange={(e) => {
-                                handleImageChange(e);
-                                field.onChange(e.target.files?.[0]);
-                            }}
-                          />
-                          <p className="mt-2 text-xs text-muted-foreground">PNG, JPG, WEBP. Max 5MB.</p>
-                        </div>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+          control={form.control}
+          name="image"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Image de l'événement</FormLabel>
+              <FormControl>
+                <CloudinaryUploadWidget
+                  value={field.value}
+                  onChange={field.onChange}
+                  onRemove={() => field.onChange('')}
+                />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
 
               <FormField
                 control={form.control}

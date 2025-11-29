@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -9,8 +9,6 @@ import {
   Wand2,
   Trash,
   PlusCircle,
-  Upload,
-  X,
   Loader2,
 } from 'lucide-react';
 import {
@@ -49,11 +47,13 @@ import { categories } from '@/lib/data';
 import { toast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { updateEvent } from '@/app/actions/event-actions';
-import Image from 'next/image';
 import { useDoc, useFirestore } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import type { Event } from '@/lib/types';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
+import { CloudinaryUploadWidget } from '@/components/cloudinary-upload-widget'; // ✅ Import Cloudinary
+
+// ==================== SCHEMAS ====================
 
 const ticketSchema = z.object({
   id: z.string().optional(),
@@ -70,10 +70,12 @@ const formSchema = z.object({
   eventDescription: z.string().min(10, 'La description est trop courte.'),
   eventDescriptionKeywords: z.string().optional(),
   tickets: z.array(ticketSchema).min(1, 'Au moins un type de billet est requis.'),
-  image: z.any().optional(),
+  image: z.string().url().optional(), // ✅ URL Cloudinary
 });
 
 export type EventFormValues = z.infer<typeof formSchema>;
+
+// ==================== COMPONENT ====================
 
 export default function EditEventPage() {
   const params = useParams();
@@ -82,15 +84,14 @@ export default function EditEventPage() {
   const firestore = useFirestore();
   
   const [isGenerating, setIsGenerating] = useState(false);
-  const [imagePreview, setImagePreview] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  // ✅ Plus besoin de imagePreview ni fileInputRef !
 
   // Charger l'événement depuis Firestore
   const eventRef = useMemo(
     () => (firestore && eventId ? doc(firestore, `events/${eventId}`) : null),
     [firestore, eventId]
   );
-  const { data: event, isLoading: isLoadingEvent } = useDoc<Event>(eventRef);
+  const { data: event, isLoading } = useDoc<Event>(eventRef);
 
   const form = useForm<EventFormValues>({
     resolver: zodResolver(formSchema),
@@ -101,6 +102,7 @@ export default function EditEventPage() {
       eventLocation: '',
       eventDescription: '',
       tickets: [{ name: 'Standard', price: 10000, quantity: 100 }],
+      image: '', // ✅ URL Cloudinary
     },
   });
 
@@ -109,38 +111,35 @@ export default function EditEventPage() {
     name: 'tickets',
   });
 
-  // Pré-remplir le formulaire quand l'événement est chargé
+  // ✅ Initialiser le formulaire avec les données de l'événement
   useEffect(() => {
     if (event) {
-      // Convertir la date ISO en format datetime-local
-      const eventDate = new Date(event.date);
-      const localDate = new Date(eventDate.getTime() - eventDate.getTimezoneOffset() * 60000)
-        .toISOString()
-        .slice(0, 16);
-
+      // Déterminer l'URL de l'image
+      let imageUrl = event.image;
+      
+      // Si c'est un placeholder ID, convertir en URL
+      if (event.image && !event.image.startsWith('http')) {
+        const placeholderImage = PlaceHolderImages.find(img => img.id === event.image);
+        if (placeholderImage) {
+          imageUrl = placeholderImage.imageUrl;
+        }
+      }
+      
+      // Initialiser le formulaire
       form.reset({
         eventName: event.name,
         eventCategory: event.category,
-        eventDate: localDate,
+        eventDate: new Date(event.date).toISOString().split('T')[0],
         eventLocation: event.location,
         eventDescription: event.description,
-        tickets: event.tickets || [{ name: 'Standard', price: 10000, quantity: 100 }],
+        eventDescriptionKeywords: '',
+        tickets: event.tickets,
+        image: imageUrl, // ✅ CloudinaryUploadWidget affichera le preview
       });
-
-      // Afficher l'image actuelle
-      if (event.image) {
-        if (event.image.startsWith('http')) {
-          setImagePreview(event.image);
-        } else {
-          const placeholderImage = PlaceHolderImages.find(img => img.id === event.image);
-          if (placeholderImage) {
-            setImagePreview(placeholderImage.imageUrl);
-          }
-        }
-      }
     }
   }, [event, form]);
 
+  // Génération de description IA
   const handleGenerateDescription = async () => {
     const {
       eventName,
@@ -153,7 +152,7 @@ export default function EditEventPage() {
     if (!eventName || !eventCategory || !eventDate || !eventLocation) {
       toast({
         title: 'Champs manquants',
-        description: 'Veuillez remplir le nom, la catégorie, la date et le lieu pour générer une description.',
+        description: 'Veuillez remplir le nom, la catégorie, la date et le lieu.',
         variant: 'destructive',
       });
       return;
@@ -166,8 +165,7 @@ export default function EditEventPage() {
         eventCategory,
         eventDate,
         eventLocation,
-        eventDescriptionKeywords:
-          eventDescriptionKeywords || 'vibrant, unique, inoubliable',
+        eventDescriptionKeywords: eventDescriptionKeywords || 'vibrant, unique, inoubliable',
       };
       const result = await generateEventDescription(input);
       form.setValue('eventDescription', result.eventDescription, {
@@ -185,62 +183,37 @@ export default function EditEventPage() {
     }
   };
 
-  const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      if (file.size > 5 * 1024 * 1024) {
-        toast({
-          title: "Fichier trop volumineux",
-          description: "Veuillez choisir une image de moins de 5MB.",
-          variant: "destructive"
-        });
-        return;
-      }
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImagePreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
+  // ✅ Soumission du formulaire (plus de formData !)
   async function onSubmit(data: EventFormValues) {
-    const formData = new FormData();
-    if (fileInputRef.current?.files?.[0]) {
-      formData.append('image', fileInputRef.current.files[0]);
-    }
-
     try {
-      await updateEvent(eventId, data, formData);
+      await updateEvent(eventId, data); // ✅ Plus de formData
 
       toast({
-        title: 'Événement modifié avec succès !',
+        title: 'Événement mis à jour !',
         description: 'Les modifications ont été enregistrées.',
       });
 
       router.push('/dashboard/events');
     } catch (error) {
-      console.error("Error updating event: ", error);
+      console.error('Error updating event:', error);
       toast({
-        title: 'Erreur de modification',
-        description: error instanceof Error ? error.message : "Une erreur est survenue lors de la modification de l'événement.",
+        title: 'Erreur de mise à jour',
+        description: error instanceof Error ? error.message : 'Une erreur est survenue.',
         variant: 'destructive',
       });
     }
   }
 
-  if (isLoadingEvent) {
+  // Loading state
+  if (isLoading) {
     return (
       <div className="space-y-8">
-        <PageHeader
-          title="Modifier l'Événement"
-          description="Chargement des données..."
-        />
+        <PageHeader title="Chargement..." description="" />
         <Card>
-          <CardContent className="py-8">
-            <div className="flex items-center justify-center">
-              <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            </div>
+          <CardContent className="p-6">
+            <Skeleton className="h-10 w-full mb-4" />
+            <Skeleton className="h-10 w-full mb-4" />
+            <Skeleton className="h-32 w-full" />
           </CardContent>
         </Card>
       </div>
@@ -250,22 +223,7 @@ export default function EditEventPage() {
   if (!event) {
     return (
       <div className="space-y-8">
-        <PageHeader
-          title="Événement introuvable"
-          description="L'événement que vous cherchez n'existe pas."
-        />
-        <Card>
-          <CardContent className="py-8">
-            <p className="text-center text-muted-foreground">
-              Cet événement n'existe pas ou a été supprimé.
-            </p>
-            <div className="mt-4 flex justify-center">
-              <Button onClick={() => router.push('/dashboard/events')}>
-                Retour à mes événements
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        <PageHeader title="Événement introuvable" description="" />
       </div>
     );
   }
@@ -274,7 +232,7 @@ export default function EditEventPage() {
     <div className="space-y-8">
       <PageHeader
         title="Modifier l'Événement"
-        description="Modifiez les informations de votre événement."
+        description="Mettez à jour les informations de votre événement."
       />
       <Form {...form}>
         <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
@@ -287,63 +245,64 @@ export default function EditEventPage() {
                 Informations principales de votre événement.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="eventName"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Nom de l'événement</FormLabel>
+            <CardContent className="space-y-6">
+              {/* Nom */}
+              <FormField
+                control={form.control}
+                name="eventName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nom de l'événement</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Concert de Didi B" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Catégorie */}
+              <FormField
+                control={form.control}
+                name="eventCategory"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Catégorie</FormLabel>
+                    <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
-                        <Input placeholder="ex: FEMUA 2024" {...field} />
+                        <SelectTrigger>
+                          <SelectValue placeholder="Sélectionnez une catégorie" />
+                        </SelectTrigger>
                       </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <FormField
-                  control={form.control}
-                  name="eventCategory"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Catégorie</FormLabel>
-                      <Select
-                        onValueChange={field.onChange}
-                        value={field.value}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Sélectionnez une catégorie" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {categories.map((cat) => (
-                            <SelectItem key={cat.id} value={cat.name}>
-                              {cat.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <SelectContent>
+                        {categories.map((category) => (
+                          <SelectItem key={category.id} value={category.name}>
+                            {category.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Date et Lieu */}
+              <div className="grid gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
                   name="eventDate"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Date et heure</FormLabel>
+                      <FormLabel>Date</FormLabel>
                       <FormControl>
-                        <Input type="datetime-local" {...field} />
+                        <Input type="date" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
+
                 <FormField
                   control={form.control}
                   name="eventLocation"
@@ -351,14 +310,15 @@ export default function EditEventPage() {
                     <FormItem>
                       <FormLabel>Lieu</FormLabel>
                       <FormControl>
-                        <Input placeholder="ex: Palais de la Culture, Abidjan" {...field} />
+                        <Input placeholder="Palais de la Culture, Abidjan" {...field} />
                       </FormControl>
                       <FormMessage />
                     </FormItem>
                   )}
                 />
               </div>
-              
+
+              {/* ✅ IMAGE CLOUDINARY - Simple ! */}
               <FormField
                 control={form.control}
                 name="image"
@@ -366,48 +326,18 @@ export default function EditEventPage() {
                   <FormItem>
                     <FormLabel>Image de l'événement</FormLabel>
                     <FormControl>
-                      <div className="flex items-center gap-4">
-                        <div className="relative h-24 w-24 flex-shrink-0 overflow-hidden rounded-md border border-dashed flex items-center justify-center">
-                          {imagePreview ? (
-                            <>
-                              <Image src={imagePreview} alt="Aperçu" fill className="object-cover" />
-                              <Button
-                                type="button"
-                                variant="destructive"
-                                size="icon"
-                                className="absolute right-1 top-1 h-6 w-6 z-10"
-                                onClick={() => {
-                                  setImagePreview(null);
-                                  if (fileInputRef.current) fileInputRef.current.value = '';
-                                  field.onChange(null);
-                                }}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </>
-                          ) : (
-                            <Upload className="h-8 w-8 text-muted-foreground" />
-                          )}
-                        </div>
-                        <div className="flex-1">
-                          <Input
-                            type="file"
-                            accept="image/png, image/jpeg, image/webp"
-                            ref={fileInputRef}
-                            onChange={(e) => {
-                              handleImageChange(e);
-                              field.onChange(e.target.files?.[0]);
-                            }}
-                          />
-                          <p className="mt-2 text-xs text-muted-foreground">PNG, JPG, WEBP. Max 5MB.</p>
-                        </div>
-                      </div>
+                      <CloudinaryUploadWidget
+                        value={field.value}
+                        onChange={field.onChange}
+                        onRemove={() => field.onChange('')}
+                      />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
 
+              {/* Description avec IA */}
               <FormField
                 control={form.control}
                 name="eventDescription"
@@ -447,20 +377,21 @@ export default function EditEventPage() {
                 )}
               />
 
+              {/* Keywords optionnel */}
               <FormField
                 control={form.control}
                 name="eventDescriptionKeywords"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Mots-clés pour la génération (optionnel)</FormLabel>
+                    <FormLabel>Mots-clés (optionnel)</FormLabel>
                     <FormControl>
                       <Input
-                        placeholder="ex: vibrant, culturel, familial"
+                        placeholder="vibrant, unique, inoubliable"
                         {...field}
                       />
                     </FormControl>
                     <FormDescription>
-                      Ces mots-clés seront utilisés pour générer la description avec l'IA.
+                      Utilisé pour la génération IA
                     </FormDescription>
                     <FormMessage />
                   </FormItem>
@@ -469,43 +400,35 @@ export default function EditEventPage() {
             </CardContent>
           </Card>
 
+          {/* Billets */}
           <Card>
             <CardHeader>
-              <CardTitle className="font-headline">Billetterie</CardTitle>
+              <CardTitle className="font-headline">Types de Billets</CardTitle>
               <CardDescription>
-                Définissez les types de billets et leurs prix.
+                Définissez les différents types de billets disponibles.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {fields.map((field, index) => (
-                <div key={field.id} className="space-y-4 rounded-lg border p-4">
-                  <div className="flex items-center justify-between">
-                    <h4 className="font-medium">Billet #{index + 1}</h4>
-                    {fields.length > 1 && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => remove(index)}
-                      >
-                        <Trash className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div
+                  key={field.id}
+                  className="flex items-end gap-4 rounded-lg border p-4"
+                >
+                  <div className="grid flex-1 gap-4 md:grid-cols-3">
                     <FormField
                       control={form.control}
                       name={`tickets.${index}.name`}
                       render={({ field }) => (
                         <FormItem>
-                          <FormLabel>Nom du billet</FormLabel>
+                          <FormLabel>Nom</FormLabel>
                           <FormControl>
-                            <Input placeholder="ex: VIP" {...field} />
+                            <Input placeholder="VIP" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
+
                     <FormField
                       control={form.control}
                       name={`tickets.${index}.price`}
@@ -523,6 +446,7 @@ export default function EditEventPage() {
                         </FormItem>
                       )}
                     />
+
                     <FormField
                       control={form.control}
                       name={`tickets.${index}.quantity`}
@@ -530,25 +454,32 @@ export default function EditEventPage() {
                         <FormItem>
                           <FormLabel>Quantité</FormLabel>
                           <FormControl>
-                            <Input
-                              type="number"
-                              placeholder="100"
-                              {...field}
-                            />
+                            <Input type="number" placeholder="100" {...field} />
                           </FormControl>
                           <FormMessage />
                         </FormItem>
                       )}
                     />
                   </div>
+
+                  {fields.length > 1 && (
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      onClick={() => remove(index)}
+                    >
+                      <Trash className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               ))}
+
               <Button
                 type="button"
                 variant="outline"
-                size="sm"
                 onClick={() =>
-                  append({ name: '', price: 0, quantity: 50 })
+                  append({ name: '', price: 0, quantity: 100 })
                 }
               >
                 <PlusCircle className="mr-2 h-4 w-4" />
@@ -557,7 +488,8 @@ export default function EditEventPage() {
             </CardContent>
           </Card>
 
-          <div className="flex gap-4 justify-end">
+          {/* Submit */}
+          <div className="flex justify-end gap-4">
             <Button
               type="button"
               variant="outline"
@@ -565,9 +497,7 @@ export default function EditEventPage() {
             >
               Annuler
             </Button>
-            <Button type="submit" disabled={form.formState.isSubmitting}>
-              {form.formState.isSubmitting ? 'Modification en cours...' : 'Enregistrer les modifications'}
-            </Button>
+            <Button type="submit">Enregistrer les modifications</Button>
           </div>
         </form>
       </Form>

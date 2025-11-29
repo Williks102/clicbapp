@@ -2,15 +2,15 @@
 
 import { z } from 'zod';
 import { auth } from '@/auth';
-import { firestore, storage } from '@/lib/firebase-admin';
+import { firestore } from '@/lib/firebase-admin'; // ✅ Plus besoin de 'storage'
 import { revalidatePath } from 'next/cache';
 import type { Event, TicketTier } from '@/lib/types';
 import type { EventFormValues } from '@/app/dashboard/events/create/page';
-import { v4 as uuidv4 } from 'uuid';
 
-// ✅ Schéma avec id optionnel pour gérer création ET modification
+// ==================== SCHEMAS ====================
+
 const ticketSchema = z.object({
-  id: z.string().optional(), // ✅ Ajout de l'id optionnel
+  id: z.string().optional(),
   name: z.string().min(1, 'Le nom du billet est requis.'),
   price: z.coerce.number().min(0, 'Le prix doit être positif.'),
   quantity: z.coerce.number().int().min(1, 'La quantité doit être au moins 1.'),
@@ -22,14 +22,14 @@ const formSchema = z.object({
   eventDate: z.string().min(1, 'La date est requise.'),
   eventLocation: z.string().min(1, 'Le lieu est requis.'),
   eventDescription: z.string().min(10, 'La description est trop courte.'),
-  eventDescriptionKeywords: z
-    .string()
-    .optional(),
+  eventDescriptionKeywords: z.string().optional(),
   tickets: z.array(ticketSchema).min(1, 'Au moins un type de billet est requis.'),
+  image: z.string().url().optional(), // ✅ URL Cloudinary
 });
 
+// ==================== CREATE EVENT ====================
 
-export async function createEvent(data: EventFormValues, formData: FormData) {
+export async function createEvent(data: EventFormValues) {
   try {
     console.log('[CREATE EVENT] 📝 Starting event creation...');
     
@@ -45,7 +45,7 @@ export async function createEvent(data: EventFormValues, formData: FormData) {
     if (!validatedData.success) {
       const errorMessages = validatedData.error.errors.map(e => e.message).join(', ');
       console.error('[CREATE EVENT] ❌ Validation failed:', errorMessages);
-      throw new Error(`Données du formulaire invalides: ${errorMessages}`);
+      throw new Error(`Données invalides: ${errorMessages}`);
     }
     console.log('[CREATE EVENT] ✅ Data validated');
 
@@ -56,50 +56,22 @@ export async function createEvent(data: EventFormValues, formData: FormData) {
       eventLocation,
       eventDescription,
       tickets,
+      image,
     } = validatedData.data;
-    
-    let imageUrl = 'event-1'; // Default image
 
-    // 3. Gérer l'upload de l'image
-    const imageFile = formData.get('image') as File;
-    if (imageFile && imageFile.size > 0) {
-      try {
-        console.log('[CREATE EVENT] 📤 Uploading image:', imageFile.name, `(${imageFile.size} bytes)`);
-        
-        const fileExtension = imageFile.name.split('.').pop();
-        const imageFileName = `events/${uuidv4()}.${fileExtension}`;
-        const file = storage.file(imageFileName);
+    // ✅ L'image vient directement du Cloudinary widget (URL)
+    const imageUrl = image || 'event-1'; // Default si pas d'image
+    console.log('[CREATE EVENT] 🖼️ Image URL:', imageUrl);
 
-        const buffer = Buffer.from(await imageFile.arrayBuffer());
-        
-        await file.save(buffer, {
-          metadata: {
-            contentType: imageFile.type,
-          },
-        });
-
-        // Rendre le fichier public et obtenir l'URL
-        await file.makePublic();
-        imageUrl = file.publicUrl();
-        
-        console.log('[CREATE EVENT] ✅ Image uploaded:', imageUrl);
-      } catch (uploadError) {
-        console.error('[CREATE EVENT] ⚠️ Image upload failed:', uploadError);
-        // Continue avec l'image par défaut si l'upload échoue
-        console.log('[CREATE EVENT] ℹ️ Using default image');
-      }
-    } else {
-      console.log('[CREATE EVENT] ℹ️ No image provided, using default');
-    }
-
-    // 4. Préparer les données de l'événement
+    // 3. Préparer les tickets avec IDs
     const ticketsWithIds: TicketTier[] = tickets.map((t, index) => ({
-      id: t.id || `tkt-${Date.now()}-${index}`, // ✅ Utilise l'id existant ou en crée un
+      id: t.id || `tkt-${Date.now()}-${index}`,
       name: t.name,
       price: t.price,
       quantity: t.quantity,
     }));
 
+    // 4. Créer l'événement
     const newEvent: Omit<Event, 'id'> = {
       name: eventName,
       category: eventCategory,
@@ -108,7 +80,7 @@ export async function createEvent(data: EventFormValues, formData: FormData) {
       description: eventDescription,
       organizerId: session.user.id,
       tickets: ticketsWithIds,
-      image: imageUrl, 
+      image: imageUrl, // ✅ URL Cloudinary directe
     };
 
     console.log('[CREATE EVENT] 💾 Saving to Firestore...');
@@ -132,8 +104,9 @@ export async function createEvent(data: EventFormValues, formData: FormData) {
   }
 }
 
-// ✅ Fonction pour mettre à jour un événement existant
-export async function updateEvent(eventId: string, data: EventFormValues, formData: FormData) {
+// ==================== UPDATE EVENT ====================
+
+export async function updateEvent(eventId: string, data: EventFormValues) {
   try {
     console.log('[UPDATE EVENT] 📝 Starting event update...', eventId);
     
@@ -160,7 +133,7 @@ export async function updateEvent(eventId: string, data: EventFormValues, formDa
     if (!validatedData.success) {
       const errorMessages = validatedData.error.errors.map(e => e.message).join(', ');
       console.error('[UPDATE EVENT] ❌ Validation failed:', errorMessages);
-      throw new Error(`Données du formulaire invalides: ${errorMessages}`);
+      throw new Error(`Données invalides: ${errorMessages}`);
     }
     console.log('[UPDATE EVENT] ✅ Data validated');
 
@@ -171,78 +144,49 @@ export async function updateEvent(eventId: string, data: EventFormValues, formDa
       eventLocation,
       eventDescription,
       tickets,
+      image,
     } = validatedData.data;
-    
-    let imageUrl = eventData.image; // Garder l'image actuelle par défaut
 
-    // 4. Gérer l'upload de la nouvelle image (si fournie)
-    const imageFile = formData.get('image') as File;
-    if (imageFile && imageFile.size > 0) {
-      try {
-        console.log('[UPDATE EVENT] 📤 Uploading new image:', imageFile.name, `(${imageFile.size} bytes)`);
-        
-        const fileExtension = imageFile.name.split('.').pop();
-        const imageFileName = `events/${uuidv4()}.${fileExtension}`;
-        const file = storage.file(imageFileName);
+    // ✅ Utiliser nouvelle image ou garder l'ancienne
+    const imageUrl = image || eventData.image;
+    console.log('[UPDATE EVENT] 🖼️ Image URL:', imageUrl);
 
-        const buffer = Buffer.from(await imageFile.arrayBuffer());
-        
-        await file.save(buffer, {
-          metadata: {
-            contentType: imageFile.type,
-          },
-        });
-
-        // Rendre le fichier public et obtenir l'URL
-        await file.makePublic();
-        imageUrl = file.publicUrl();
-        
-        console.log('[UPDATE EVENT] ✅ New image uploaded:', imageUrl);
-      } catch (uploadError) {
-        console.error('[UPDATE EVENT] ⚠️ Image upload failed:', uploadError);
-        // Continue avec l'ancienne image si l'upload échoue
-        console.log('[UPDATE EVENT] ℹ️ Keeping existing image');
-      }
-    } else {
-      console.log('[UPDATE EVENT] ℹ️ No new image provided, keeping existing');
-    }
-
-    // 5. Préparer les données de mise à jour
+    // 4. Préparer les tickets avec IDs
     const ticketsWithIds: TicketTier[] = tickets.map((t, index) => ({
-      id: t.id || `tkt-${Date.now()}-${index}`, // ✅ Garder l'ID existant ou en créer un nouveau
+      id: t.id || `tkt-${Date.now()}-${index}`,
       name: t.name,
       price: t.price,
       quantity: t.quantity,
     }));
 
-    const updatedEvent: Partial<Event> = {
+    // 5. Mettre à jour l'événement
+    const updatedEvent = {
       name: eventName,
       category: eventCategory,
       date: new Date(eventDate).toISOString(),
       location: eventLocation,
       description: eventDescription,
       tickets: ticketsWithIds,
-      image: imageUrl,
+      image: imageUrl, // ✅ URL Cloudinary
     };
 
     console.log('[UPDATE EVENT] 💾 Updating in Firestore...');
 
-    // 6. Mettre à jour dans Firestore
     await firestore.collection('events').doc(eventId).update(updatedEvent);
 
-    console.log('[UPDATE EVENT] ✅ Event updated successfully:', eventId);
+    console.log('[UPDATE EVENT] ✅ Event updated successfully');
 
     revalidatePath('/dashboard/events');
     revalidatePath(`/events/${eventId}`);
     
-    return { id: eventId };
+    return { success: true };
     
   } catch (error) {
     console.error('[UPDATE EVENT] ❌ Fatal error:', error);
     
     if (error instanceof Error) {
-      throw new Error(`Erreur modification événement: ${error.message}`);
+      throw new Error(`Erreur mise à jour événement: ${error.message}`);
     }
-    throw new Error('Une erreur inconnue est survenue lors de la modification de l\'événement.');
+    throw new Error('Une erreur inconnue est survenue lors de la mise à jour de l\'événement.');
   }
 }
