@@ -48,11 +48,14 @@ export function CloudinaryUploadWidget({
         options={{
           maxFiles: 1,
           maxFileSize: 5000000, // 5MB
-          sources: ['local', 'camera'],
-          cropping: true,
-          croppingAspectRatio: 16 / 9,
-          showSkipCropButton: false,
+          sources: ['local', 'camera', 'url'],
+          cropping: false, // ✅ Pas de cropping forcé
+          // croppingAspectRatio: 16 / 9, // Désactivé
+          // showSkipCropButton: true, // Optionnel si cropping activé
           folder: 'events',
+          clientAllowedFormats: ['png', 'jpg', 'jpeg', 'webp'],
+          maxImageWidth: 1920,
+          maxImageHeight: 1080,
         }}
       >
         {({ open }) => (
