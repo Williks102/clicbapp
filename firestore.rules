@@ -1,4 +1,3 @@
-
 /**
  * Core Philosophy: This ruleset implements a security model with three primary access levels:
  * 1.  User-Owned Data: User profiles and their associated tickets are strictly private. Only the authenticated owner of the data can perform any action on it. This is enforced for all paths under `/users/{userId}`.
@@ -12,24 +11,24 @@
  * - /categories, /ticketTypes: Publicly readable master data, writable only by admins.
  * - /percentageConfigurations: Private configuration data, readable and writable only by admins.
  * - /roles_admin: A locked-down collection that serves as the source of truth for identifying admin users.
+ * - /sales: Sales data accessible to customers (by email), organizers (by organizerId), and admins.
+ * - /transactions: Financial transactions accessible to organizers (their own) and admins (all).
  *
  * Key Security Decisions:
  * - Admin Role Management: The `/roles_admin` collection is read-only via security rules. Admins must be added or removed manually through the Firebase Console to prevent any client-side escalation of privileges.
- * - No User/Organizer Listing: Top-level listing of `/users` and `/organizers` collections is disabled to protect user privacy and prevent data scraping.
+ * - No User/Organizer Listing: Top-level listing of `/users` and `/organizers` collections is disabled to protect user privacy and prevent data scraping (except for admins).
  * - Default Deny: Any path not explicitly matched is denied access. Permissions that are not explicitly granted are also denied.
  *
  * Denormalization for Authorization:
  * To ensure fast and secure rules, authorization data is denormalized. For example, a document in the `/users/{userId}/tickets` subcollection must contain a `userId` field that matches the `{userId}` in the path. Similarly, an `event` document contains an `organizerId`. This avoids costly and slow `get()` calls in rules, making authorization checks efficient.
- *
- * Structural Segregation:
- * While not yet implemented, this ruleset is designed to easily support structural segregation. For example, if "draft" events were needed, they could be placed in a separate, private collection with stricter rules, while public events remain in `/events/{eventId}`.
  */
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions for concise and readable rules
+    // ==================== HELPER FUNCTIONS ====================
+    
     function isSignedIn() {
       return request.auth != null;
     }
@@ -54,6 +53,8 @@ service cloud.firestore {
       return isAdmin() && resource != null;
     }
 
+    // ==================== USER DATA ====================
+    
     /**
      * @description   Protects a user's private profile document.
      * @path          /users/{userId}
@@ -63,7 +64,7 @@ service cloud.firestore {
      */
     match /users/{userId} {
       allow get: if isOwner(userId) || isAdmin();
-      allow list: if isAdmin(); // ✅ Admins peuvent lister les users
+      allow list: if isAdmin();
       allow create: if isOwner(userId) && request.resource.data.id == userId;
       allow update: if isOwner(userId) && request.resource.data.id == resource.data.id;
       allow delete: if isOwner(userId) || isAdmin();
@@ -81,6 +82,8 @@ service cloud.firestore {
       }
     }
 
+    // ==================== ORGANIZER DATA ====================
+    
     /**
      * @description   Manages organizer profiles.
      * @path          /organizers/{organizerId}
@@ -88,91 +91,99 @@ service cloud.firestore {
      */
     match /organizers/{organizerId} {
       allow get: if true;
-      allow list: if isAdmin(); // ✅ Admins peuvent lister les organizers
+      allow list: if isAdmin();
       allow create: if isOwner(organizerId) && request.resource.data.id == organizerId;
       allow update: if isOwner(organizerId) && request.resource.data.id == resource.data.id;
       allow delete: if isOwner(organizerId) || isAdmin();
     }
     
+    // ==================== EVENT DATA ====================
+    
     /**
      * @description   Manages events.
      * @path          /events/{eventId}
-     * @allow         Public read, owner write, admins can list all.
+     * @allow         Public read, owner write, admins can manage all.
      */
     match /events/{eventId} {
       allow get: if true;
-      allow list: if true; // ✅ Public peut lister (pour homepage)
+      allow list: if true;
       allow create: if isSignedIn() && isOwner(request.resource.data.organizerId);
       allow update: if isExistingOwner('organizerId') || isAdmin();
       allow delete: if isExistingOwner('organizerId') || isAdmin();
     }
 
+    // ==================== SALES DATA ====================
+    
     /**
- * @description   Manages ticket sales/purchases.
- * @path          /sales/{saleId}
- * @allow         Authenticated users can create sales (buy tickets).
- * @allow         Customers can read their own sales (by email).
- * @allow         Organizers can read sales for their events (by organizerId).
- * @allow         Admins can read all sales.
- * @deny          Only admins can update or delete sales (for refunds/cancellations).
- * @principle     Customer privacy with organizer access to their event sales.
- */
-match /sales/{saleId} {
-  // ✅ CREATE: Any authenticated user can create a sale (when purchasing)
-  allow create: if isSignedIn() 
-                && request.resource.data.customerEmail != null
-                && request.resource.data.eventId != null
-                && request.resource.data.organizerId != null;
-  
-  // ✅ GET: Customer (by email) OR Organizer (by organizerId) OR Admin
-  allow get: if isSignedIn() && (
-                  request.auth.token.email == resource.data.customerEmail  // Customer
-                  || request.auth.uid == resource.data.organizerId         // Organizer
-                  || isAdmin()                                             // Admin
-                );
-  
-  // ✅ LIST: Authenticated users only (filtered by where() client-side)
-  // Client-side queries MUST use where() to filter by customerEmail or organizerId
-  allow list: if isSignedIn();
-  
-  // ✅ UPDATE/DELETE: Admin only (for refunds, cancellations)
-  allow update: if isAdmin();
-  allow delete: if isAdmin();
-}
-
-    /**
-     * @description   Manages sales/purchases.
+     * @description   Manages ticket sales/purchases.
      * @path          /sales/{saleId}
-     * @allow         Organizer can read their own sales.
-     * @allow         Admins can read/list all sales.
-     * @allow         System can create sales (via server).
+     * @allow         Authenticated users can create sales (buy tickets).
+     * @allow         Customers can read their own sales (by email).
+     * @allow         Organizers can read sales for their events (by organizerId).
+     * @allow         Admins can read all sales.
+     * @deny          Only admins can update or delete sales (for refunds/cancellations).
+     * @principle     Customer privacy with organizer access to their event sales.
      */
     match /sales/{saleId} {
-      // Lecture : propriétaire de la vente OU organisateur de l'événement OU admin
+      // CREATE: Any authenticated user can create a sale (when purchasing)
+      allow create: if isSignedIn() 
+                    && request.resource.data.customerEmail != null
+                    && request.resource.data.eventId != null
+                    && request.resource.data.organizerId != null;
+      
+      // GET: Customer (by email) OR Organizer (by organizerId) OR Admin
       allow get: if isSignedIn() && (
-        isExistingOwner('organizerId') || 
+                      request.auth.token.email == resource.data.customerEmail  // Customer
+                      || request.auth.uid == resource.data.organizerId         // Organizer
+                      || isAdmin()                                             // Admin
+                    );
+      
+      // LIST: Authenticated users only (filtered by where() client-side)
+      // Client-side queries MUST use where() to filter by customerEmail or organizerId
+      allow list: if isSignedIn();
+      
+      // UPDATE/DELETE: Admin only (for refunds, cancellations)
+      allow update: if isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    // ==================== TRANSACTION DATA ====================
+    
+    /**
+     * @description   Manages financial transactions (payouts, refunds, commissions).
+     * @path          /transactions/{transactionId}
+     * @allow         Organizers can read their own transactions.
+     * @allow         Admins can read all and create new transactions.
+     * @deny          Only admins can create/update/delete transactions.
+     */
+    match /transactions/{transactionId} {
+      // GET: Organizer can see their own transactions OR Admin
+      allow get: if isSignedIn() && (
+        request.auth.uid == resource.data.organizerId ||
         isAdmin()
       );
       
-      // List : organisateur peut lister ses ventes, admin peut tout lister
+      // LIST: Organizer can list their transactions, Admin can list all
       allow list: if isSignedIn() && (
         request.auth.uid == resource.data.organizerId ||
         isAdmin()
       );
       
-      // Création : n'importe quel utilisateur authentifié peut créer une vente
-      // (nécessaire pour le processus d'achat)
-      allow create: if isSignedIn() && 
+      // CREATE: Admin only
+      allow create: if isAdmin() && 
         request.resource.data.organizerId != null &&
-        request.resource.data.eventId != null;
+        request.resource.data.type != null &&
+        request.resource.data.amount != null;
       
-      // Mise à jour : seulement admin
+      // UPDATE: Admin only
       allow update: if isAdmin();
       
-      // Suppression : seulement admin
+      // DELETE: Admin only
       allow delete: if isAdmin();
     }
 
+    // ==================== MASTER DATA ====================
+    
     /**
      * @description   Stores event categories.
      * @path          /categories/{categoryId}
@@ -197,6 +208,8 @@ match /sales/{saleId} {
       allow delete: if isAdminAndExists();
     }
 
+    // ==================== CONFIGURATION DATA ====================
+    
     /**
      * @description   Stores sensitive configurations.
      * @path          /percentageConfigurations/{configId}
@@ -209,9 +222,12 @@ match /sales/{saleId} {
       allow delete: if isAdminAndExists();
     }
 
+    // ==================== ADMIN ROLES ====================
+    
     /**
      * @description   Source of truth for admin roles.
      * @path          /roles_admin/{userId}
+     * @note          This collection should ONLY be modified via Firebase Console.
      */
     match /roles_admin/{userId} {
       allow get: if isAdmin();
@@ -219,6 +235,25 @@ match /sales/{saleId} {
       allow create: if false;
       allow update: if false;
       allow delete: if false;
+    }
+  }
+}
+
+// ==================== FIREBASE STORAGE RULES ====================
+
+service firebase.storage {
+  match /b/{bucket}/o {
+    /**
+     * @description   Rules for event images.
+     * @path          /events/{imageId}
+     * @allow         Public read access to all event images.
+     * @allow         Authenticated users can upload images (max 5MB, images only).
+     */
+    match /events/{imageId} {
+      allow read: if true;
+      allow write: if request.auth != null 
+                   && request.resource.size < 5 * 1024 * 1024
+                   && request.resource.contentType.matches('image/.*');
     }
   }
 }
