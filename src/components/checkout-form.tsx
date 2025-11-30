@@ -2,10 +2,11 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { useSession } from 'next-auth/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { Loader2, Mail, User } from 'lucide-react';
+import { Loader2, Mail, User, CreditCard } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -23,14 +24,17 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
+  CardFooter,
 } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import type { Event } from '@/lib/types';
 import { createPurchaseAndSendTicket } from '@/app/actions/ticket-actions';
+import { PurchaseModal } from '@/components/purchase-modal';
 
+// Schéma de validation conditionnel
 const formSchema = z.object({
-  fullName: z.string().min(2, 'Le nom doit contenir au moins 2 caractères'),
-  email: z.string().email('Email invalide'),
+  fullName: z.string().optional(),
+  email: z.string().optional(),
   quantity: z.number().min(1).max(10),
 });
 
@@ -42,20 +46,22 @@ type CheckoutFormProps = {
 export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
   const router = useRouter();
   const { toast } = useToast();
+  const { data: session } = useSession();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
+  const [guestInfo, setGuestInfo] = useState<{ email: string; name: string } | null>(null);
 
   const ticket = event.tickets.find((t) => t.id === ticketId);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      fullName: '',
-      email: '',
+      fullName: session?.user?.name || '',
+      email: session?.user?.email || '',
       quantity: 1,
     },
   });
 
-  // ✅ Early return si le billet n'existe pas
   if (!ticket) {
     return (
       <Card>
@@ -68,12 +74,40 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
     );
   }
 
-  // ✅ À partir d'ici, TypeScript sait que ticket est défini
   const quantity = form.watch('quantity');
   const totalPrice = ticket.price * quantity;
 
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    // ✅ Guard clause supplémentaire pour être sûr
+  // Gestion de l'achat en mode invité
+  const handleGuestPurchase = async (email: string, name: string) => {
+    setGuestInfo({ email, name });
+    setShowPurchaseModal(false);
+    
+    // Procéder directement au paiement avec les infos invité
+    await processPurchase({
+      fullName: name,
+      email: email,
+      quantity: form.getValues('quantity')
+    });
+  };
+
+  // Gestion de l'achat en mode connecté
+  const handleUserPurchase = async () => {
+    setShowPurchaseModal(false);
+    
+    // Utiliser les infos de la session
+    await processPurchase({
+      fullName: session?.user?.name || '',
+      email: session?.user?.email || '',
+      quantity: form.getValues('quantity')
+    });
+  };
+
+  // Traitement de l'achat
+  const processPurchase = async (purchaseData: {
+    fullName: string;
+    email: string;
+    quantity: number;
+  }) => {
     if (!ticket) return;
     
     setIsProcessing(true);
@@ -84,178 +118,177 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
         description: 'Création de votre commande',
       });
 
-      // Créer l'achat et envoyer le billet
       const result = await createPurchaseAndSendTicket({
         eventId: event.id,
         ticketId: ticket.id,
-        quantity: values.quantity,
-        fullName: values.fullName,
-        email: values.email,
-        totalPrice,
+        quantity: purchaseData.quantity,
+        fullName: purchaseData.fullName,
+        email: purchaseData.email,
+        totalPrice: ticket.price * purchaseData.quantity,
       });
 
       if (result.success) {
         toast({
           title: '✅ Achat confirmé !',
-          description: result.message,
+          description: 'Votre billet a été envoyé par email.',
         });
-
-        // Rediriger vers la page de confirmation
-        const params = new URLSearchParams({
-          saleId: result.saleId!,
-          eventId: event.id,
-        });
-        router.push(`/events/${event.id}/confirmation?${params.toString()}`);
+        
+        // Rediriger vers une page de confirmation
+        router.push(`/purchase/success?orderId=${result.saleId}`);
       } else {
         toast({
           title: 'Erreur',
-          description: result.error,
+          description: result.error || 'Une erreur est survenue',
           variant: 'destructive',
         });
       }
     } catch (error) {
+      console.error('Erreur:', error);
       toast({
         title: 'Erreur',
-        description: 'Une erreur est survenue',
+        description: 'Une erreur est survenue lors du traitement',
         variant: 'destructive',
       });
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  // Soumission du formulaire
+  async function onSubmit(values: z.infer<typeof formSchema>) {
+    // Ouvrir le modal de choix si pas connecté
+    if (!session?.user && !guestInfo) {
+      setShowPurchaseModal(true);
+      return;
+    }
+
+    // Si connecté ou déjà invité, procéder directement
+    await processPurchase({
+      fullName: guestInfo?.name || session?.user?.name || values.fullName || '',
+      email: guestInfo?.email || session?.user?.email || values.email || '',
+      quantity: values.quantity
+    });
   }
 
   return (
-    <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Informations de Contact</CardTitle>
-            <CardDescription>
-              Votre billet électronique sera envoyé à cette adresse email
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <FormField
-              control={form.control}
-              name="fullName"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nom et Prénoms</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                      <Input placeholder="John Doe" {...field} className="pl-10" />
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="email"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Adresse Email</FormLabel>
-                  <FormControl>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>Finaliser votre commande</CardTitle>
+          <CardDescription>
+            {event.name} - {ticket.name}
+          </CardDescription>
+        </CardHeader>
+        
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)}>
+            <CardContent className="space-y-4">
+              {/* Sélection de la quantité */}
+              <FormField
+                control={form.control}
+                name="quantity"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Nombre de billets</FormLabel>
+                    <FormControl>
                       <Input
-                        type="email"
-                        placeholder="john@example.com"
+                        type="number"
+                        min="1"
+                        max="10"
                         {...field}
-                        className="pl-10"
+                        onChange={(e) => field.onChange(parseInt(e.target.value))}
                       />
-                    </div>
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              {/* Récapitulatif */}
+              <div className="rounded-lg border p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Prix unitaire</span>
+                  <span>{ticket.price.toLocaleString('fr-FR')} F CFA</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Quantité</span>
+                  <span>× {quantity}</span>
+                </div>
+                <div className="border-t pt-2 flex justify-between font-semibold">
+                  <span>Total</span>
+                  <span>{totalPrice.toLocaleString('fr-FR')} F CFA</span>
+                </div>
+              </div>
+
+              {/* Afficher les infos utilisateur si connecté */}
+              {session?.user && (
+                <div className="rounded-lg bg-muted p-4 space-y-1">
+                  <p className="text-sm font-medium">Achat pour :</p>
+                  <p className="text-sm text-muted-foreground">
+                    {session.user.name} ({session.user.email})
+                  </p>
+                </div>
               )}
-            />
 
-            <FormField
-              control={form.control}
-              name="quantity"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Nombre de billets</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      min={1}
-                      max={10}
-                      {...field}
-                      onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
+              {/* Afficher les infos invité si renseignées */}
+              {guestInfo && !session?.user && (
+                <div className="rounded-lg bg-muted p-4 space-y-1">
+                  <p className="text-sm font-medium">Achat pour :</p>
+                  <p className="text-sm text-muted-foreground">
+                    {guestInfo.name} ({guestInfo.email})
+                  </p>
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    onClick={() => {
+                      setGuestInfo(null);
+                      setShowPurchaseModal(true);
+                    }}
+                    className="p-0 h-auto"
+                  >
+                    Modifier
+                  </Button>
+                </div>
               )}
-            />
-          </CardContent>
-        </Card>
+            </CardContent>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Récapitulatif</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Type de billet</span>
-              <span className="font-medium">{ticket.name}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Prix unitaire</span>
-              <span className="font-medium">
-                {ticket.price.toLocaleString('fr-FR')} FCFA
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Quantité</span>
-              <span className="font-medium">{quantity}</span>
-            </div>
-            <div className="border-t pt-3 flex justify-between">
-              <span className="font-semibold text-lg">Total</span>
-              <span className="font-bold text-lg text-primary">
-                {totalPrice.toLocaleString('fr-FR')} FCFA
-              </span>
-            </div>
-          </CardContent>
-        </Card>
+            <CardFooter>
+              <Button 
+                type="submit" 
+                className="w-full" 
+                disabled={isProcessing || !ticket}
+                size="lg"
+              >
+                {isProcessing ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Traitement en cours...
+                  </>
+                ) : (
+                  <>
+                    <CreditCard className="mr-2 h-4 w-4" />
+                    {session?.user || guestInfo 
+                      ? `Payer ${totalPrice.toLocaleString('fr-FR')} F CFA` 
+                      : 'Continuer vers le paiement'}
+                  </>
+                )}
+              </Button>
+            </CardFooter>
+          </form>
+        </Form>
+      </Card>
 
-        <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-          <p className="text-sm text-blue-800">
-            <strong>📧 Livraison instantanée</strong>
-            <br />
-            Votre billet électronique avec QR code sera envoyé immédiatement à votre email.
-          </p>
-        </div>
-
-        <Button
-          type="submit"
-          size="lg"
-          className="w-full"
-          disabled={isProcessing}
-        >
-          {isProcessing ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Traitement en cours...
-            </>
-          ) : (
-            <>Confirmer l'achat</>
-          )}
-        </Button>
-
-        <p className="text-center text-xs text-muted-foreground">
-          En confirmant, vous acceptez de recevoir votre billet par email.
-          <br />
-          Vérifiez vos spams si vous ne recevez rien.
-        </p>
-      </form>
-    </Form>
+      {/* Modal de choix : connexion ou invité */}
+      <PurchaseModal
+        isOpen={showPurchaseModal}
+        onClose={() => setShowPurchaseModal(false)}
+        event={event}
+        ticketId={ticketId}
+        quantity={form.getValues('quantity')}
+        onProceedAsGuest={handleGuestPurchase}
+        onProceedAsUser={handleUserPurchase}
+      />
+    </>
   );
 }
-
-export default CheckoutForm;

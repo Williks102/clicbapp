@@ -52,6 +52,9 @@ export async function createPurchaseAndSendTicket(
   try {
     console.log('[PURCHASE] 🎫 Creating purchase...');
 
+    // Récupérer la session pour les achats connectés (optionnel)
+    const session = await auth();
+    
     // Récupérer l'événement
     const eventDoc = await firestore.collection('events').doc(data.eventId).get();
     
@@ -72,12 +75,12 @@ export async function createPurchaseAndSendTicket(
     // TODO: Implémenter la vérification de stock réelle
 
     // Générer l'ID de vente
-    const saleId = generateOrderNumber();
+    const orderId = generateOrderNumber();
     const purchaseDate = new Date().toISOString();
 
-    // Créer l'objet Sale
+    // Créer l'objet Sale (sans userId car il n'existe pas dans le type)
     const sale: Sale = {
-      id: saleId,
+      id: orderId,
       eventId: data.eventId,
       ticketId: data.ticketId,
       customerName: data.fullName,
@@ -89,7 +92,7 @@ export async function createPurchaseAndSendTicket(
     };
 
     // Sauvegarder dans Firestore
-    await firestore.collection('sales').doc(saleId).set(sale);
+    await firestore.collection('sales').doc(orderId).set(sale);
     console.log('[PURCHASE] ✅ Sale created in Firestore');
 
     // Générer le QR code
@@ -114,7 +117,7 @@ export async function createPurchaseAndSendTicket(
 
     return {
       success: true,
-      saleId,
+      saleId: orderId,
       message: 'Achat confirmé ! Vérifiez votre email pour votre billet.',
     };
 
@@ -168,39 +171,35 @@ async function sendTicketEmail(data: TicketEmailData) {
       padding: 20px;
     }
     .header {
-      background: linear-gradient(135deg, #FF9500 0%, #FF6B00 100%);
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
       color: white;
       padding: 30px;
       text-align: center;
       border-radius: 10px 10px 0 0;
     }
-    .header h1 {
-      margin: 0;
-      font-size: 28px;
-    }
     .content {
-      background: #f8f9fa;
+      background: #f7f7f7;
       padding: 30px;
-      border-radius: 0 0 10px 10px;
+      border: 1px solid #e0e0e0;
     }
     .ticket-card {
       background: white;
+      border: 2px solid #667eea;
       border-radius: 10px;
-      padding: 25px;
+      padding: 20px;
       margin: 20px 0;
-      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
     }
     .event-name {
       font-size: 24px;
       font-weight: bold;
-      color: #FF9500;
-      margin-bottom: 15px;
+      color: #667eea;
+      margin-bottom: 20px;
     }
     .info-row {
       display: flex;
       justify-content: space-between;
       padding: 10px 0;
-      border-bottom: 1px solid #eee;
+      border-bottom: 1px solid #f0f0f0;
     }
     .info-label {
       font-weight: 600;
@@ -211,50 +210,38 @@ async function sendTicketEmail(data: TicketEmailData) {
     }
     .qr-section {
       text-align: center;
-      margin: 30px 0;
-      padding: 20px;
+      padding: 30px;
       background: white;
       border-radius: 10px;
+      margin: 20px 0;
     }
     .qr-section img {
       max-width: 250px;
-      border: 3px solid #FF9500;
-      border-radius: 10px;
-      padding: 10px;
+      margin: 20px auto;
     }
     .warning {
-      background: #fff3cd;
-      border-left: 4px solid #ffc107;
+      background: #fff9c4;
+      border: 1px solid #fbc02d;
+      border-radius: 5px;
       padding: 15px;
       margin: 20px 0;
-      border-radius: 5px;
     }
     .footer {
       text-align: center;
+      padding: 20px;
       color: #666;
-      font-size: 12px;
-      margin-top: 30px;
-      padding-top: 20px;
-      border-top: 1px solid #eee;
-    }
-    .button {
-      display: inline-block;
-      background: #FF9500;
-      color: white;
-      padding: 12px 30px;
-      text-decoration: none;
-      border-radius: 5px;
-      margin: 20px 0;
+      font-size: 14px;
     }
   </style>
 </head>
 <body>
   <div class="header">
-    <h1>🎉 Votre Billet Électronique</h1>
+    <h1>🎫 ClicBillet</h1>
+    <p>Votre billet électronique</p>
   </div>
   
   <div class="content">
-    <p>Bonjour <strong>${customerName}</strong>,</p>
+    <p>Bonjour ${customerName},</p>
     
     <p>Merci pour votre achat ! Voici votre billet électronique pour l'événement :</p>
     
@@ -288,7 +275,7 @@ async function sendTicketEmail(data: TicketEmailData) {
       
       <div class="info-row">
         <span class="info-label">💰 Prix total</span>
-        <span class="info-value">${sale.totalPrice.toLocaleString('fr-FR')} FCFA</span>
+        <span class="info-value">${sale.totalPrice.toLocaleString('fr-FR')} F CFA</span>
       </div>
       
       <div class="info-row">
@@ -316,7 +303,7 @@ async function sendTicketEmail(data: TicketEmailData) {
     <p>Pour toute question, contactez l'organisateur via la plateforme.</p>
     
     <p style="margin-top: 30px;">
-      À bientôt ! 🎊<br>
+      À bientôt !<br>
       <strong>L'équipe ClicBillet</strong>
     </p>
   </div>

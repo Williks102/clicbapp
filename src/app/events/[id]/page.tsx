@@ -23,7 +23,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { useState } from 'react';
 import { TicketTier, Organizer, Event } from '@/lib/types';
-import CheckoutForm from '@/components/checkout-form';
+import {CheckoutForm} from '@/components/checkout-form';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useDoc, useFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';

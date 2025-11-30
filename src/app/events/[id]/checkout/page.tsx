@@ -15,7 +15,7 @@ import {
 } from '@/components/ui/card';
 import MainNav from '@/components/main-nav';
 import Footer from '@/components/footer';
-import CheckoutForm from '@/components/checkout-form';
+import {CheckoutForm} from '@/components/checkout-form';
 import { useDoc, useFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import type { Event } from '@/lib/types';
