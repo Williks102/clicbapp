@@ -40,6 +40,7 @@ import { PageHeader } from '@/components/page-header';
 import { useToast } from '@/hooks/use-toast';
 import type { Sale, Event } from '@/lib/types';
 import { Badge } from '@/components/ui/badge';
+import { useRouter } from 'next/navigation';
 
 interface AdminSalesPageClientProps {
   initialSales: Sale[];
@@ -53,6 +54,7 @@ export default function AdminSalesPageClient({
   const { toast } = useToast();
   const [sales] = useState(initialSales);
   const [events] = useState(initialEvents);
+  const router = useRouter();
   
   const [date, setDate] = useState<DateRange | undefined>({
     from: new Date(new Date().setDate(new Date().getDate() - 30)),
@@ -141,13 +143,11 @@ export default function AdminSalesPageClient({
     });
   };
 
-  const handleViewDetails = (sale: Sale) => {
-    // TODO: Implémenter la vue détaillée ou redirection
-    toast({
-      title: 'Détails de la vente',
-      description: `Vente #${sale.id} - ${sale.customerName}`
-    });
-  };
+  
+
+const handleViewDetails = (saleId: string) => {
+  router.push(`/admin/sales/${saleId}`);
+};
 
   const handleRefund = (sale: Sale) => {
     // TODO: Implémenter le remboursement
@@ -358,7 +358,7 @@ export default function AdminSalesPageClient({
                           <DropdownMenuContent align="end">
                             <DropdownMenuLabel>Actions</DropdownMenuLabel>
                             <DropdownMenuItem
-                              onClick={() => handleViewDetails(sale)}
+                              onClick={() => handleViewDetails(sale.id)}
                             >
                               Voir les détails
                             </DropdownMenuItem>
