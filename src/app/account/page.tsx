@@ -4,46 +4,59 @@ import { PageHeader } from '@/components/page-header';
 import ElectronicTicket from '@/components/electronic-ticket';
 import { useSession } from 'next-auth/react';
 import { useCollection, useFirebase } from '@/firebase';
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { collection, query, where } from 'firebase/firestore';
 import type { Sale, Event } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
-import { redirect } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 
 export default function MyTicketsPage() {
+  const router = useRouter();
   const { data: session, status } = useSession();
-  const { firestore } = useFirebase();
-  const isLoadingSession = status === 'loading';
+  const { firestore, areServicesAvailable } = useFirebase();
 
-  // ✅ Rediriger si non authentifié
-  if (status === 'unauthenticated') {
-    redirect('/login');
-  }
-
-  // ✅ Ne créer les queries QUE si authentifié
-  const userTicketsQuery = useMemo(() => {
-    if (firestore && session?.user?.email && status === 'authenticated') {
-      return query(
-        collection(firestore, 'sales'), 
-        where('customerEmail', '==', session.user.email)
-      );
+  // ✅ SOLUTION 1: Rediriger si pas authentifié (useEffect pour éviter les erreurs SSR)
+  useEffect(() => {
+    if (status === 'unauthenticated') {
+      router.push('/login');
     }
-    return null;
-  }, [firestore, session?.user?.email, status]);
+  }, [status, router]);
+
+  // ✅ SOLUTION 2: Ne créer les queries QUE si TOUT est prêt
+  const isReady = status === 'authenticated' && 
+                  areServicesAvailable && 
+                  firestore && 
+                  session?.user?.email;
+
+  const userTicketsQuery = useMemo(() => {
+    // ✅ CRITIQUE: Ne retourner une query QUE si TOUT est prêt
+    if (!isReady) return null;
+    
+    return query(
+      collection(firestore, 'sales'), 
+      where('customerEmail', '==', session.user.email)
+    );
+  }, [isReady, firestore, session?.user?.email]);
 
   const allEventsQuery = useMemo(() => {
-    if (firestore && status === 'authenticated') {
-      return collection(firestore, 'events');
-    }
-    return null;
-  }, [firestore, status]);
+    // ✅ CRITIQUE: Ne retourner une query QUE si TOUT est prêt
+    if (!isReady) return null;
+    
+    return collection(firestore, 'events');
+  }, [isReady, firestore]);
 
+  // ✅ SOLUTION 3: useCollection ne s'exécute QUE si les queries sont définies
   const { data: sales, isLoading: isLoadingSales } = useCollection<Sale>(userTicketsQuery);
   const { data: events, isLoading: isLoadingEvents } = useCollection<Event>(allEventsQuery);
   
-  const isLoading = isLoadingSession || isLoadingSales || isLoadingEvents;
+  // ✅ État de chargement global
+  const isLoading = status === 'loading' || 
+                    !areServicesAvailable || 
+                    !isReady ||
+                    isLoadingSales || 
+                    isLoadingEvents;
   
-  // ✅ CORRECTION: Filtrer les tickets invalides ET s'assurer que tous les champs sont définis
+  // ✅ SOLUTION 4: Filtrer proprement avec type predicate
   const purchasedTickets = useMemo(() => {
     if (!sales || !events) return [];
 
@@ -55,10 +68,9 @@ export default function MyTicketsPage() {
         const ticket = event.tickets.find(t => t.id === sale.ticketId);
         if (!ticket) return null;
 
-        // ✅ Retourner un objet avec TOUS les champs requis et non-undefined
         return {
-          event,           // Event (non-undefined)
-          ticket,          // TicketTier (non-undefined)
+          event,
+          ticket,
           quantity: sale.quantity,
           fullName: sale.customerName,
           orderId: sale.id,
@@ -66,16 +78,15 @@ export default function MyTicketsPage() {
         };
       })
       .filter((ticket): ticket is NonNullable<typeof ticket> => ticket !== null);
-      // ✅ TypeScript sait maintenant que les éléments ne sont PAS null
   }, [sales, events]);
 
-  // ✅ Afficher un loading pendant l'authentification
-  if (isLoadingSession) {
+  // ✅ SOLUTION 5: Afficher un loading propre si pas prêt
+  if (status === 'loading' || !areServicesAvailable) {
     return (
       <div className="space-y-8">
         <PageHeader
           title="Mes Billets"
-          description="Chargement..."
+          description="Chargement de vos billets..."
         />
         <div className="grid gap-6">
           <Skeleton className="h-64 w-full" />
@@ -85,19 +96,36 @@ export default function MyTicketsPage() {
     );
   }
 
+  // ✅ SOLUTION 6: Ne rien afficher si pas authentifié (évite le flash)
+  if (status === 'unauthenticated') {
+    return null; // Le useEffect redirigera
+  }
+
+  // ✅ SOLUTION 7: Afficher loading si les données chargent
+  if (isLoading) {
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          title="Mes Billets"
+          description="Chargement de vos billets..."
+        />
+        <div className="grid gap-6">
+          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-64 w-full" />
+          <Skeleton className="h-64 w-full" />
+        </div>
+      </div>
+    );
+  }
+
+  // ✅ À ce stade, TOUT est chargé et prêt
   return (
     <div className="space-y-8">
       <PageHeader
         title="Mes Billets"
         description="Retrouvez ici tous les billets pour vos événements à venir."
       />
-      {isLoading ? (
-        <div className="grid gap-6">
-          <Skeleton className="h-64 w-full" />
-          <Skeleton className="h-64 w-full" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      ) : purchasedTickets.length === 0 ? (
+      {purchasedTickets.length === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center">
           <p className="text-lg font-medium">Aucun billet pour le moment</p>
           <p className="text-sm text-muted-foreground mt-2">
