@@ -16,9 +16,13 @@ import {
   XCircle,
   AlertTriangle,
   BarChart3,
+  Keyboard,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import Link from 'next/link';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useCollection, useFirestore } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Event } from '@/lib/types';
@@ -44,6 +48,7 @@ export default function ScannerPage() {
   const [isValidating, setIsValidating] = useState(false);
   const [validationStatus, setValidationStatus] = useState<'valid' | 'invalid' | 'not_yours' | 'already_scanned' | null>(null);
   const [validationMessage, setValidationMessage] = useState<string | null>(null);
+  const [manualCode, setManualCode] = useState<string>('');
 
   // Charger les événements de l'organisateur depuis Firestore
   const myEventsQuery = useMemo(
@@ -134,6 +139,58 @@ export default function ScannerPage() {
     setIsScanning(true);
   };
 
+  const handleManualValidation = async () => {
+    if (!manualCode.trim()) {
+      setScanError('Veuillez entrer un code QR');
+      return;
+    }
+
+    setScanError(null);
+    setIsValidating(true);
+
+    try {
+      const parsed = JSON.parse(manualCode) as ScanData;
+      setParsedData(parsed);
+
+      // Vérifier que l'événement existe et appartient à l'organisateur
+      const event = myEvents?.find(e => e.id === parsed.eventId);
+
+      if (!event) {
+        setValidationStatus('not_yours');
+        setIsValidating(false);
+        return;
+      }
+
+      // Appeler l'action serveur pour valider et enregistrer le scan
+      const result = await validateAndScanTicket(manualCode);
+
+      if (result.success) {
+        setValidationStatus('valid');
+        setValidationMessage(result.message || 'Billet validé avec succès');
+        setManualCode(''); // Réinitialiser le champ
+      } else {
+        // Déterminer le type d'erreur
+        if (result.error?.includes('déjà scanné')) {
+          setValidationStatus('already_scanned');
+          setValidationMessage(result.message || result.error);
+        } else if (result.error?.includes('autorisé')) {
+          setValidationStatus('not_yours');
+          setValidationMessage(result.error);
+        } else {
+          setValidationStatus('invalid');
+          setValidationMessage(result.error || 'Billet invalide');
+        }
+      }
+    } catch (e) {
+      console.error('Erreur parsing code manuel:', e);
+      setParsedData(null);
+      setValidationStatus('invalid');
+      setValidationMessage('Format de code invalide');
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
   // Obtenir le nom de l'événement
   const getEventName = (eventId: string) => {
     return myEvents?.find(e => e.id === eventId)?.name || 'Événement inconnu';
@@ -164,28 +221,65 @@ export default function ScannerPage() {
         <CardHeader>
           <CardTitle>Scanner</CardTitle>
           <CardDescription>
-            Pointez la caméra de votre appareil vers le QR code du billet.
+            Scannez avec la caméra ou saisissez le code manuellement.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-6">
-          {/* Zone de scan */}
-          <div className="w-full max-w-sm overflow-hidden rounded-lg border">
-            {isScanning ? (
-              <QrScanner
-                delay={300}
-                onError={handleError}
-                onScan={handleScan}
-                style={{ width: '100%' }}
-                constraints={{
-                    video: { facingMode: 'environment' }
-                }}
-              />
-            ) : (
-                <div className="flex aspect-square w-full items-center justify-center bg-muted">
-                    <Button onClick={startScanning}>Démarrer le Scan</Button>
+          <Tabs defaultValue="camera" className="w-full">
+            <TabsList className="grid w-full grid-cols-2">
+              <TabsTrigger value="camera">Caméra</TabsTrigger>
+              <TabsTrigger value="manual">
+                <Keyboard className="mr-2 h-4 w-4" />
+                Saisie Manuelle
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="camera" className="flex flex-col items-center gap-6 mt-6">
+              {/* Zone de scan */}
+              <div className="w-full max-w-sm overflow-hidden rounded-lg border">
+                {isScanning ? (
+                  <QrScanner
+                    delay={300}
+                    onError={handleError}
+                    onScan={handleScan}
+                    style={{ width: '100%' }}
+                    constraints={{
+                        video: { facingMode: 'environment' }
+                    }}
+                  />
+                ) : (
+                    <div className="flex aspect-square w-full items-center justify-center bg-muted">
+                        <Button onClick={startScanning}>Démarrer le Scan</Button>
+                    </div>
+                )}
+              </div>
+            </TabsContent>
+
+            <TabsContent value="manual" className="flex flex-col items-center gap-6 mt-6">
+              <div className="w-full max-w-sm space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="manual-code">Code QR du billet</Label>
+                  <Input
+                    id="manual-code"
+                    placeholder='{"eventId":"...","ticketId":"...","saleId":"..."}'
+                    value={manualCode}
+                    onChange={(e) => setManualCode(e.target.value)}
+                    className="font-mono text-sm"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Collez le contenu JSON du QR code
+                  </p>
                 </div>
-            )}
-          </div>
+                <Button
+                  onClick={handleManualValidation}
+                  disabled={isValidating || !manualCode.trim()}
+                  className="w-full"
+                >
+                  {isValidating ? 'Validation...' : 'Valider le Billet'}
+                </Button>
+              </div>
+            </TabsContent>
+          </Tabs>
 
           {/* Indicateur de validation en cours */}
           {isValidating && (
