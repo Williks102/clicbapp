@@ -40,8 +40,7 @@ export default function ElectronicTicket({
   const qrCodeData = JSON.stringify({
     eventId: event.id,
     ticketId: ticket.id,
-    purchaseId: orderId,
-    ticketNumber: ticketNumber,
+    saleId: orderId,
     quantity: quantity,
     holder: fullName,
   });

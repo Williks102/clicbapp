@@ -15,17 +15,20 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
+  BarChart3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import Link from 'next/link';
 import { useCollection, useFirestore } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Event } from '@/lib/types';
 import { useSession } from 'next-auth/react';
+import { validateAndScanTicket } from '@/app/actions/scanner-actions';
 
 type ScanData = {
     eventId: string;
     ticketId: string;
-    purchaseId: string;
+    saleId: string;
     quantity: number;
     holder: string;
 }
@@ -38,10 +41,9 @@ export default function ScannerPage() {
   const [parsedData, setParsedData] = useState<ScanData | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
-  const [validationStatus, setValidationStatus] = useState<'valid' | 'invalid' | 'not_yours' | null>(null);
-  
-  // Fake database of scanned tickets (in-memory)
-  const [scannedTickets, setScannedTickets] = useState<Set<string>>(new Set());
+  const [isValidating, setIsValidating] = useState(false);
+  const [validationStatus, setValidationStatus] = useState<'valid' | 'invalid' | 'not_yours' | 'already_scanned' | null>(null);
+  const [validationMessage, setValidationMessage] = useState<string | null>(null);
 
   // Charger les événements de l'organisateur depuis Firestore
   const myEventsQuery = useMemo(
@@ -52,44 +54,52 @@ export default function ScannerPage() {
   );
   const { data: myEvents } = useCollection<Event>(myEventsQuery);
 
-  const handleScan = (data: { text: string } | null) => {
+  const handleScan = async (data: { text: string } | null) => {
     if (data) {
       setScanResult(data.text);
       setIsScanning(false);
-      
+      setIsValidating(true);
+
       try {
         const parsed = JSON.parse(data.text) as ScanData;
-        
+        setParsedData(parsed);
+
         // Vérifier que l'événement existe et appartient à l'organisateur
         const event = myEvents?.find(e => e.id === parsed.eventId);
-        
+
         if (!event) {
           // L'événement n'appartient pas à cet organisateur
-          setParsedData(parsed);
           setValidationStatus('not_yours');
+          setIsValidating(false);
           return;
         }
 
-        const ticket = event.tickets.find(t => t.id === parsed.ticketId);
+        // Appeler l'action serveur pour valider et enregistrer le scan
+        const result = await validateAndScanTicket(data.text);
 
-        if (event && ticket && parsed.purchaseId) {
-          setParsedData(parsed);
-          
-          // Vérifier si déjà scanné
-          if (scannedTickets.has(parsed.purchaseId)) {
-            setValidationStatus('invalid');
-          } else {
-            setValidationStatus('valid');
-            setScannedTickets(prev => new Set(prev).add(parsed.purchaseId));
-          }
+        if (result.success) {
+          setValidationStatus('valid');
+          setValidationMessage(result.message || 'Billet validé avec succès');
         } else {
-          setParsedData(null);
-          setValidationStatus('invalid');
+          // Déterminer le type d'erreur
+          if (result.error?.includes('déjà scanné')) {
+            setValidationStatus('already_scanned');
+            setValidationMessage(result.message || result.error);
+          } else if (result.error?.includes('autorisé')) {
+            setValidationStatus('not_yours');
+            setValidationMessage(result.error);
+          } else {
+            setValidationStatus('invalid');
+            setValidationMessage(result.error || 'Billet invalide');
+          }
         }
       } catch (e) {
         console.error('Erreur parsing QR code:', e);
         setParsedData(null);
         setValidationStatus('invalid');
+        setValidationMessage('QR code invalide');
+      } finally {
+        setIsValidating(false);
       }
     }
   };
@@ -111,6 +121,7 @@ export default function ScannerPage() {
     setParsedData(null);
     setScanError(null);
     setValidationStatus(null);
+    setValidationMessage(null);
     setIsScanning(true);
   };
 
@@ -119,6 +130,7 @@ export default function ScannerPage() {
     setParsedData(null);
     setScanError(null);
     setValidationStatus(null);
+    setValidationMessage(null);
     setIsScanning(true);
   };
 
@@ -135,10 +147,18 @@ export default function ScannerPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        title="Scanner de Billets"
-        description="Scannez les QR codes sur les billets pour valider les entrées à vos événements."
-      />
+      <div className="flex items-center justify-between">
+        <PageHeader
+          title="Scanner de Billets"
+          description="Scannez les QR codes sur les billets pour valider les entrées à vos événements."
+        />
+        <Link href="/dashboard/scanner/stats">
+          <Button variant="outline">
+            <BarChart3 className="mr-2 h-4 w-4" />
+            Voir les Statistiques
+          </Button>
+        </Link>
+      </div>
 
       <Card>
         <CardHeader>
@@ -166,6 +186,15 @@ export default function ScannerPage() {
                 </div>
             )}
           </div>
+
+          {/* Indicateur de validation en cours */}
+          {isValidating && (
+            <Alert className="w-full max-w-sm">
+              <AlertTriangle className="h-4 w-4 animate-pulse" />
+              <AlertTitle>Validation en cours...</AlertTitle>
+              <AlertDescription>Vérification du billet dans la base de données.</AlertDescription>
+            </Alert>
+          )}
 
           {/* Message d'erreur */}
           {scanError && (
@@ -206,7 +235,7 @@ export default function ScannerPage() {
                       </div>
                       <div className="grid grid-cols-[120px_1fr] gap-2">
                         <span className="font-semibold">N° Commande:</span>
-                        <span className="font-mono text-sm">{parsedData.purchaseId}</span>
+                        <span className="font-mono text-sm">{parsedData.saleId}</span>
                       </div>
                     </div>
                     <div className="mt-4 rounded-lg bg-green-100 p-3 text-green-800 border border-green-300">
@@ -220,7 +249,7 @@ export default function ScannerPage() {
               )}
 
               {/* Billet déjà scanné */}
-              {validationStatus === 'invalid' && parsedData && (
+              {validationStatus === 'already_scanned' && parsedData && (
                 <Alert variant="destructive" className="flex flex-col items-center text-center">
                   <AlertTriangle className="mb-2 h-12 w-12 text-destructive" />
                   <AlertTitle className="mb-3 text-xl font-bold">
@@ -234,12 +263,38 @@ export default function ScannerPage() {
                       </div>
                       <div className="grid grid-cols-[120px_1fr] gap-2">
                         <span className="font-semibold">N° Commande:</span>
-                        <span className="font-mono text-sm">{parsedData.purchaseId}</span>
+                        <span className="font-mono text-sm">{parsedData.saleId}</span>
                       </div>
                     </div>
                     <p className="mt-4 text-destructive font-semibold">
-                      ❌ Ce billet a déjà été validé et ne peut plus être utilisé.
+                      ❌ {validationMessage || 'Ce billet a déjà été validé et ne peut plus être utilisé.'}
                     </p>
+                  </AlertDescription>
+                  <Button onClick={handleReset} className="mt-6 w-full" size="lg" variant="destructive">
+                    Scanner un autre billet
+                  </Button>
+                </Alert>
+              )}
+
+              {/* Billet invalide */}
+              {validationStatus === 'invalid' && parsedData && (
+                <Alert variant="destructive" className="flex flex-col items-center text-center">
+                  <XCircle className="mb-2 h-12 w-12 text-destructive" />
+                  <AlertTitle className="mb-3 text-xl font-bold">
+                    Billet Invalide ❌
+                  </AlertTitle>
+                  <AlertDescription className="w-full">
+                    <p className="mb-4">{validationMessage || 'Ce billet est invalide.'}</p>
+                    <div className='space-y-3 text-left bg-destructive/10 rounded-lg p-4'>
+                      <div className="grid grid-cols-[120px_1fr] gap-2">
+                        <span className="font-semibold">Détenteur:</span>
+                        <span className="font-medium">{parsedData.holder}</span>
+                      </div>
+                      <div className="grid grid-cols-[120px_1fr] gap-2">
+                        <span className="font-semibold">N° Commande:</span>
+                        <span className="font-mono text-sm">{parsedData.saleId}</span>
+                      </div>
+                    </div>
                   </AlertDescription>
                   <Button onClick={handleReset} className="mt-6 w-full" size="lg" variant="destructive">
                     Scanner un autre billet
@@ -263,7 +318,7 @@ export default function ScannerPage() {
                       </div>
                       <div className="grid grid-cols-[120px_1fr] gap-2">
                         <span className="font-semibold">N° Commande:</span>
-                        <span className="font-mono text-xs">{parsedData.purchaseId}</span>
+                        <span className="font-mono text-xs">{parsedData.saleId}</span>
                       </div>
                     </div>
                     <p className="mt-4 text-destructive font-semibold">

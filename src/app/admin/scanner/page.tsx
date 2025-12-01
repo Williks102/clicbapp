@@ -15,16 +15,19 @@ import {
   CheckCircle,
   XCircle,
   AlertTriangle,
+  BarChart3,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCollection, useFirestore } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import type { Event } from '@/lib/types';
+import Link from 'next/link';
+import { validateAndScanTicket } from '@/app/actions/scanner-actions';
 
 type ScanData = {
     eventId: string;
     ticketId: string;
-    purchaseId: string;
+    saleId: string;
     quantity: number;
     holder: string;
 }
@@ -35,11 +38,10 @@ export default function AdminScannerPage() {
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [parsedData, setParsedData] = useState<ScanData | null>(null);
   const [validationStatus, setValidationStatus] = useState<'valid' | 'invalid' | 'already_scanned' | null>(null);
+  const [validationMessage, setValidationMessage] = useState<string | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
   const [isScanning, setIsScanning] = useState(false);
-  
-  // Base de données en mémoire des billets scannés
-  const [scannedTickets, setScannedTickets] = useState<Set<string>>(new Set());
+  const [isValidating, setIsValidating] = useState(false);
 
   // Charger tous les événements depuis Firestore
   const eventsQuery = useMemo(
@@ -48,31 +50,39 @@ export default function AdminScannerPage() {
   );
   const { data: events } = useCollection<Event>(eventsQuery);
 
-  const handleScan = (data: { text: string } | null) => {
+  const handleScan = async (data: { text: string } | null) => {
     if (data) {
-      setIsScanning(false);
       setScanResult(data.text);
+      setIsScanning(false);
+      setIsValidating(true);
+
       try {
         const parsed = JSON.parse(data.text) as ScanData;
-        const event = events?.find(e => e.id === parsed.eventId);
-        const ticket = event?.tickets.find(t => t.id === parsed.ticketId);
+        setParsedData(parsed);
 
-        if (event && ticket && parsed.purchaseId) {
-            setParsedData(parsed);
-            if (scannedTickets.has(parsed.purchaseId)) {
-                setValidationStatus('already_scanned');
-            } else {
-                setValidationStatus('valid');
-                setScannedTickets(prev => new Set(prev).add(parsed.purchaseId));
-            }
+        // Appeler l'action serveur pour valider et enregistrer le scan
+        const result = await validateAndScanTicket(data.text);
+
+        if (result.success) {
+          setValidationStatus('valid');
+          setValidationMessage(result.message || 'Billet validé avec succès');
         } else {
-            setParsedData(null);
+          // Déterminer le type d'erreur
+          if (result.error?.includes('déjà scanné')) {
+            setValidationStatus('already_scanned');
+            setValidationMessage(result.message || result.error);
+          } else {
             setValidationStatus('invalid');
+            setValidationMessage(result.error || 'Billet invalide');
+          }
         }
       } catch (e) {
         console.error('Erreur parsing QR code:', e);
         setParsedData(null);
         setValidationStatus('invalid');
+        setValidationMessage('QR code invalide');
+      } finally {
+        setIsValidating(false);
       }
     }
   };
@@ -94,6 +104,7 @@ export default function AdminScannerPage() {
     setParsedData(null);
     setScanError(null);
     setValidationStatus(null);
+    setValidationMessage(null);
     setIsScanning(true);
   };
 
@@ -102,6 +113,7 @@ export default function AdminScannerPage() {
     setParsedData(null);
     setScanError(null);
     setValidationStatus(null);
+    setValidationMessage(null);
     setIsScanning(true);
   };
   
@@ -113,10 +125,18 @@ export default function AdminScannerPage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        title="Scanner de Billets (Admin)"
-        description="Scannez et validez les billets pour n'importe quel événement de la plateforme."
-      />
+      <div className="flex items-center justify-between">
+        <PageHeader
+          title="Scanner de Billets (Admin)"
+          description="Scannez et validez les billets pour n'importe quel événement de la plateforme."
+        />
+        <Link href="/admin/scanner/stats">
+          <Button variant="outline">
+            <BarChart3 className="mr-2 h-4 w-4" />
+            Voir les Statistiques
+          </Button>
+        </Link>
+      </div>
 
       <Card>
         <CardHeader>
@@ -144,6 +164,15 @@ export default function AdminScannerPage() {
                 </div>
             )}
           </div>
+
+          {/* Indicateur de validation en cours */}
+          {isValidating && (
+            <Alert className="w-full max-w-sm">
+              <AlertTriangle className="h-4 w-4 animate-pulse" />
+              <AlertTitle>Validation en cours...</AlertTitle>
+              <AlertDescription>Vérification du billet dans la base de données.</AlertDescription>
+            </Alert>
+          )}
 
           {/* Message d'erreur */}
           {scanError && (
@@ -184,7 +213,7 @@ export default function AdminScannerPage() {
                       </div>
                       <div className="grid grid-cols-[120px_1fr] gap-2">
                         <span className="font-semibold">N° Commande:</span>
-                        <span className="font-mono text-sm">{parsedData.purchaseId}</span>
+                        <span className="font-mono text-sm">{parsedData.saleId}</span>
                       </div>
                     </div>
                     <div className="mt-4 rounded-lg bg-green-100 p-3 text-green-800 border border-green-300">
@@ -216,11 +245,11 @@ export default function AdminScannerPage() {
                       </div>
                       <div className="grid grid-cols-[120px_1fr] gap-2">
                         <span className="font-semibold">N° Commande:</span>
-                        <span className="font-mono text-sm">{parsedData.purchaseId}</span>
+                        <span className="font-mono text-sm">{parsedData.saleId}</span>
                       </div>
                     </div>
                     <p className="mt-4 text-destructive font-semibold">
-                      ❌ Ce billet a déjà été validé et ne peut plus être utilisé.
+                      ❌ {validationMessage || 'Ce billet a déjà été validé et ne peut plus être utilisé.'}
                     </p>
                   </AlertDescription>
                   <Button onClick={handleReset} className="mt-6 w-full" size="lg" variant="destructive">
@@ -237,13 +266,17 @@ export default function AdminScannerPage() {
                     QR Code Invalide ❌
                   </AlertTitle>
                   <AlertDescription>
-                    <p className="mb-4">Ce QR code ne correspond pas à un billet valide dans la plateforme.</p>
+                    <p className="mb-4">{validationMessage || 'Ce QR code ne correspond pas à un billet valide dans la plateforme.'}</p>
                     {parsedData && (
                       <div className='space-y-2 text-left bg-destructive/10 rounded-lg p-4 text-sm'>
-                        <p><span className="font-semibold">Événement:</span> {getEventName(parsedData.eventId)}</p>
-                        <p className="text-xs text-muted-foreground">
-                          L'événement ou le type de billet n'existe pas dans la base de données.
-                        </p>
+                        <div className="grid grid-cols-[120px_1fr] gap-2">
+                          <span className="font-semibold">Détenteur:</span>
+                          <span>{parsedData.holder}</span>
+                        </div>
+                        <div className="grid grid-cols-[120px_1fr] gap-2">
+                          <span className="font-semibold">N° Commande:</span>
+                          <span className="font-mono text-xs">{parsedData.saleId}</span>
+                        </div>
                       </div>
                     )}
                     <details className="mt-4">
