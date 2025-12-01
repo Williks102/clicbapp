@@ -1,23 +1,15 @@
+
 'use client';
 
 import { PageHeader } from '@/components/page-header';
 import ElectronicTicket from '@/components/electronic-ticket';
 import { useSession } from 'next-auth/react';
 import { useCollection, useDoc, useFirebase } from '@/firebase';
-import { useMemo, useEffect, useState } from 'react';
+import { useMemo, useEffect } from 'react';
 import { collection, query, where, doc } from 'firebase/firestore';
 import type { Sale, Event, TicketTier } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
-
-type EnrichedTicket = {
-  event: Event;
-  ticket: TicketTier;
-  quantity: number;
-  fullName: string;
-  orderId: string;
-  ticketNumber: string;
-};
 
 // Component pour afficher un seul billet enrichi
 function PurchasedTicket({ sale }: { sale: Sale }) {
