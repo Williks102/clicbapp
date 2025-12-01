@@ -32,8 +32,15 @@ export async function getOrganizerSales(): Promise<Sale[]> {
     console.log(`[ORGANIZER SALES] ✅ Fetched ${sales.length} sales`);
     return sales;
 
-  } catch (error) {
+  } catch (error: any) {
     console.error('[ORGANIZER SALES] ❌ Error:', error);
+
+    // Si c'est une erreur d'index manquant, afficher l'URL de création
+    if (error?.message?.includes('index')) {
+      console.error('[ORGANIZER SALES] 💡 Index manquant. Créez-le avec: firebase deploy --only firestore:indexes');
+      console.error('[ORGANIZER SALES] 💡 Ou via la console Firebase:', error.message);
+    }
+
     return [];
   }
 }
