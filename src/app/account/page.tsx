@@ -3,84 +3,108 @@
 import { PageHeader } from '@/components/page-header';
 import ElectronicTicket from '@/components/electronic-ticket';
 import { useSession } from 'next-auth/react';
-import { useCollection, useFirebase } from '@/firebase';
-import { useMemo, useEffect } from 'react';
-import { collection, query, where } from 'firebase/firestore';
-import type { Sale, Event } from '@/lib/types';
+import { useCollection, useDoc, useFirebase } from '@/firebase';
+import { useMemo, useEffect, useState } from 'react';
+import { collection, query, where, doc } from 'firebase/firestore';
+import type { Sale, Event, TicketTier } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
+
+type EnrichedTicket = {
+  event: Event;
+  ticket: TicketTier;
+  quantity: number;
+  fullName: string;
+  orderId: string;
+  ticketNumber: string;
+};
+
+// Component pour afficher un seul billet enrichi
+function PurchasedTicket({ sale }: { sale: Sale }) {
+  const { firestore, areServicesAvailable } = useFirebase();
+  
+  // Récupérer l'événement associé à cette vente
+  const eventRef = useMemo(() => {
+    if (!areServicesAvailable) return null;
+    return doc(firestore, 'events', sale.eventId);
+  }, [firestore, sale.eventId, areServicesAvailable]);
+
+  const { data: event, isLoading } = useDoc<Event>(eventRef);
+
+  if (isLoading || !areServicesAvailable) {
+    return <Skeleton className="h-64 w-full" />;
+  }
+
+  if (!event) {
+    // Gérer le cas où l'événement n'est pas trouvé (supprimé, etc.)
+    return (
+      <div className="rounded-lg border border-dashed p-6 text-center">
+        <p className="font-semibold text-destructive">Événement introuvable</p>
+        <p className="text-sm text-muted-foreground mt-2">
+          L'événement associé à cette commande (ID: {sale.eventId}) n'existe plus.
+        </p>
+      </div>
+    );
+  }
+
+  const ticketTier = event.tickets.find(t => t.id === sale.ticketId);
+
+  if (!ticketTier) {
+    // Gérer le cas où le type de billet a été supprimé de l'événement
+    return (
+      <div className="rounded-lg border border-dashed p-6 text-center">
+        <p className="font-semibold text-destructive">Type de billet introuvable</p>
+        <p className="text-sm text-muted-foreground mt-2">
+          Pour l'événement: {event.name}
+        </p>
+      </div>
+    );
+  }
+
+  const ticketNumber = `TKT-${sale.id.split('-')[1] || sale.id.substring(0, 8)}`;
+
+  return (
+    <ElectronicTicket
+      event={event}
+      ticket={ticketTier}
+      quantity={sale.quantity}
+      fullName={sale.customerName}
+      orderId={sale.id}
+      ticketNumber={ticketNumber}
+    />
+  );
+}
+
 
 export default function MyTicketsPage() {
   const router = useRouter();
   const { data: session, status } = useSession();
   const { firestore, areServicesAvailable } = useFirebase();
 
-  // ✅ SOLUTION 1: Rediriger si pas authentifié (useEffect pour éviter les erreurs SSR)
+  // Redirection si pas authentifié (côté client pour éviter les flashs)
   useEffect(() => {
     if (status === 'unauthenticated') {
       router.push('/login');
     }
   }, [status, router]);
 
-  // ✅ SOLUTION 2: Ne créer les queries QUE si TOUT est prêt
-  const isReady = status === 'authenticated' && 
-                  areServicesAvailable && 
-                  firestore && 
-                  session?.user?.email;
-
-  const userTicketsQuery = useMemo(() => {
-    // ✅ CRITIQUE: Ne retourner une query QUE si TOUT est prêt
-    if (!isReady) return null;
-    
+  // Construire la requête pour les ventes de l'utilisateur
+  const userSalesQuery = useMemo(() => {
+    if (status !== 'authenticated' || !areServicesAvailable || !session?.user?.email) {
+      return null;
+    }
     return query(
-      collection(firestore, 'sales'), 
+      collection(firestore, 'sales'),
       where('customerEmail', '==', session.user.email)
     );
-  }, [isReady, firestore, session?.user?.email]);
+  }, [status, areServicesAvailable, firestore, session?.user?.email]);
 
-  const allEventsQuery = useMemo(() => {
-    // ✅ CRITIQUE: Ne retourner une query QUE si TOUT est prêt
-    if (!isReady) return null;
-    
-    return collection(firestore, 'events');
-  }, [isReady, firestore]);
-
-  // ✅ SOLUTION 3: useCollection ne s'exécute QUE si les queries sont définies
-  const { data: sales, isLoading: isLoadingSales } = useCollection<Sale>(userTicketsQuery);
-  const { data: events, isLoading: isLoadingEvents } = useCollection<Event>(allEventsQuery);
+  // Hook pour récupérer les ventes
+  const { data: sales, isLoading: isLoadingSales, error: salesError } = useCollection<Sale>(userSalesQuery);
   
-  // ✅ État de chargement global
-  const isLoading = status === 'loading' || 
-                    !areServicesAvailable || 
-                    !isReady ||
-                    isLoadingSales || 
-                    isLoadingEvents;
-  
-  // ✅ SOLUTION 4: Filtrer proprement avec type predicate
-  const purchasedTickets = useMemo(() => {
-    if (!sales || !events) return [];
+  const isLoading = status === 'loading' || !areServicesAvailable || isLoadingSales;
 
-    return sales
-      .map(sale => {
-        const event = events.find(e => e.id === sale.eventId);
-        if (!event) return null;
-
-        const ticket = event.tickets.find(t => t.id === sale.ticketId);
-        if (!ticket) return null;
-
-        return {
-          event,
-          ticket,
-          quantity: sale.quantity,
-          fullName: sale.customerName,
-          orderId: sale.id,
-          ticketNumber: `TKT-${sale.id.split('-')[1] || sale.id.substring(0, 8)}`,
-        };
-      })
-      .filter((ticket): ticket is NonNullable<typeof ticket> => ticket !== null);
-  }, [sales, events]);
-
-  // ✅ SOLUTION 5: Afficher un loading propre si pas prêt
+  // Affichage des états de chargement
   if (status === 'loading' || !areServicesAvailable) {
     return (
       <div className="space-y-8">
@@ -89,43 +113,58 @@ export default function MyTicketsPage() {
           description="Chargement de vos billets..."
         />
         <div className="grid gap-6">
-          <Skeleton className="h-64 w-full" />
-          <Skeleton className="h-64 w-full" />
+          {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-64 w-full" />)}
+        </div>
+      </div>
+    );
+  }
+  
+  // Attendre la fin de l'authentification avant de rendre quoi que ce soit
+  if (status !== 'authenticated') {
+    return null; // Le useEffect se chargera de la redirection
+  }
+  
+  // Affichage en cas d'erreur (ex: permission refusée)
+  if (salesError) {
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          title="Mes Billets"
+          description="Une erreur est survenue."
+        />
+        <div className="rounded-lg border border-destructive bg-destructive/10 p-6 text-center">
+            <p className="text-lg font-medium text-destructive">Impossible de charger vos billets</p>
+            <p className="text-sm text-destructive/80 mt-2">
+                Veuillez réessayer plus tard ou contacter le support.
+            </p>
         </div>
       </div>
     );
   }
 
-  // ✅ SOLUTION 6: Ne rien afficher si pas authentifié (évite le flash)
-  if (status === 'unauthenticated') {
-    return null; // Le useEffect redirigera
-  }
-
-  // ✅ SOLUTION 7: Afficher loading si les données chargent
+  // Affichage pendant le chargement des ventes
   if (isLoading) {
-    return (
+      return (
       <div className="space-y-8">
         <PageHeader
           title="Mes Billets"
           description="Chargement de vos billets..."
         />
         <div className="grid gap-6">
-          <Skeleton className="h-64 w-full" />
-          <Skeleton className="h-64 w-full" />
-          <Skeleton className="h-64 w-full" />
+          {[...Array(3)].map((_, i) => <Skeleton key={i} className="h-64 w-full" />)}
         </div>
       </div>
     );
   }
 
-  // ✅ À ce stade, TOUT est chargé et prêt
+  // Rendu final
   return (
     <div className="space-y-8">
       <PageHeader
         title="Mes Billets"
         description="Retrouvez ici tous les billets pour vos événements à venir."
       />
-      {purchasedTickets.length === 0 ? (
+      {sales && sales.length === 0 ? (
         <div className="rounded-lg border border-dashed p-12 text-center">
           <p className="text-lg font-medium">Aucun billet pour le moment</p>
           <p className="text-sm text-muted-foreground mt-2">
@@ -134,16 +173,8 @@ export default function MyTicketsPage() {
         </div>
       ) : (
         <div className="grid gap-6">
-          {purchasedTickets.map((ticket, index) => (
-            <ElectronicTicket 
-              key={index} 
-              event={ticket.event}
-              ticket={ticket.ticket}
-              quantity={ticket.quantity}
-              fullName={ticket.fullName}
-              orderId={ticket.orderId}
-              ticketNumber={ticket.ticketNumber}
-            />
+          {sales?.map((sale) => (
+            <PurchasedTicket key={sale.id} sale={sale} />
           ))}
         </div>
       )}

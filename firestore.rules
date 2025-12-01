@@ -162,9 +162,12 @@ match /ticket_scans/{scanId} {
                       || isAdmin()                                             // Admin
                     );
       
-      // LIST: Authenticated users only (filtered by where() client-side)
-      // Client-side queries MUST use where() to filter by customerEmail or organizerId
-      allow list: if isSignedIn();
+      // LIST: Allow if the query is filtered by customerEmail or organizerId, or if admin
+      allow list: if isSignedIn() && (
+                    request.query.where[0][0] == 'customerEmail' && request.query.where[0][2] == request.auth.token.email ||
+                    request.query.where[0][0] == 'organizerId' && request.query.where[0][2] == request.auth.uid ||
+                    isAdmin()
+                  );
       
       // UPDATE/DELETE: Admin only (for refunds, cancellations)
       allow update: if isAdmin();
