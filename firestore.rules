@@ -112,6 +112,30 @@ service cloud.firestore {
       allow delete: if isExistingOwner('organizerId') || isAdmin();
     }
 
+     // ==================== scanner ====================
+
+  /**
+ * @description   Manages ticket scans at events.
+ * @path          /ticket_scans/{scanId}
+ */
+match /ticket_scans/{scanId} {
+  // Créer : Organisateur de l'événement OU admin
+  allow create: if isSignedIn();  // Vérifié dans l'action serveur
+  
+  // Lire : Organisateur de l'événement OU admin
+  allow get, list: if isSignedIn();  // Vérifié dans l'action serveur
+  
+  // Supprimer : Celui qui a scanné OU admin
+  allow delete: if isSignedIn() && (
+    request.auth.uid == resource.data.scannedBy ||
+    isAdmin()
+  );
+  
+  // Pas de modification
+  allow update: if false;
+}
+
+
     // ==================== SALES DATA ====================
     
     /**
