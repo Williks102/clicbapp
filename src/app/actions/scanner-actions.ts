@@ -40,12 +40,18 @@ export async function validateAndScanTicket(
 ): Promise<ScanResult> {
   try {
     console.log('[SCAN TICKET] 🎫 Validating ticket...');
-    
+    console.log('[SCAN TICKET] QR Data received:', qrData);
+
     // Vérifier la session
+    console.log('[SCAN TICKET] 🔐 Checking authentication...');
     const session = await auth();
+    console.log('[SCAN TICKET] Session user ID:', session?.user?.id);
+
     if (!session?.user?.id) {
+      console.log('[SCAN TICKET] ❌ Not authenticated');
       return { success: false, error: 'Non authentifié' };
     }
+    console.log('[SCAN TICKET] ✅ User authenticated:', session.user.email);
 
     // Parser les données du QR code
     let parsedData: {
@@ -57,61 +63,80 @@ export async function validateAndScanTicket(
     };
 
     try {
+      console.log('[SCAN TICKET] 🔍 Parsing QR data...');
       parsedData = JSON.parse(qrData);
+      console.log('[SCAN TICKET] ✅ Parsed data:', parsedData);
     } catch (e) {
+      console.log('[SCAN TICKET] ❌ Failed to parse QR data:', e);
       return { success: false, error: 'QR code invalide' };
     }
 
     // Vérifier que la vente existe
+    console.log('[SCAN TICKET] 🔍 Checking if sale exists:', parsedData.saleId);
     const saleDoc = await firestore
       .collection('sales')
       .doc(parsedData.saleId)
       .get();
 
     if (!saleDoc.exists) {
+      console.log('[SCAN TICKET] ❌ Sale not found');
       return { success: false, error: 'Billet introuvable' };
     }
+    console.log('[SCAN TICKET] ✅ Sale found');
 
     // Vérifier que l'événement existe
+    console.log('[SCAN TICKET] 🔍 Checking if event exists:', parsedData.eventId);
     const eventDoc = await firestore
       .collection('events')
       .doc(parsedData.eventId)
       .get();
 
     if (!eventDoc.exists) {
+      console.log('[SCAN TICKET] ❌ Event not found');
       return { success: false, error: 'Événement introuvable' };
     }
 
     const event = eventDoc.data();
-    
+    console.log('[SCAN TICKET] ✅ Event found:', event?.name);
+
     // ✅ CORRECTION 1: Vérifier que event existe avant d'accéder à ses propriétés
     if (!event) {
+      console.log('[SCAN TICKET] ❌ Event data is invalid');
       return { success: false, error: 'Données événement invalides' };
     }
 
     // Trouver le ticket
+    console.log('[SCAN TICKET] 🔍 Looking for ticket type:', parsedData.ticketId);
     const ticket = event.tickets?.find((t: any) => t.id === parsedData.ticketId);
     if (!ticket) {
+      console.log('[SCAN TICKET] ❌ Ticket type not found');
       return { success: false, error: 'Type de billet introuvable' };
     }
+    console.log('[SCAN TICKET] ✅ Ticket type found:', ticket.name);
 
     // Vérifier si l'utilisateur est autorisé à scanner (organisateur de l'événement ou admin)
+    console.log('[SCAN TICKET] 🔐 Checking permissions...');
     const isAdmin = await firestore
       .collection('roles_admin')
       .doc(session.user.id)
       .get()
       .then(doc => doc.exists);
+    console.log('[SCAN TICKET] Is admin:', isAdmin);
 
     const isOrganizer = event.organizerId === session.user.id;
+    console.log('[SCAN TICKET] Is organizer:', isOrganizer, '(event organizer:', event.organizerId, ', user:', session.user.id, ')');
 
     if (!isAdmin && !isOrganizer) {
-      return { 
-        success: false, 
-        error: 'Vous n\'êtes pas autorisé à scanner les billets pour cet événement' 
+      console.log('[SCAN TICKET] ❌ Not authorized to scan');
+      return {
+        success: false,
+        error: 'Vous n\'êtes pas autorisé à scanner les billets pour cet événement'
       };
     }
+    console.log('[SCAN TICKET] ✅ User authorized to scan');
 
     // Vérifier si le billet a déjà été scanné
+    console.log('[SCAN TICKET] 🔍 Checking if ticket already scanned...');
     const existingScanQuery = await firestore
       .collection('ticket_scans')
       .where('saleId', '==', parsedData.saleId)
@@ -120,16 +145,19 @@ export async function validateAndScanTicket(
 
     if (!existingScanQuery.empty) {
       const existingScan = existingScanQuery.docs[0].data();
+      console.log('[SCAN TICKET] ❌ Ticket already scanned at:', existingScan.scannedAt);
       return {
         success: false,
         error: 'Billet déjà scanné',
         message: `Ce billet a déjà été scanné le ${new Date(existingScan.scannedAt).toLocaleString('fr-FR')}`,
       };
     }
+    console.log('[SCAN TICKET] ✅ Ticket not scanned yet');
 
     // Enregistrer le scan
+    console.log('[SCAN TICKET] 💾 Saving scan to database...');
     const scanTime = new Date().toISOString();
-    await firestore.collection('ticket_scans').add({
+    const scanData = {
       saleId: parsedData.saleId,
       eventId: parsedData.eventId,
       ticketId: parsedData.ticketId,
@@ -138,11 +166,14 @@ export async function validateAndScanTicket(
       scannedAt: scanTime,
       holderName: parsedData.holder,
       quantity: parsedData.quantity,
-    });
+    };
+    console.log('[SCAN TICKET] Scan data to save:', scanData);
+
+    await firestore.collection('ticket_scans').add(scanData);
 
     console.log('[SCAN TICKET] ✅ Ticket scanned successfully');
 
-    return {
+    const result = {
       success: true,
       message: 'Billet validé avec succès',
       scanData: {
@@ -153,12 +184,16 @@ export async function validateAndScanTicket(
         scanTime,
       },
     };
+    console.log('[SCAN TICKET] Returning result:', result);
+
+    return result;
 
   } catch (error) {
     console.error('[SCAN TICKET] ❌ Error:', error);
-    return { 
-      success: false, 
-      error: 'Erreur lors de la validation du billet' 
+    console.error('[SCAN TICKET] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    return {
+      success: false,
+      error: 'Erreur lors de la validation du billet'
     };
   }
 }

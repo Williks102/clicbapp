@@ -60,133 +60,188 @@ export default function ScannerPage() {
   const { data: myEvents } = useCollection<Event>(myEventsQuery);
 
   const handleScan = async (data: { text: string } | null) => {
+    console.log('[SCANNER] 📸 handleScan called with data:', data);
+
     if (data) {
+      console.log('[SCANNER] ✅ Data received:', data.text);
       setScanResult(data.text);
       setIsScanning(false);
       setIsValidating(true);
+      console.log('[SCANNER] 🔄 Starting validation...');
 
       try {
+        console.log('[SCANNER] 🔍 Parsing QR code data...');
         const parsed = JSON.parse(data.text) as ScanData;
+        console.log('[SCANNER] ✅ Parsed data:', parsed);
         setParsedData(parsed);
 
         // Vérifier que l'événement existe et appartient à l'organisateur
+        console.log('[SCANNER] 🔍 Checking if event belongs to organizer...');
+        console.log('[SCANNER] Event ID to find:', parsed.eventId);
+        console.log('[SCANNER] My events:', myEvents?.map(e => ({ id: e.id, name: e.name })));
         const event = myEvents?.find(e => e.id === parsed.eventId);
 
         if (!event) {
           // L'événement n'appartient pas à cet organisateur
+          console.log('[SCANNER] ❌ Event not found or not yours');
           setValidationStatus('not_yours');
           setIsValidating(false);
           return;
         }
 
+        console.log('[SCANNER] ✅ Event found:', event.name);
+        console.log('[SCANNER] 📡 Calling server action validateAndScanTicket...');
+
         // Appeler l'action serveur pour valider et enregistrer le scan
         const result = await validateAndScanTicket(data.text);
+        console.log('[SCANNER] 📡 Server response:', result);
 
         if (result.success) {
+          console.log('[SCANNER] ✅ Validation successful!');
           setValidationStatus('valid');
           setValidationMessage(result.message || 'Billet validé avec succès');
         } else {
+          console.log('[SCANNER] ❌ Validation failed:', result.error);
           // Déterminer le type d'erreur
           if (result.error?.includes('déjà scanné')) {
+            console.log('[SCANNER] Error type: already_scanned');
             setValidationStatus('already_scanned');
             setValidationMessage(result.message || result.error);
           } else if (result.error?.includes('autorisé')) {
+            console.log('[SCANNER] Error type: not_yours');
             setValidationStatus('not_yours');
             setValidationMessage(result.error);
           } else {
+            console.log('[SCANNER] Error type: invalid');
             setValidationStatus('invalid');
             setValidationMessage(result.error || 'Billet invalide');
           }
         }
       } catch (e) {
-        console.error('Erreur parsing QR code:', e);
+        console.error('[SCANNER] ❌ Error parsing QR code:', e);
         setParsedData(null);
         setValidationStatus('invalid');
         setValidationMessage('QR code invalide');
       } finally {
+        console.log('[SCANNER] 🏁 Validation complete, isValidating=false');
         setIsValidating(false);
       }
+    } else {
+      console.log('[SCANNER] ⚠️ handleScan called with null/undefined data');
     }
   };
 
   const handleError = (err: any) => {
+    console.error('[SCANNER] 🚨 Scanner error occurred:', err);
+    console.error('[SCANNER] Error name:', err.name);
+    console.error('[SCANNER] Error message:', err.message);
+
     if (err.name === 'NotAllowedError') {
+      console.log('[SCANNER] ❌ Camera access denied');
       setScanError(
         "L'accès à la caméra est requis pour scanner les billets. Veuillez autoriser l'accès dans les paramètres de votre navigateur."
       );
     } else {
+      console.log('[SCANNER] ❌ Other scanner error:', err.name);
       setScanError('Une erreur est survenue lors du scan. Veuillez réessayer.');
     }
-    console.error(err);
+    console.log('[SCANNER] ⏹️ Stopping scanner, isScanning=false');
     setIsScanning(false);
   };
 
   const handleReset = () => {
+    console.log('[SCANNER] 🔄 Resetting scanner and restarting...');
     setScanResult(null);
     setParsedData(null);
     setScanError(null);
     setValidationStatus(null);
     setValidationMessage(null);
     setIsScanning(true);
+    console.log('[SCANNER] ✅ Scanner reset and restarted, isScanning=true');
   };
 
   const startScanning = () => {
+    console.log('[SCANNER] 🎬 Starting scanner...');
+    console.log('[SCANNER] Reset states');
     setScanResult(null);
     setParsedData(null);
     setScanError(null);
     setValidationStatus(null);
     setValidationMessage(null);
     setIsScanning(true);
+    console.log('[SCANNER] ✅ Scanner started, isScanning=true');
   };
 
   const handleManualValidation = async () => {
+    console.log('[MANUAL] ⌨️ Manual validation triggered');
+    console.log('[MANUAL] Manual code:', manualCode);
+
     if (!manualCode.trim()) {
+      console.log('[MANUAL] ❌ Empty manual code');
       setScanError('Veuillez entrer un code QR');
       return;
     }
 
     setScanError(null);
     setIsValidating(true);
+    console.log('[MANUAL] 🔄 Starting manual validation...');
 
     try {
+      console.log('[MANUAL] 🔍 Parsing manual code...');
       const parsed = JSON.parse(manualCode) as ScanData;
+      console.log('[MANUAL] ✅ Parsed data:', parsed);
       setParsedData(parsed);
 
       // Vérifier que l'événement existe et appartient à l'organisateur
+      console.log('[MANUAL] 🔍 Checking if event belongs to organizer...');
+      console.log('[MANUAL] Event ID to find:', parsed.eventId);
+      console.log('[MANUAL] My events:', myEvents?.map(e => ({ id: e.id, name: e.name })));
       const event = myEvents?.find(e => e.id === parsed.eventId);
 
       if (!event) {
+        console.log('[MANUAL] ❌ Event not found or not yours');
         setValidationStatus('not_yours');
         setIsValidating(false);
         return;
       }
 
+      console.log('[MANUAL] ✅ Event found:', event.name);
+      console.log('[MANUAL] 📡 Calling server action validateAndScanTicket...');
+
       // Appeler l'action serveur pour valider et enregistrer le scan
       const result = await validateAndScanTicket(manualCode);
+      console.log('[MANUAL] 📡 Server response:', result);
 
       if (result.success) {
+        console.log('[MANUAL] ✅ Validation successful!');
         setValidationStatus('valid');
         setValidationMessage(result.message || 'Billet validé avec succès');
         setManualCode(''); // Réinitialiser le champ
+        console.log('[MANUAL] Manual code cleared');
       } else {
+        console.log('[MANUAL] ❌ Validation failed:', result.error);
         // Déterminer le type d'erreur
         if (result.error?.includes('déjà scanné')) {
+          console.log('[MANUAL] Error type: already_scanned');
           setValidationStatus('already_scanned');
           setValidationMessage(result.message || result.error);
         } else if (result.error?.includes('autorisé')) {
+          console.log('[MANUAL] Error type: not_yours');
           setValidationStatus('not_yours');
           setValidationMessage(result.error);
         } else {
+          console.log('[MANUAL] Error type: invalid');
           setValidationStatus('invalid');
           setValidationMessage(result.error || 'Billet invalide');
         }
       }
     } catch (e) {
-      console.error('Erreur parsing code manuel:', e);
+      console.error('[MANUAL] ❌ Error parsing manual code:', e);
       setParsedData(null);
       setValidationStatus('invalid');
       setValidationMessage('Format de code invalide');
     } finally {
+      console.log('[MANUAL] 🏁 Manual validation complete, isValidating=false');
       setIsValidating(false);
     }
   };

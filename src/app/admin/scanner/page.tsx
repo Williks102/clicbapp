@@ -51,70 +51,96 @@ export default function AdminScannerPage() {
   const { data: events } = useCollection<Event>(eventsQuery);
 
   const handleScan = async (data: { text: string } | null) => {
+    console.log('[ADMIN SCANNER] 📸 handleScan called with data:', data);
+
     if (data) {
+      console.log('[ADMIN SCANNER] ✅ Data received:', data.text);
       setScanResult(data.text);
       setIsScanning(false);
       setIsValidating(true);
+      console.log('[ADMIN SCANNER] 🔄 Starting validation...');
 
       try {
+        console.log('[ADMIN SCANNER] 🔍 Parsing QR code data...');
         const parsed = JSON.parse(data.text) as ScanData;
+        console.log('[ADMIN SCANNER] ✅ Parsed data:', parsed);
         setParsedData(parsed);
 
         // Appeler l'action serveur pour valider et enregistrer le scan
+        console.log('[ADMIN SCANNER] 📡 Calling server action validateAndScanTicket...');
         const result = await validateAndScanTicket(data.text);
+        console.log('[ADMIN SCANNER] 📡 Server response:', result);
 
         if (result.success) {
+          console.log('[ADMIN SCANNER] ✅ Validation successful!');
           setValidationStatus('valid');
           setValidationMessage(result.message || 'Billet validé avec succès');
         } else {
+          console.log('[ADMIN SCANNER] ❌ Validation failed:', result.error);
           // Déterminer le type d'erreur
           if (result.error?.includes('déjà scanné')) {
+            console.log('[ADMIN SCANNER] Error type: already_scanned');
             setValidationStatus('already_scanned');
             setValidationMessage(result.message || result.error);
           } else {
+            console.log('[ADMIN SCANNER] Error type: invalid');
             setValidationStatus('invalid');
             setValidationMessage(result.error || 'Billet invalide');
           }
         }
       } catch (e) {
-        console.error('Erreur parsing QR code:', e);
+        console.error('[ADMIN SCANNER] ❌ Error parsing QR code:', e);
         setParsedData(null);
         setValidationStatus('invalid');
         setValidationMessage('QR code invalide');
       } finally {
+        console.log('[ADMIN SCANNER] 🏁 Validation complete, isValidating=false');
         setIsValidating(false);
       }
+    } else {
+      console.log('[ADMIN SCANNER] ⚠️ handleScan called with null/undefined data');
     }
   };
 
   const handleError = (err: any) => {
+    console.error('[ADMIN SCANNER] 🚨 Scanner error occurred:', err);
+    console.error('[ADMIN SCANNER] Error name:', err.name);
+    console.error('[ADMIN SCANNER] Error message:', err.message);
+
     if (err.name === 'NotAllowedError') {
+      console.log('[ADMIN SCANNER] ❌ Camera access denied');
       setScanError(
         "L'accès à la caméra est requis pour scanner les billets. Veuillez autoriser l'accès dans les paramètres de votre navigateur."
       );
     } else {
+      console.log('[ADMIN SCANNER] ❌ Other scanner error:', err.name);
       setScanError('Une erreur est survenue lors du scan. Veuillez réessayer.');
     }
-    console.error(err);
+    console.log('[ADMIN SCANNER] ⏹️ Stopping scanner, isScanning=false');
     setIsScanning(false);
   };
 
   const handleReset = () => {
+    console.log('[ADMIN SCANNER] 🔄 Resetting scanner and restarting...');
     setScanResult(null);
     setParsedData(null);
     setScanError(null);
     setValidationStatus(null);
     setValidationMessage(null);
     setIsScanning(true);
+    console.log('[ADMIN SCANNER] ✅ Scanner reset and restarted, isScanning=true');
   };
 
   const startScanning = () => {
+    console.log('[ADMIN SCANNER] 🎬 Starting scanner...');
+    console.log('[ADMIN SCANNER] Reset states');
     setScanResult(null);
     setParsedData(null);
     setScanError(null);
     setValidationStatus(null);
     setValidationMessage(null);
     setIsScanning(true);
+    console.log('[ADMIN SCANNER] ✅ Scanner started, isScanning=true');
   };
   
   const getEventName = (eventId: string) => events?.find(e => e.id === eventId)?.name || 'Événement inconnu';
