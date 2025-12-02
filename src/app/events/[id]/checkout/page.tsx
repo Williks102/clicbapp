@@ -29,9 +29,11 @@ function CheckoutPageComponent() {
   const { areServicesAvailable, firestore } = useFirebase();
 
   // Charger l'événement depuis Firestore
+  // ✅ FIX: Don't include firestore in deps as it's a stable reference
   const eventRef = useMemo(
     () => (areServicesAvailable && eventId ? doc(firestore, `events/${eventId}`) : null),
-    [areServicesAvailable, firestore, eventId]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [areServicesAvailable, eventId]
   );
   const { data: event, isLoading, error } = useDoc<Event>(eventRef);
 

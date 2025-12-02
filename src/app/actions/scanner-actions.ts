@@ -53,7 +53,7 @@ export async function validateAndScanTicket(
     }
     console.log('[SCAN TICKET] ✅ User authenticated:', session.user.email);
 
-    // Parser les données du QR code
+    // Parser les données du QR code ou utiliser l'ID de vente directement
     let parsedData: {
       saleId: string;
       eventId: string;
@@ -62,27 +62,66 @@ export async function validateAndScanTicket(
       holder: string;
     };
 
-    try {
-      console.log('[SCAN TICKET] 🔍 Parsing QR data...');
-      parsedData = JSON.parse(qrData);
-      console.log('[SCAN TICKET] ✅ Parsed data:', parsedData);
-    } catch (e) {
-      console.log('[SCAN TICKET] ❌ Failed to parse QR data:', e);
-      return { success: false, error: 'QR code invalide' };
+    // Vérifier si c'est un JSON ou juste un ID de vente
+    if (qrData.trim().startsWith('{')) {
+      // Format JSON complet
+      try {
+        console.log('[SCAN TICKET] 🔍 Parsing JSON QR data...');
+        parsedData = JSON.parse(qrData);
+        console.log('[SCAN TICKET] ✅ Parsed JSON data:', parsedData);
+      } catch (e) {
+        console.log('[SCAN TICKET] ❌ Failed to parse JSON:', e);
+        return { success: false, error: 'QR code invalide' };
+      }
+    } else {
+      // Format ID de vente simple - on va chercher les infos dans Firestore
+      console.log('[SCAN TICKET] 🔍 Using sale ID format, fetching from database...');
+      const saleId = qrData.trim();
+
+      const saleDoc = await firestore
+        .collection('sales')
+        .doc(saleId)
+        .get();
+
+      if (!saleDoc.exists) {
+        console.log('[SCAN TICKET] ❌ Sale not found with ID:', saleId);
+        return { success: false, error: 'ID de vente introuvable' };
+      }
+
+      const saleData = saleDoc.data();
+      if (!saleData) {
+        console.log('[SCAN TICKET] ❌ Sale data is invalid');
+        return { success: false, error: 'Données de vente invalides' };
+      }
+
+      console.log('[SCAN TICKET] ✅ Sale found:', saleData);
+
+      parsedData = {
+        saleId: saleId,
+        eventId: saleData.eventId,
+        ticketId: saleData.ticketId,
+        quantity: saleData.quantity,
+        holder: saleData.customerName,
+      };
+      console.log('[SCAN TICKET] ✅ Constructed data from sale:', parsedData);
     }
 
-    // Vérifier que la vente existe
-    console.log('[SCAN TICKET] 🔍 Checking if sale exists:', parsedData.saleId);
-    const saleDoc = await firestore
-      .collection('sales')
-      .doc(parsedData.saleId)
-      .get();
+    // Si on a reçu un JSON, vérifier que la vente existe
+    if (qrData.trim().startsWith('{')) {
+      console.log('[SCAN TICKET] 🔍 Verifying sale exists for JSON data:', parsedData.saleId);
+      const saleDoc = await firestore
+        .collection('sales')
+        .doc(parsedData.saleId)
+        .get();
 
-    if (!saleDoc.exists) {
-      console.log('[SCAN TICKET] ❌ Sale not found');
-      return { success: false, error: 'Billet introuvable' };
+      if (!saleDoc.exists) {
+        console.log('[SCAN TICKET] ❌ Sale not found');
+        return { success: false, error: 'Billet introuvable' };
+      }
+      console.log('[SCAN TICKET] ✅ Sale verified');
+    } else {
+      console.log('[SCAN TICKET] ✅ Sale already verified (loaded from database)');
     }
-    console.log('[SCAN TICKET] ✅ Sale found');
 
     // Vérifier que l'événement existe
     console.log('[SCAN TICKET] 🔍 Checking if event exists:', parsedData.eventId);

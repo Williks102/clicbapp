@@ -174,11 +174,11 @@ export default function ScannerPage() {
 
   const handleManualValidation = async () => {
     console.log('[MANUAL] ⌨️ Manual validation triggered');
-    console.log('[MANUAL] Manual code:', manualCode);
+    console.log('[MANUAL] Manual input:', manualCode);
 
     if (!manualCode.trim()) {
       console.log('[MANUAL] ❌ Empty manual code');
-      setScanError('Veuillez entrer un code QR');
+      setScanError('Veuillez entrer un ID de vente');
       return;
     }
 
@@ -187,29 +187,26 @@ export default function ScannerPage() {
     console.log('[MANUAL] 🔄 Starting manual validation...');
 
     try {
-      console.log('[MANUAL] 🔍 Parsing manual code...');
-      const parsed = JSON.parse(manualCode) as ScanData;
-      console.log('[MANUAL] ✅ Parsed data:', parsed);
-      setParsedData(parsed);
-
-      // Vérifier que l'événement existe et appartient à l'organisateur
-      console.log('[MANUAL] 🔍 Checking if event belongs to organizer...');
-      console.log('[MANUAL] Event ID to find:', parsed.eventId);
-      console.log('[MANUAL] My events:', myEvents?.map(e => ({ id: e.id, name: e.name })));
-      const event = myEvents?.find(e => e.id === parsed.eventId);
-
-      if (!event) {
-        console.log('[MANUAL] ❌ Event not found or not yours');
-        setValidationStatus('not_yours');
-        setIsValidating(false);
-        return;
+      // Essayer de parser en JSON si ça ressemble à du JSON
+      let qrData: string;
+      if (manualCode.trim().startsWith('{')) {
+        console.log('[MANUAL] 🔍 Detected JSON format, parsing...');
+        const parsed = JSON.parse(manualCode) as ScanData;
+        console.log('[MANUAL] ✅ Parsed JSON data:', parsed);
+        setParsedData(parsed);
+        qrData = manualCode;
+      } else {
+        // Sinon, traiter comme un ID de vente simple
+        console.log('[MANUAL] 🔍 Detected sale ID format:', manualCode.trim());
+        // Chercher la vente dans Firestore pour récupérer les infos complètes
+        // On passe l'ID directement, le serveur fera la recherche
+        qrData = manualCode.trim();
       }
 
-      console.log('[MANUAL] ✅ Event found:', event.name);
       console.log('[MANUAL] 📡 Calling server action validateAndScanTicket...');
 
       // Appeler l'action serveur pour valider et enregistrer le scan
-      const result = await validateAndScanTicket(manualCode);
+      const result = await validateAndScanTicket(qrData);
       console.log('[MANUAL] 📡 Server response:', result);
 
       if (result.success) {
@@ -218,6 +215,17 @@ export default function ScannerPage() {
         setValidationMessage(result.message || 'Billet validé avec succès');
         setManualCode(''); // Réinitialiser le champ
         console.log('[MANUAL] Manual code cleared');
+
+        // Mettre à jour parsedData avec les infos retournées
+        if (result.scanData) {
+          setParsedData({
+            eventId: '',
+            ticketId: '',
+            saleId: qrData,
+            quantity: result.scanData.quantity,
+            holder: result.scanData.holderName
+          });
+        }
       } else {
         console.log('[MANUAL] ❌ Validation failed:', result.error);
         // Déterminer le type d'erreur
@@ -236,7 +244,7 @@ export default function ScannerPage() {
         }
       }
     } catch (e) {
-      console.error('[MANUAL] ❌ Error parsing manual code:', e);
+      console.error('[MANUAL] ❌ Error processing manual input:', e);
       setParsedData(null);
       setValidationStatus('invalid');
       setValidationMessage('Format de code invalide');
@@ -313,16 +321,16 @@ export default function ScannerPage() {
             <TabsContent value="manual" className="flex flex-col items-center gap-6 mt-6">
               <div className="w-full max-w-sm space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="manual-code">Code QR du billet</Label>
+                  <Label htmlFor="manual-code">ID de vente ou Code QR</Label>
                   <Input
                     id="manual-code"
-                    placeholder='{"eventId":"...","ticketId":"...","saleId":"..."}'
+                    placeholder='Exemple: abc123xyz ou {"eventId":"...","saleId":"..."}'
                     value={manualCode}
                     onChange={(e) => setManualCode(e.target.value)}
                     className="font-mono text-sm"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Collez le contenu JSON du QR code
+                    Entrez l&apos;ID de vente (format simple) ou le contenu JSON complet du QR code
                   </p>
                 </div>
                 <Button

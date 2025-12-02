@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -53,14 +53,28 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
 
   const ticket = event.tickets.find((t) => t.id === ticketId);
 
+  // ✅ FIX: Don't use session in defaultValues to prevent React hook errors
+  // when session changes after login during checkout
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      fullName: session?.user?.name || '',
-      email: session?.user?.email || '',
+      fullName: '',
+      email: '',
       quantity: 1,
     },
   });
+
+  // ✅ FIX: Update form values when session changes
+  useEffect(() => {
+    if (session?.user) {
+      if (session.user.name && !form.getValues('fullName')) {
+        form.setValue('fullName', session.user.name);
+      }
+      if (session.user.email && !form.getValues('email')) {
+        form.setValue('email', session.user.email);
+      }
+    }
+  }, [session, form]);
 
   if (!ticket) {
     return (
