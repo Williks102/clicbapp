@@ -112,6 +112,16 @@ export default function AdminScannerPage() {
       setScanError(
         "L'accès à la caméra est requis pour scanner les billets. Veuillez autoriser l'accès dans les paramètres de votre navigateur."
       );
+    } else if (err.name === 'NotFoundError') {
+      console.log('[ADMIN SCANNER] ❌ No camera found on device');
+      setScanError(
+        "Aucune caméra détectée sur cet appareil. Scannez depuis un appareil mobile ou utilisez un scanner USB."
+      );
+    } else if (err.name === 'NotReadableError') {
+      console.log('[ADMIN SCANNER] ❌ Camera not readable (may be in use)');
+      setScanError(
+        "La caméra est peut-être utilisée par une autre application. Fermez les autres applications utilisant la caméra et réessayez."
+      );
     } else {
       console.log('[ADMIN SCANNER] ❌ Other scanner error:', err.name);
       setScanError('Une erreur est survenue lors du scan. Veuillez réessayer.');

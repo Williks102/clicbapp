@@ -41,9 +41,13 @@ export type TicketScan = {
 export async function validateAndScanTicket(
   qrData: string
 ): Promise<ScanResult> {
+  const startTime = Date.now();
   try {
+    console.log('==================== SCAN TICKET START ====================');
     console.log('[SCAN TICKET] 🎫 Validating ticket...');
+    console.log('[SCAN TICKET] Timestamp:', new Date().toISOString());
     console.log('[SCAN TICKET] QR Data received:', qrData);
+    console.log('[SCAN TICKET] QR Data length:', qrData.length);
 
     // Vérifier la session
     console.log('[SCAN TICKET] 🔐 Checking authentication...');
@@ -66,14 +70,22 @@ export async function validateAndScanTicket(
     };
 
     // Vérifier si c'est un JSON ou juste un ID (de vente ou de billet)
-    if (qrData.trim().startsWith('{')) {
+    const trimmedData = qrData.trim();
+    const startsWithBrace = trimmedData.startsWith('{');
+    console.log('[SCAN TICKET] 🔍 Analyzing QR data format...');
+    console.log('[SCAN TICKET] Trimmed data length:', trimmedData.length);
+    console.log('[SCAN TICKET] Starts with brace:', startsWithBrace);
+    console.log('[SCAN TICKET] First 50 chars:', trimmedData.substring(0, 50));
+
+    if (startsWithBrace) {
       // Format JSON complet
       try {
         console.log('[SCAN TICKET] 🔍 Parsing JSON QR data...');
         parsedData = JSON.parse(qrData);
-        console.log('[SCAN TICKET] ✅ Parsed JSON data:', parsedData);
+        console.log('[SCAN TICKET] ✅ Parsed JSON data:', JSON.stringify(parsedData));
       } catch (e) {
-        console.log('[SCAN TICKET] ❌ Failed to parse JSON:', e);
+        console.error('[SCAN TICKET] ❌ Failed to parse JSON:', e);
+        console.error('[SCAN TICKET] Invalid JSON string:', qrData);
         return { success: false, error: 'QR code invalide' };
       }
     } else {
@@ -266,13 +278,22 @@ export async function validateAndScanTicket(
         scanTime,
       },
     };
+    const duration = Date.now() - startTime;
     console.log('[SCAN TICKET] Returning result:', result);
+    console.log('[SCAN TICKET] ⏱️  Total duration:', duration, 'ms');
+    console.log('==================== SCAN TICKET SUCCESS ====================');
 
     return result;
 
   } catch (error) {
+    const duration = Date.now() - startTime;
+    console.error('==================== SCAN TICKET ERROR ====================');
     console.error('[SCAN TICKET] ❌ Error:', error);
+    console.error('[SCAN TICKET] Error type:', error instanceof Error ? error.constructor.name : typeof error);
+    console.error('[SCAN TICKET] Error message:', error instanceof Error ? error.message : String(error));
     console.error('[SCAN TICKET] Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+    console.error('[SCAN TICKET] ⏱️  Failed after:', duration, 'ms');
+    console.error('==================== SCAN TICKET END ====================');
     return {
       success: false,
       error: 'Erreur lors de la validation du billet'

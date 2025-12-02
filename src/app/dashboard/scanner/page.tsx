@@ -164,9 +164,19 @@ export default function ScannerPage() {
       setScanError(
         "L'accès à la caméra est requis pour scanner les billets. Veuillez autoriser l'accès dans les paramètres de votre navigateur."
       );
+    } else if (err.name === 'NotFoundError') {
+      console.log('[SCANNER] ❌ No camera found on device');
+      setScanError(
+        "Aucune caméra détectée sur cet appareil. Utilisez l'onglet 'Saisie Manuelle' pour entrer le numéro de billet."
+      );
+    } else if (err.name === 'NotReadableError') {
+      console.log('[SCANNER] ❌ Camera not readable (may be in use)');
+      setScanError(
+        "La caméra est peut-être utilisée par une autre application. Fermez les autres applications utilisant la caméra et réessayez."
+      );
     } else {
       console.log('[SCANNER] ❌ Other scanner error:', err.name);
-      setScanError('Une erreur est survenue lors du scan. Veuillez réessayer.');
+      setScanError('Une erreur est survenue lors du scan. Utilisez la saisie manuelle pour continuer.');
     }
     console.log('[SCANNER] ⏹️ Stopping scanner, isScanning=false');
     setIsScanning(false);
