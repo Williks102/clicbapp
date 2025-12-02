@@ -19,6 +19,17 @@ function generateOrderNumber(): string {
 }
 
 /**
+ * Génère un numéro de billet unique à partir de l'ID de commande
+ */
+function generateTicketNumber(orderId: string): string {
+  // Extraire la partie unique de l'ID de commande
+  // Si orderId = "ORD-L0M5ABCD-XYZ12", on veut "TKT-XYZ12" (la partie aléatoire)
+  const parts = orderId.split('-');
+  const uniquePart = parts[parts.length - 1] || parts[1] || orderId.substring(4, 12);
+  return `TKT-${uniquePart}`;
+}
+
+/**
  * Génère le contenu du QR code pour le billet
  */
 function generateTicketQRData(sale: Sale, event: Event): string {
@@ -74,13 +85,18 @@ export async function createPurchaseAndSendTicket(
     // Vérifier la disponibilité
     // TODO: Implémenter la vérification de stock réelle
 
-    // Générer l'ID de vente
+    // Générer l'ID de vente et le numéro de billet
     const orderId = generateOrderNumber();
+    const ticketNumber = generateTicketNumber(orderId);
     const purchaseDate = new Date().toISOString();
 
-    // Créer l'objet Sale (sans userId car il n'existe pas dans le type)
+    console.log('[PURCHASE] Generated orderId:', orderId);
+    console.log('[PURCHASE] Generated ticketNumber:', ticketNumber);
+
+    // Créer l'objet Sale
     const sale: Sale = {
       id: orderId,
+      ticketNumber: ticketNumber,
       eventId: data.eventId,
       ticketId: data.ticketId,
       customerName: data.fullName,
@@ -93,7 +109,7 @@ export async function createPurchaseAndSendTicket(
 
     // Sauvegarder dans Firestore
     await firestore.collection('sales').doc(orderId).set(sale);
-    console.log('[PURCHASE] ✅ Sale created in Firestore');
+    console.log('[PURCHASE] ✅ Sale created in Firestore with ticketNumber:', ticketNumber);
 
     // Générer le QR code
     const qrData = generateTicketQRData(sale, event);

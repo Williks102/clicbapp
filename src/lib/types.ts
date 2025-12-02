@@ -31,6 +31,7 @@ export type Category = {
 
 export type Sale = {
   id: string;
+  ticketNumber?: string; // Numéro de billet unique (ex: TKT-ABC123)
   eventId: string;
   ticketId: string;
   customerName: string;

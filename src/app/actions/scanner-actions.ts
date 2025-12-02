@@ -62,7 +62,7 @@ export async function validateAndScanTicket(
       holder: string;
     };
 
-    // Vérifier si c'est un JSON ou juste un ID de vente
+    // Vérifier si c'est un JSON ou juste un ID (de vente ou de billet)
     if (qrData.trim().startsWith('{')) {
       // Format JSON complet
       try {
@@ -74,18 +74,46 @@ export async function validateAndScanTicket(
         return { success: false, error: 'QR code invalide' };
       }
     } else {
-      // Format ID de vente simple - on va chercher les infos dans Firestore
-      console.log('[SCAN TICKET] 🔍 Using sale ID format, fetching from database...');
-      const saleId = qrData.trim();
+      // Format ID simple - peut être un ID de vente (ORD-...) ou un numéro de billet (TKT-...)
+      const inputId = qrData.trim();
+      console.log('[SCAN TICKET] 🔍 Using ID format, fetching from database...', inputId);
 
-      const saleDoc = await firestore
-        .collection('sales')
-        .doc(saleId)
-        .get();
+      let saleDoc;
+      let saleId: string;
 
-      if (!saleDoc.exists) {
-        console.log('[SCAN TICKET] ❌ Sale not found with ID:', saleId);
-        return { success: false, error: 'ID de vente introuvable' };
+      // Vérifier si c'est un numéro de billet (TKT-...)
+      if (inputId.startsWith('TKT-')) {
+        console.log('[SCAN TICKET] 🎫 Detected ticket number, searching by ticketNumber field...');
+
+        // Chercher par ticketNumber
+        const querySnapshot = await firestore
+          .collection('sales')
+          .where('ticketNumber', '==', inputId)
+          .limit(1)
+          .get();
+
+        if (querySnapshot.empty) {
+          console.log('[SCAN TICKET] ❌ No sale found with ticket number:', inputId);
+          return { success: false, error: 'Numéro de billet introuvable' };
+        }
+
+        saleDoc = querySnapshot.docs[0];
+        saleId = saleDoc.id;
+        console.log('[SCAN TICKET] ✅ Found sale with ticketNumber:', saleId);
+      } else {
+        // Sinon, traiter comme un ID de vente (ORD-... ou ancien format)
+        console.log('[SCAN TICKET] 📋 Detected order ID, searching by document ID...');
+        saleDoc = await firestore
+          .collection('sales')
+          .doc(inputId)
+          .get();
+
+        if (!saleDoc.exists) {
+          console.log('[SCAN TICKET] ❌ Sale not found with ID:', inputId);
+          return { success: false, error: 'ID de commande introuvable' };
+        }
+
+        saleId = inputId;
       }
 
       const saleData = saleDoc.data();

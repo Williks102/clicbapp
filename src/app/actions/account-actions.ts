@@ -84,7 +84,9 @@ export async function getUserTickets(): Promise<{
     const enrichedTickets: EnrichedTicket[] = sales.map(sale => {
       const event = eventsMap.get(sale.eventId) || null;
       const ticketTier = event?.tickets.find(t => t.id === sale.ticketId) || null;
-      const ticketNumber = `TKT-${sale.id.split('-')[1] || sale.id.substring(0, 8)}`;
+
+      // ✅ Utiliser le ticketNumber stocké, sinon le générer (pour les anciennes ventes)
+      const ticketNumber = sale.ticketNumber || `TKT-${sale.id.split('-')[1] || sale.id.substring(0, 8)}`;
 
       return {
         sale,

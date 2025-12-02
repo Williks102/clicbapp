@@ -321,16 +321,16 @@ export default function ScannerPage() {
             <TabsContent value="manual" className="flex flex-col items-center gap-6 mt-6">
               <div className="w-full max-w-sm space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="manual-code">ID de vente ou Code QR</Label>
+                  <Label htmlFor="manual-code">Numéro de billet ou Code QR</Label>
                   <Input
                     id="manual-code"
-                    placeholder='Exemple: abc123xyz ou {"eventId":"...","saleId":"..."}'
+                    placeholder='Exemple: TKT-ABC123 ou ORD-XYZ789'
                     value={manualCode}
                     onChange={(e) => setManualCode(e.target.value)}
                     className="font-mono text-sm"
                   />
                   <p className="text-xs text-muted-foreground">
-                    Entrez l&apos;ID de vente (format simple) ou le contenu JSON complet du QR code
+                    Entrez le <strong>N° de Billet</strong> (TKT-...), le N° de Commande (ORD-...) ou le JSON complet
                   </p>
                 </div>
                 <Button
