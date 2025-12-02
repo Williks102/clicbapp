@@ -40,15 +40,21 @@ export default function EventPage() {
 
   const { areServicesAvailable, firestore } = useFirebase();
 
+  // ✅ FIX: Don't include firestore in deps as it's a stable reference
+  // Only include areServicesAvailable and id which are primitives
   const eventRef = useMemo(
     () => (areServicesAvailable && id ? doc(firestore, `events/${id}`) : null),
-    [areServicesAvailable, firestore, id]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [areServicesAvailable, id]
   );
   const { data: event, isLoading: isEventLoading, error: eventError } = useDoc<Event>(eventRef);
-  
+
+  // ✅ FIX: Use event?.organizerId instead of entire event object to avoid re-renders
+  // Only depend on the organizerId string, not the whole event object
   const organizerRef = useMemo(
-    () => (areServicesAvailable && event ? doc(firestore, `organizers/${event.organizerId}`) : null),
-    [areServicesAvailable, firestore, event]
+    () => (areServicesAvailable && event?.organizerId ? doc(firestore, `organizers/${event.organizerId}`) : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [areServicesAvailable, event?.organizerId]
   );
   const { data: organizer, isLoading: isOrganizerLoading } = useDoc<Organizer>(organizerRef);
   
