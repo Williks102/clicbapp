@@ -248,9 +248,10 @@ export async function validateAndScanTicket(
     };
     console.log('[SCAN TICKET] Scan data to save:', scanData);
 
-    await firestore.collection('ticket_scans').add(scanData);
+    const docRef = await firestore.collection('ticket_scans').add(scanData);
 
-    console.log('[SCAN TICKET] ✅ Ticket scanned successfully');
+    console.log('[SCAN TICKET] ✅ Ticket scanned successfully with ID:', docRef.id);
+    console.log('[SCAN TICKET] 💾 Document saved in collection: ticket_scans');
 
     const result = {
       success: true,
@@ -318,22 +319,62 @@ export async function getEventScans(eventId: string): Promise<TicketScan[]> {
     }
 
     // Récupérer les scans
-    const scansSnapshot = await firestore
-      .collection('ticket_scans')
-      .where('eventId', '==', eventId)
-      .orderBy('scannedAt', 'desc')
-      .get();
+    console.log('[GET SCANS] 🔍 Querying ticket_scans collection...');
+    console.log('[GET SCANS] Query: eventId ==', eventId);
 
-    const scans = scansSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as TicketScan[];
+    let scansSnapshot;
+    try {
+      // Essayer avec orderBy (nécessite un index)
+      scansSnapshot = await firestore
+        .collection('ticket_scans')
+        .where('eventId', '==', eventId)
+        .orderBy('scannedAt', 'desc')
+        .get();
+      console.log('[GET SCANS] ✅ Query with orderBy succeeded');
+    } catch (indexError) {
+      // Si l'index manque, essayer sans orderBy
+      console.warn('[GET SCANS] ⚠️ Query with orderBy failed, trying without orderBy...');
+      console.warn('[GET SCANS] Error:', indexError instanceof Error ? indexError.message : 'Unknown error');
 
-    console.log(`[GET SCANS] ✅ Found ${scans.length} scans`);
+      scansSnapshot = await firestore
+        .collection('ticket_scans')
+        .where('eventId', '==', eventId)
+        .get();
+      console.log('[GET SCANS] ✅ Query without orderBy succeeded');
+    }
+
+    console.log('[GET SCANS] Query executed, docs returned:', scansSnapshot.docs.length);
+
+    let scans = scansSnapshot.docs.map(doc => {
+      const data = doc.data();
+      console.log('[GET SCANS] Scan doc:', doc.id, data);
+      return {
+        id: doc.id,
+        ...data
+      };
+    }) as TicketScan[];
+
+    // Trier par date si pas déjà trié (quand index manque)
+    scans = scans.sort((a, b) => {
+      const dateA = new Date(a.scannedAt).getTime();
+      const dateB = new Date(b.scannedAt).getTime();
+      return dateB - dateA; // Plus récent d'abord
+    });
+
+    console.log(`[GET SCANS] ✅ Found ${scans.length} scans (sorted)`);
     return scans;
 
   } catch (error) {
     console.error('[GET SCANS] ❌ Error:', error);
+    console.error('[GET SCANS] Error details:', error instanceof Error ? error.message : 'Unknown error');
+    console.error('[GET SCANS] Error stack:', error instanceof Error ? error.stack : 'No stack');
+
+    // Si c'est une erreur d'index Firestore, le message le dira
+    if (error instanceof Error && error.message.includes('index')) {
+      console.error('[GET SCANS] 🔥 FIRESTORE INDEX MISSING! Create the index in Firebase Console');
+      console.error('[GET SCANS] Index needed: ticket_scans collection, fields: eventId (ASC), scannedAt (DESC)');
+    }
+
     return [];
   }
 }
@@ -347,11 +388,14 @@ export async function getEventScanStats(eventId: string): Promise<{
   scansByTicketType: Record<string, number>;
 } | null> {
   try {
+    console.log('[SCAN STATS] 📊 Computing stats for event:', eventId);
     const scans = await getEventScans(eventId);
-    
+
+    console.log('[SCAN STATS] Got', scans.length, 'scans from getEventScans');
+
     const totalScans = scans.length;
     const totalAttendees = scans.reduce((sum, scan) => sum + scan.quantity, 0);
-    
+
     const scansByTicketType: Record<string, number> = {};
     scans.forEach(scan => {
       if (!scansByTicketType[scan.ticketId]) {
@@ -360,11 +404,14 @@ export async function getEventScanStats(eventId: string): Promise<{
       scansByTicketType[scan.ticketId] += scan.quantity;
     });
 
-    return {
+    const stats = {
       totalScans,
       totalAttendees,
       scansByTicketType,
     };
+
+    console.log('[SCAN STATS] ✅ Computed stats:', stats);
+    return stats;
 
   } catch (error) {
     console.error('[SCAN STATS] ❌ Error:', error);
