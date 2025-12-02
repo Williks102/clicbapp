@@ -11,6 +11,8 @@ export type ScanResult = {
   error?: string;
   message?: string;
   scanData?: {
+    eventId: string;
+    ticketId: string;
     eventName: string;
     ticketName: string;
     holderName: string;
@@ -217,6 +219,15 @@ export async function validateAndScanTicket(
         success: false,
         error: 'Billet déjà scanné',
         message: `Ce billet a déjà été scanné le ${new Date(existingScan.scannedAt).toLocaleString('fr-FR')}`,
+        scanData: {
+          eventId: parsedData.eventId,
+          ticketId: parsedData.ticketId,
+          eventName: event.name,
+          ticketName: ticket.name,
+          holderName: parsedData.holder,
+          quantity: parsedData.quantity,
+          scanTime: existingScan.scannedAt,
+        },
       };
     }
     console.log('[SCAN TICKET] ✅ Ticket not scanned yet');
@@ -244,6 +255,8 @@ export async function validateAndScanTicket(
       success: true,
       message: 'Billet validé avec succès',
       scanData: {
+        eventId: parsedData.eventId,
+        ticketId: parsedData.ticketId,
         eventName: event.name,
         ticketName: ticket.name,
         holderName: parsedData.holder,

@@ -100,8 +100,31 @@ export default function ScannerPage() {
           console.log('[SCANNER] ✅ Validation successful!');
           setValidationStatus('valid');
           setValidationMessage(result.message || 'Billet validé avec succès');
+
+          // Mettre à jour parsedData avec les infos complètes du serveur
+          if (result.scanData) {
+            setParsedData({
+              eventId: result.scanData.eventId,
+              ticketId: result.scanData.ticketId,
+              saleId: parsed.saleId,
+              quantity: result.scanData.quantity,
+              holder: result.scanData.holderName
+            });
+          }
         } else {
           console.log('[SCANNER] ❌ Validation failed:', result.error);
+
+          // Mettre à jour parsedData pour afficher les infos même en cas d'erreur
+          if (result.scanData) {
+            setParsedData({
+              eventId: result.scanData.eventId,
+              ticketId: result.scanData.ticketId,
+              saleId: parsed.saleId,
+              quantity: result.scanData.quantity,
+              holder: result.scanData.holderName
+            });
+          }
+
           // Déterminer le type d'erreur
           if (result.error?.includes('déjà scanné')) {
             console.log('[SCANNER] Error type: already_scanned');
@@ -211,16 +234,19 @@ export default function ScannerPage() {
 
       if (result.success) {
         console.log('[MANUAL] ✅ Validation successful!');
+
+        // ✅ Définir scanResult pour afficher le résultat visuel
+        setScanResult(qrData);
         setValidationStatus('valid');
         setValidationMessage(result.message || 'Billet validé avec succès');
         setManualCode(''); // Réinitialiser le champ
         console.log('[MANUAL] Manual code cleared');
 
-        // Mettre à jour parsedData avec les infos retournées
+        // Mettre à jour parsedData avec les infos complètes retournées du serveur
         if (result.scanData) {
           setParsedData({
-            eventId: '',
-            ticketId: '',
+            eventId: result.scanData.eventId,
+            ticketId: result.scanData.ticketId,
             saleId: qrData,
             quantity: result.scanData.quantity,
             holder: result.scanData.holderName
@@ -228,6 +254,10 @@ export default function ScannerPage() {
         }
       } else {
         console.log('[MANUAL] ❌ Validation failed:', result.error);
+
+        // ✅ Définir scanResult pour afficher les erreurs visuellement aussi
+        setScanResult(qrData);
+
         // Déterminer le type d'erreur
         if (result.error?.includes('déjà scanné')) {
           console.log('[MANUAL] Error type: already_scanned');
@@ -241,6 +271,17 @@ export default function ScannerPage() {
           console.log('[MANUAL] Error type: invalid');
           setValidationStatus('invalid');
           setValidationMessage(result.error || 'Billet invalide');
+        }
+
+        // Mettre les données complètes pour l'affichage des erreurs
+        if (result.scanData) {
+          setParsedData({
+            eventId: result.scanData.eventId,
+            ticketId: result.scanData.ticketId,
+            saleId: qrData,
+            quantity: result.scanData.quantity || 0,
+            holder: result.scanData.holderName || 'Inconnu'
+          });
         }
       }
     } catch (e) {
