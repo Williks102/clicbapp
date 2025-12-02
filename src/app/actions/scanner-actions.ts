@@ -27,6 +27,7 @@ export type TicketScan = {
   eventId: string;
   ticketId: string;
   scannedBy: string;
+  scannedByName: string;
   scannedAt: string;
   holderName: string;
   quantity: number;

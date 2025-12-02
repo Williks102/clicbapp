@@ -24,7 +24,8 @@ import { useCollection, useFirestore } from '@/firebase';
 import { collection, query, where } from 'firebase/firestore';
 import type { Event } from '@/lib/types';
 import { useSession } from 'next-auth/react';
-import { CheckCircle, Users, Ticket, Calendar } from 'lucide-react';
+import { CheckCircle, Users, Ticket, Calendar, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -47,11 +48,13 @@ export default function ScannerStatsPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   // Charger les événements de l'organisateur
+  // ✅ FIX: Don't include firestore in deps as it's a stable reference
   const myEventsQuery = useMemo(
     () => (firestore && session?.user?.id
       ? query(collection(firestore, 'events'), where('organizerId', '==', session.user.id))
       : null),
-    [firestore, session]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [session?.user?.id]
   );
   const { data: myEvents, isLoading: eventsLoading } = useCollection<Event>(myEventsQuery);
 
@@ -65,6 +68,7 @@ export default function ScannerStatsPage() {
   const loadScansData = async () => {
     if (!selectedEventId) return;
 
+    console.log('[SCANNER STATS] 📊 Loading stats for event:', selectedEventId);
     setIsLoading(true);
     try {
       const [scansData, statsData] = await Promise.all([
@@ -72,10 +76,13 @@ export default function ScannerStatsPage() {
         getEventScanStats(selectedEventId),
       ]);
 
+      console.log('[SCANNER STATS] ✅ Scans loaded:', scansData.length, 'scans');
+      console.log('[SCANNER STATS] ✅ Stats loaded:', statsData);
+
       setScans(scansData);
       setStats(statsData);
     } catch (error) {
-      console.error('Erreur chargement stats:', error);
+      console.error('[SCANNER STATS] ❌ Error loading stats:', error);
     } finally {
       setIsLoading(false);
     }
@@ -204,10 +211,23 @@ export default function ScannerStatsPage() {
       {selectedEventId && (
         <Card>
           <CardHeader>
-            <CardTitle>Historique des Scans</CardTitle>
-            <CardDescription>
-              Liste chronologique de tous les billets scannés pour cet événement.
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Historique des Scans</CardTitle>
+                <CardDescription>
+                  Liste chronologique de tous les billets scannés pour cet événement.
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadScansData}
+                disabled={isLoading}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                Actualiser
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -247,7 +267,7 @@ export default function ScannerStatsPage() {
                         </TableCell>
                         <TableCell className="text-right">{scan.quantity}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {scan.scannedBy}
+                          {scan.scannedByName || scan.scannedBy}
                         </TableCell>
                       </TableRow>
                     ))}

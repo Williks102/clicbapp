@@ -23,7 +23,8 @@ import { getEventScans, getEventScanStats, type TicketScan } from '@/app/actions
 import { useCollection, useFirestore } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import type { Event } from '@/lib/types';
-import { CheckCircle, Users, Ticket, Calendar } from 'lucide-react';
+import { CheckCircle, Users, Ticket, Calendar, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   Select,
   SelectContent,
@@ -58,6 +59,7 @@ export default function AdminScannerStatsPage() {
   const loadScansData = async () => {
     if (!selectedEventId) return;
 
+    console.log('[ADMIN SCANNER STATS] 📊 Loading stats for event:', selectedEventId);
     setIsLoading(true);
     try {
       const [scansData, statsData] = await Promise.all([
@@ -65,10 +67,13 @@ export default function AdminScannerStatsPage() {
         getEventScanStats(selectedEventId),
       ]);
 
+      console.log('[ADMIN SCANNER STATS] ✅ Scans loaded:', scansData.length, 'scans');
+      console.log('[ADMIN SCANNER STATS] ✅ Stats loaded:', statsData);
+
       setScans(scansData);
       setStats(statsData);
     } catch (error) {
-      console.error('Erreur chargement stats:', error);
+      console.error('[ADMIN SCANNER STATS] ❌ Error loading stats:', error);
     } finally {
       setIsLoading(false);
     }
@@ -197,10 +202,23 @@ export default function AdminScannerStatsPage() {
       {selectedEventId && (
         <Card>
           <CardHeader>
-            <CardTitle>Historique des Scans</CardTitle>
-            <CardDescription>
-              Liste chronologique de tous les billets scannés pour cet événement.
-            </CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle>Historique des Scans</CardTitle>
+                <CardDescription>
+                  Liste chronologique de tous les billets scannés pour cet événement.
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={loadScansData}
+                disabled={isLoading}
+              >
+                <RefreshCw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
+                Actualiser
+              </Button>
+            </div>
           </CardHeader>
           <CardContent>
             {isLoading ? (
@@ -240,7 +258,7 @@ export default function AdminScannerStatsPage() {
                         </TableCell>
                         <TableCell className="text-right">{scan.quantity}</TableCell>
                         <TableCell className="text-sm text-muted-foreground">
-                          {scan.scannedBy}
+                          {scan.scannedByName || scan.scannedBy}
                         </TableCell>
                       </TableRow>
                     ))}
