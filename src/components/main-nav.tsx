@@ -194,13 +194,48 @@ export default function MainNav() {
                         </Link>
                       </SheetClose>
                     ))}
-                    <SheetClose asChild>
-                      <Link href="/login" className="text-lg">
-                        Connexion
-                      </Link>
-                    </SheetClose>
+
+                    {/* Liens utilisateur connecté */}
+                    {session && (
+                      <>
+                        <div className="my-4 h-px bg-border" />
+                        <div className="text-sm font-semibold text-muted-foreground">
+                          Mon Compte
+                        </div>
+                        <SheetClose asChild>
+                          <Link href="/account" className="text-lg">
+                            Mes Billets
+                          </Link>
+                        </SheetClose>
+                        <SheetClose asChild>
+                          <Link href="/dashboard" className="text-lg">
+                            Tableau de bord
+                          </Link>
+                        </SheetClose>
+                      </>
+                    )}
+
+                    {/* Liens utilisateur non connecté */}
+                    {!session && (
+                      <SheetClose asChild>
+                        <Link href="/login" className="text-lg">
+                          Connexion
+                        </Link>
+                      </SheetClose>
+                    )}
                   </nav>
-                  {status !== 'authenticated' && (
+
+                  {/* Bouton en bas */}
+                  {session ? (
+                    <Button
+                      variant="outline"
+                      onClick={() => signOut({ callbackUrl: '/' })}
+                      className="mt-auto"
+                    >
+                      <LogOut className="mr-2 h-4 w-4" />
+                      Déconnexion
+                    </Button>
+                  ) : (
                     <Button asChild className="mt-auto">
                       <Link href="/signup">Créer un compte</Link>
                     </Button>
