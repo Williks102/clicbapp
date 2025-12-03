@@ -92,12 +92,24 @@ export default function Home() {
   }, [events]);
 
 
-  const filteredEvents =
-    activeFilter === 'Tous'
-      ? events
-      : events?.filter(
-          (event) => event.category === activeFilter
-        );
+  // Fonction pour vérifier si un événement est futur
+  const isUpcomingEvent = (eventDate: string) => {
+    const eventDateTime = new Date(eventDate).getTime();
+    const now = new Date().getTime();
+    return eventDateTime >= now;
+  };
+
+  // Filtrer les événements futurs ET par catégorie
+  const filteredEvents = useMemo(() => {
+    // D'abord filtrer les événements futurs
+    const upcomingEvents = events?.filter(event => isUpcomingEvent(event.date));
+
+    // Ensuite filtrer par catégorie
+    if (activeFilter === 'Tous') {
+      return upcomingEvents;
+    }
+    return upcomingEvents?.filter(event => event.category === activeFilter);
+  }, [events, activeFilter]);
 
 
   return (
