@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
-import QrScanner from 'react-qr-scanner';
+import { QrScanner } from '@/components/qr-scanner';
 import { PageHeader } from '@/components/page-header';
 import {
   Card,
@@ -59,60 +59,60 @@ export default function AdminScannerPage() {
   useEffect(() => {
     if (validationStatus === 'valid') {
       playSound('success');
-    } else if (validationStatus && validationStatus !== 'valid') {
+    } else if (validationStatus === 'invalid' || validationStatus === 'already_scanned') {
       playSound('error');
     }
   }, [validationStatus, playSound]);
 
-  const handleScan = async (data: { text: string } | null) => {
+  const handleScan = async (data: string) => {
     console.log('[ADMIN SCANNER] 📸 handleScan called with data:', data);
 
-    if (data) {
-      console.log('[ADMIN SCANNER] ✅ Data received:', data.text);
-      setScanResult(data.text);
-      setIsScanning(false);
-      setIsValidating(true);
-      console.log('[ADMIN SCANNER] 🔄 Starting validation...');
+    console.log('[ADMIN SCANNER] ✅ Data received:', data);
+    setScanResult(data);
+    setIsScanning(false);
+    setIsValidating(true);
+    console.log('[ADMIN SCANNER] 🔄 Starting validation...');
 
+    try {
+      console.log('[ADMIN SCANNER] 🔍 Parsing QR code data...');
       try {
-        console.log('[ADMIN SCANNER] 🔍 Parsing QR code data...');
-        const parsed = JSON.parse(data.text) as ScanData;
+        const parsed = JSON.parse(data) as ScanData;
         console.log('[ADMIN SCANNER] ✅ Parsed data:', parsed);
         setParsedData(parsed);
+      } catch {
+        console.log('[ADMIN SCANNER] 📋 QR Data (non-JSON):', data.substring(0, 50));
+      }
 
-        // Appeler l'action serveur pour valider et enregistrer le scan
-        console.log('[ADMIN SCANNER] 📡 Calling server action validateAndScanTicket...');
-        const result = await validateAndScanTicket(data.text);
+      // Appeler l'action serveur pour valider et enregistrer le scan
+      console.log('[ADMIN SCANNER] 📡 Calling server action validateAndScanTicket...');
+      const result = await validateAndScanTicket(data);
         console.log('[ADMIN SCANNER] 📡 Server response:', result);
 
-        if (result.success) {
-          console.log('[ADMIN SCANNER] ✅ Validation successful!');
-          setValidationStatus('valid');
-          setValidationMessage(result.message || 'Billet validé avec succès');
+      if (result.success) {
+        console.log('[ADMIN SCANNER] ✅ Validation successful!');
+        setValidationStatus('valid');
+        setValidationMessage(result.message || 'Billet validé avec succès');
+      } else {
+        console.log('[ADMIN SCANNER] ❌ Validation failed:', result.error);
+        // Déterminer le type d'erreur
+        if (result.error?.includes('déjà scanné')) {
+          console.log('[ADMIN SCANNER] Error type: already_scanned');
+          setValidationStatus('already_scanned');
+          setValidationMessage(result.message || result.error);
         } else {
-          console.log('[ADMIN SCANNER] ❌ Validation failed:', result.error);
-          // Déterminer le type d'erreur
-          if (result.error?.includes('déjà scanné')) {
-            console.log('[ADMIN SCANNER] Error type: already_scanned');
-            setValidationStatus('already_scanned');
-            setValidationMessage(result.message || result.error);
-          } else {
-            console.log('[ADMIN SCANNER] Error type: invalid');
-            setValidationStatus('invalid');
-            setValidationMessage(result.error || 'Billet invalide');
-          }
+          console.log('[ADMIN SCANNER] Error type: invalid');
+          setValidationStatus('invalid');
+          setValidationMessage(result.error || 'Billet invalide');
         }
-      } catch (e) {
-        console.error('[ADMIN SCANNER] ❌ Error parsing QR code:', e);
-        setParsedData(null);
-        setValidationStatus('invalid');
-        setValidationMessage('QR code invalide');
-      } finally {
-        console.log('[ADMIN SCANNER] 🏁 Validation complete, isValidating=false');
-        setIsValidating(false);
       }
-    } else {
-      console.log('[ADMIN SCANNER] ⚠️ handleScan called with null/undefined data');
+    } catch (e) {
+      console.error('[ADMIN SCANNER] ❌ Error parsing QR code:', e);
+      setParsedData(null);
+      setValidationStatus('invalid');
+      setValidationMessage('QR code invalide');
+    } finally {
+      console.log('[ADMIN SCANNER] 🏁 Validation complete, isValidating=false');
+      setIsValidating(false);
     }
   };
 
@@ -197,23 +197,23 @@ export default function AdminScannerPage() {
         </CardHeader>
         <CardContent className="flex flex-col items-center gap-6">
           {/* Zone de scan */}
-          <div className="w-full max-w-sm overflow-hidden rounded-lg border">
-            {isScanning ? (
+          {!isScanning ? (
+            <div className="w-full max-w-sm overflow-hidden rounded-lg border">
+              <div className="flex aspect-square w-full items-center justify-center bg-muted">
+                <Button onClick={startScanning}>Démarrer le Scan</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="w-full max-w-sm overflow-hidden rounded-lg border">
               <QrScanner
-                delay={300}
-                onError={handleError}
                 onScan={handleScan}
-                style={{ width: '100%' }}
-                constraints={{
-                    video: { facingMode: 'environment' }
-                }}
+                onError={handleError}
+                isScanning={isScanning}
+                fps={10}
+                qrbox={250}
               />
-            ) : (
-                <div className="flex aspect-square w-full items-center justify-center bg-muted">
-                    <Button onClick={startScanning}>Démarrer le Scan</Button>
-                </div>
-            )}
-          </div>
+            </div>
+          )}
 
           {/* Avertissement si le système n'est pas prêt */}
           {!isSystemReady && (
