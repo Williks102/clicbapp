@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import QrScanner from 'react-qr-scanner';
 import { PageHeader } from '@/components/page-header';
 import {
@@ -23,6 +23,7 @@ import { collection } from 'firebase/firestore';
 import type { Event } from '@/lib/types';
 import Link from 'next/link';
 import { validateAndScanTicket } from '@/app/actions/scanner-actions';
+import { useScannerSounds } from '@/hooks/use-scanner-sounds';
 
 type ScanData = {
     eventId: string;
@@ -34,7 +35,8 @@ type ScanData = {
 
 export default function AdminScannerPage() {
   const firestore = useFirestore();
-  
+  const { playSound } = useScannerSounds();
+
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [parsedData, setParsedData] = useState<ScanData | null>(null);
   const [validationStatus, setValidationStatus] = useState<'valid' | 'invalid' | 'already_scanned' | null>(null);
@@ -49,6 +51,15 @@ export default function AdminScannerPage() {
     [firestore]
   );
   const { data: events } = useCollection<Event>(eventsQuery);
+
+  // Jouer un son quand le statut de validation change
+  useEffect(() => {
+    if (validationStatus === 'valid') {
+      playSound('success');
+    } else if (validationStatus && validationStatus !== 'valid') {
+      playSound('error');
+    }
+  }, [validationStatus, playSound]);
 
   const handleScan = async (data: { text: string } | null) => {
     console.log('[ADMIN SCANNER] 📸 handleScan called with data:', data);

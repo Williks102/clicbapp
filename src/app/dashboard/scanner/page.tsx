@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import QrScanner from 'react-qr-scanner';
 import { PageHeader } from '@/components/page-header';
 import {
@@ -28,6 +28,7 @@ import { collection, query, where } from 'firebase/firestore';
 import type { Event } from '@/lib/types';
 import { useSession } from 'next-auth/react';
 import { validateAndScanTicket } from '@/app/actions/scanner-actions';
+import { useScannerSounds } from '@/hooks/use-scanner-sounds';
 
 type ScanData = {
     eventId: string;
@@ -40,7 +41,8 @@ type ScanData = {
 export default function ScannerPage() {
   const { data: session } = useSession();
   const firestore = useFirestore();
-  
+  const { playSound } = useScannerSounds();
+
   const [scanResult, setScanResult] = useState<string | null>(null);
   const [parsedData, setParsedData] = useState<ScanData | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -52,12 +54,21 @@ export default function ScannerPage() {
 
   // Charger les événements de l'organisateur depuis Firestore
   const myEventsQuery = useMemo(
-    () => (firestore && session?.user?.id 
-      ? query(collection(firestore, 'events'), where('organizerId', '==', session.user.id)) 
+    () => (firestore && session?.user?.id
+      ? query(collection(firestore, 'events'), where('organizerId', '==', session.user.id))
       : null),
     [firestore, session]
   );
   const { data: myEvents } = useCollection<Event>(myEventsQuery);
+
+  // Jouer un son quand le statut de validation change
+  useEffect(() => {
+    if (validationStatus === 'valid') {
+      playSound('success');
+    } else if (validationStatus && validationStatus !== 'valid') {
+      playSound('error');
+    }
+  }, [validationStatus, playSound]);
 
   const handleScan = async (data: { text: string } | null) => {
     console.log('[SCANNER] 📸 handleScan called with data:', data);
