@@ -61,6 +61,9 @@ export default function ScannerPage() {
   );
   const { data: myEvents } = useCollection<Event>(myEventsQuery);
 
+  // Vérifier si le système est prêt (Firebase + Session)
+  const isSystemReady = !!(firestore && session?.user?.id);
+
   // Jouer un son quand le statut de validation change
   useEffect(() => {
     if (validationStatus === 'valid') {
@@ -81,29 +84,21 @@ export default function ScannerPage() {
       console.log('[SCANNER] 🔄 Starting validation...');
 
       try {
-        console.log('[SCANNER] 🔍 Parsing QR code data...');
-        const parsed = JSON.parse(data.text) as ScanData;
-        console.log('[SCANNER] ✅ Parsed data:', parsed);
-        setParsedData(parsed);
-
-        // Vérifier que l'événement existe et appartient à l'organisateur
-        console.log('[SCANNER] 🔍 Checking if event belongs to organizer...');
-        console.log('[SCANNER] Event ID to find:', parsed.eventId);
-        console.log('[SCANNER] My events:', myEvents?.map(e => ({ id: e.id, name: e.name })));
-        const event = myEvents?.find(e => e.id === parsed.eventId);
-
-        if (!event) {
-          // L'événement n'appartient pas à cet organisateur
-          console.log('[SCANNER] ❌ Event not found or not yours');
-          setValidationStatus('not_yours');
-          setIsValidating(false);
-          return;
+        // Essayer de parser le JSON pour les logs (optionnel)
+        try {
+          const parsed = JSON.parse(data.text) as ScanData;
+          console.log('[SCANNER] 📋 QR Data preview:', {
+            saleId: parsed.saleId,
+            eventId: parsed.eventId,
+            holder: parsed.holder
+          });
+        } catch {
+          console.log('[SCANNER] 📋 QR Data (non-JSON):', data.text.substring(0, 50));
         }
 
-        console.log('[SCANNER] ✅ Event found:', event.name);
         console.log('[SCANNER] 📡 Calling server action validateAndScanTicket...');
 
-        // Appeler l'action serveur pour valider et enregistrer le scan
+        // Appeler directement l'action serveur (qui fait toutes les vérifications)
         const result = await validateAndScanTicket(data.text);
         console.log('[SCANNER] 📡 Server response:', result);
 
@@ -117,7 +112,7 @@ export default function ScannerPage() {
             setParsedData({
               eventId: result.scanData.eventId,
               ticketId: result.scanData.ticketId,
-              saleId: parsed.saleId,
+              saleId: data.text.includes('saleId') ? JSON.parse(data.text).saleId : data.text,
               quantity: result.scanData.quantity,
               holder: result.scanData.holderName
             });
@@ -130,7 +125,7 @@ export default function ScannerPage() {
             setParsedData({
               eventId: result.scanData.eventId,
               ticketId: result.scanData.ticketId,
-              saleId: parsed.saleId,
+              saleId: data.text.includes('saleId') ? JSON.parse(data.text).saleId : data.text,
               quantity: result.scanData.quantity,
               holder: result.scanData.holderName
             });
@@ -405,6 +400,17 @@ export default function ScannerPage() {
               </div>
             </TabsContent>
           </Tabs>
+
+          {/* Avertissement si le système n'est pas prêt */}
+          {!isSystemReady && (
+            <Alert className="w-full max-w-sm">
+              <AlertTriangle className="h-4 w-4 text-orange-500" />
+              <AlertTitle>Chargement du système...</AlertTitle>
+              <AlertDescription>
+                Connexion à la base de données en cours. Le scanner sera disponible dans quelques instants.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Indicateur de validation en cours */}
           {isValidating && (

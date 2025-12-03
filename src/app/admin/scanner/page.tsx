@@ -52,6 +52,9 @@ export default function AdminScannerPage() {
   );
   const { data: events } = useCollection<Event>(eventsQuery);
 
+  // Vérifier si le système est prêt (Firebase disponible pour admin)
+  const isSystemReady = !!firestore;
+
   // Jouer un son quand le statut de validation change
   useEffect(() => {
     if (validationStatus === 'valid') {
@@ -211,6 +214,17 @@ export default function AdminScannerPage() {
                 </div>
             )}
           </div>
+
+          {/* Avertissement si le système n'est pas prêt */}
+          {!isSystemReady && (
+            <Alert className="w-full max-w-sm">
+              <AlertTriangle className="h-4 w-4 text-orange-500" />
+              <AlertTitle>Chargement du système...</AlertTitle>
+              <AlertDescription>
+                Connexion à la base de données en cours. Le scanner sera disponible dans quelques instants.
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Indicateur de validation en cours */}
           {isValidating && (
