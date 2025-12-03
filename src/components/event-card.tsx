@@ -19,21 +19,35 @@ type EventCardProps = {
 
 export default function EventCard({ event }: EventCardProps) {
   const minPrice = event.tickets.length > 0 ? Math.min(...event.tickets.map(t => t.price)) : 0;
-  
+
   const isExternalImage = event.image.startsWith('http');
-  const image = isExternalImage ? { imageUrl: event.image, imageHint: 'event image' } : PlaceHolderImages.find((img) => img.id === event.image);
+
+  // Amélioration : Transformation Cloudinary intelligente pour les images externes
+  let imageUrl = event.image;
+  if (isExternalImage && event.image.includes('cloudinary.com')) {
+    // Si c'est une image Cloudinary, appliquer des transformations intelligentes
+    // c_fill : remplit le conteneur en gardant les parties importantes
+    // g_auto : crop intelligent basé sur l'IA (détecte les visages, objets principaux)
+    // ar_16:9 : ratio 16:9 (format standard pour événements)
+    // f_auto : format optimal (webp, avif selon navigateur)
+    // q_auto : qualité optimale automatique
+    imageUrl = event.image.replace('/upload/', '/upload/c_fill,g_auto,ar_16:9,f_auto,q_auto/');
+  }
+
+  const image = isExternalImage ? { imageUrl, imageHint: 'event image' } : PlaceHolderImages.find((img) => img.id === event.image);
 
   return (
     <Card className="flex h-full transform flex-col overflow-hidden shadow-md transition-all duration-300 hover:shadow-xl hover:-translate-y-1">
       <Link href={`/events/${event.id}`} className="block">
-        <div className="relative h-56 w-full">
+        <div className="relative aspect-[16/9] w-full overflow-hidden">
           {image ? (
             <Image
               src={image.imageUrl}
               alt={event.name}
               fill
-              className="object-cover"
+              className="object-cover transition-transform duration-300 hover:scale-105"
               data-ai-hint={image.imageHint}
+              sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
             />
           ) : (
             <div className="h-full w-full bg-secondary" />
@@ -86,7 +100,7 @@ export default function EventCard({ event }: EventCardProps) {
 EventCard.Skeleton = function EventCardSkeleton() {
   return (
     <Card className="flex h-full flex-col overflow-hidden">
-      <Skeleton className="h-56 w-full" />
+      <Skeleton className="aspect-[16/9] w-full" />
       <CardContent className="flex flex-1 flex-col p-4">
         <Skeleton className="mb-2 h-6 w-3/4" />
         <div className="mt-auto space-y-3">
