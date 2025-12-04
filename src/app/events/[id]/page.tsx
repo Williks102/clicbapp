@@ -28,6 +28,8 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useDoc, useFirebase } from '@/firebase';
 import { doc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useQueue } from '@/hooks/use-queue';
+import { QueueWaitingRoom } from '@/components/queue-waiting-room';
 
 
 export default function EventPage() {
@@ -36,6 +38,7 @@ export default function EventPage() {
   const params = useParams();
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<TicketTier | null>(null);
+  const [showQueue, setShowQueue] = useState(false);
   const id = params.id as string;
 
   const { areServicesAvailable, firestore } = useFirebase();
@@ -57,7 +60,13 @@ export default function EventPage() {
     [areServicesAvailable, event?.organizerId]
   );
   const { data: organizer, isLoading: isOrganizerLoading } = useDoc<Organizer>(organizerRef);
-  
+
+  // Gestion de la file d'attente
+  const { queueState, isLoading: isQueueLoading, joinQueue, leaveQueue } = useQueue(
+    id,
+    selectedTicket?.id || ''
+  );
+
   const isLoading = isEventLoading;
 
   useEffect(() => {
@@ -70,15 +79,48 @@ export default function EventPage() {
     (img) => img.id === organizer.avatar
   ) : null;
 
-  const handleBuyClick = (ticket: TicketTier) => {
+  const handleBuyClick = async (ticket: TicketTier) => {
     if (!event) return;
     setSelectedTicket(ticket);
+
+    // Pour cet exemple, activons toujours la queue (vous pouvez ajouter une logique conditionnelle)
+    // Par exemple : vérifier si l'événement a activé la queue ou si beaucoup d'utilisateurs achètent
+    const shouldUseQueue = ticket.quantity < 20; // Active la queue si moins de 20 billets restants
+
+    if (shouldUseQueue) {
+      setShowQueue(true);
+      await joinQueue();
+    } else {
+      if (isMobile) {
+        setIsSheetOpen(true);
+      } else {
+        router.push(`/events/${event.id}/checkout?ticketId=${ticket.id}`);
+      }
+    }
+  };
+
+  const handleQueueCancel = async () => {
+    await leaveQueue();
+    setShowQueue(false);
+    setSelectedTicket(null);
+  };
+
+  const handleQueueProceed = () => {
+    setShowQueue(false);
     if (isMobile) {
       setIsSheetOpen(true);
     } else {
-      router.push(`/events/${event.id}/checkout?ticketId=${ticket.id}`);
+      router.push(`/events/${event.id}/checkout?ticketId=${selectedTicket?.id}`);
     }
   };
+
+  // Gérer l'activation automatique du checkout quand l'utilisateur devient actif
+  useEffect(() => {
+    if (queueState?.status === 'active' && showQueue) {
+      handleQueueProceed();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [queueState?.status, showQueue]);
 
   const image = event 
     ? event.image.startsWith('http')
@@ -89,6 +131,16 @@ export default function EventPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <MainNav />
+
+      {/* Salle d'attente virtuelle */}
+      {showQueue && queueState && (
+        <QueueWaitingRoom
+          queueState={queueState}
+          onCancel={handleQueueCancel}
+          onProceed={handleQueueProceed}
+        />
+      )}
+
       {isLoading ? (
          <EventPageSkeleton />
       ) : event && (

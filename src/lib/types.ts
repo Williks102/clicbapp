@@ -120,3 +120,36 @@ export type AdminStats = {
   topOrganizers: Array<{ organizerId: string; organizerName: string; sales: number; revenue: number }>;
   recentSales: Sale[];
 };
+
+/**
+ * Configuration de la file d'attente pour un événement
+ */
+export type QueueConfig = {
+  enabled: boolean;
+  maxConcurrentUsers: number; // Nombre max d'utilisateurs simultanés en checkout
+  averageCheckoutTime: number; // Temps moyen de checkout en secondes
+};
+
+/**
+ * Utilisateur dans la file d'attente
+ */
+export type QueueUser = {
+  id: string;
+  sessionId: string;
+  eventId: string;
+  ticketId: string;
+  joinedAt: string;
+  expiresAt?: string; // Quand l'utilisateur doit être retiré automatiquement
+  status: 'waiting' | 'active' | 'completed' | 'expired';
+};
+
+/**
+ * État de la file d'attente
+ */
+export type QueueState = {
+  position: number;
+  totalInQueue: number;
+  estimatedWaitTime: number; // en secondes
+  status: 'waiting' | 'active' | 'expired';
+  joinedAt: Date;
+};

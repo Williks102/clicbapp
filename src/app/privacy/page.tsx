@@ -8,7 +8,7 @@ import {
   Shield,
   Calendar,
   Globe,
-  MapMarkerAlt,
+  MapPin,
   Laptop,
   MousePointer,
   Eye,
@@ -17,16 +17,15 @@ import {
   Mail,
   Phone,
   Home,
-  IdCard,
   CreditCard,
   Keyboard,
   Users,
   Building,
-  Mailbox,
   AlertTriangle,
   Clock,
-  UserShield,
-  Headset,
+  ShieldCheck,
+  LifeBuoy,
+  UserSquare,
 } from 'lucide-react';
 import Link from 'next/link';
 
@@ -161,7 +160,7 @@ export default function PrivacyPolicyPage() {
                   <li className="flex items-center"><Mail className="h-5 w-5 mr-3 text-primary" /> Email</li>
                   <li className="flex items-center"><Phone className="h-5 w-5 mr-3 text-primary" /> Numéro de téléphone</li>
                   <li className="flex items-center"><Home className="h-5 w-5 mr-3 text-primary" /> Adresse de domicile</li>
-                  <li className="flex items-center"><IdCard className="h-5 w-5 mr-3 text-primary" /> Documents d'identité</li>
+                  <li className="flex items-center"><UserSquare className="h-5 w-5 mr-3 text-primary" /> Documents d'identité</li>
                   <li className="flex items-center"><CreditCard className="h-5 w-5 mr-3 text-primary" /> Informations de paiement</li>
                   <li className="flex items-center"><Keyboard className="h-5 w-5 mr-3 text-primary" /> Données de remplissage automatique</li>
                 </ul>
@@ -193,13 +192,13 @@ export default function PrivacyPolicyPage() {
 
                 <SectionTitle>Vos droits en tant qu'utilisateur</SectionTitle>
                 <HighlightBox variant="info">
-                    <h4 className="font-semibold mb-2 flex items-center"><UserShield className="h-5 w-5 mr-2"/>Droits garantis</h4>
+                    <h4 className="font-semibold mb-2 flex items-center"><ShieldCheck className="h-5 w-5 mr-2"/>Droits garantis</h4>
                     <p>Vous disposez des droits d'accès, de rectification, d'effacement, de restriction du traitement, à la portabilité des données et d'objection.</p>
                 </HighlightBox>
                 
                 <SectionTitle>Comment modifier, supprimer ou contester les données collectées ?</SectionTitle>
                 <HighlightBox variant="success">
-                    <h4 className="font-semibold mb-2 flex items-center"><Headset className="h-5 w-5 mr-2"/>Contact Data Protection Officer (DPO)</h4>
+                    <h4 className="font-semibold mb-2 flex items-center"><LifeBuoy className="h-5 w-5 mr-2"/>Contact Data Protection Officer (DPO)</h4>
                     <ul className="list-none p-0 space-y-1">
                         <li><strong>Email spécialisé :</strong> privacy@clicbillet.com</li>
                         <li><strong>Email général :</strong> contact@clicbillet.com</li>

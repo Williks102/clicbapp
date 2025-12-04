@@ -4,7 +4,7 @@ import Footer from '@/components/footer';
 import MainNav from '@/components/main-nav';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { FileText, CalendarAlt } from 'lucide-react';
+import { FileText, Calendar } from 'lucide-react';
 import Link from 'next/link';
 
 export const metadata = {
@@ -43,7 +43,7 @@ export default function CGUPage() {
                   className="mt-4"
                 />
                 <div className="mt-4 text-sm text-muted-foreground flex items-center justify-center gap-2">
-                    <CalendarAlt className="h-4 w-4" />
+                    <Calendar className="h-4 w-4" />
                     <strong>Dernière mise à jour :</strong> 04/12/2025
                 </div>
               </div>
@@ -264,7 +264,7 @@ export default function CGUPage() {
                         <Link href="/" className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-primary bg-primary/10 hover:bg-primary/20">
                             Retour à l'accueil
                         </Link>
-                        <Link href="/#contact" className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-primary hover:bg-primary/90">
+                        <Link href="/contact" className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-primary hover:bg-primary/90">
                             Questions sur les CGV
                         </Link>
                     </div>
@@ -279,5 +279,3 @@ export default function CGUPage() {
     </div>
   );
 }
-
-    
