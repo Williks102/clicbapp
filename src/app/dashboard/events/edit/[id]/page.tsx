@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -46,7 +47,7 @@ import {
 import { toast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { updateEvent } from '@/app/actions/event-actions';
-import { useCollection, useDoc, useFirestore } from '@/firebase';
+import { useCollection, useDoc, useFirebase } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
 import type { Event, Category } from '@/lib/types';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
@@ -80,21 +81,23 @@ export default function EditEventPage() {
   const params = useParams();
   const eventId = params.id as string;
   const router = useRouter();
-  const firestore = useFirestore();
+  const { firestore, areServicesAvailable } = useFirebase();
   
   const [isGenerating, setIsGenerating] = useState(false);
 
   // Charger l'événement depuis Firestore
   const eventRef = useMemo(
-    () => (firestore && eventId ? doc(firestore, `events/${eventId}`) : null),
-    [firestore, eventId]
+    () => (areServicesAvailable && eventId ? doc(firestore, `events/${eventId}`) : null),
+    [areServicesAvailable, firestore, eventId]
   );
   const { data: event, isLoading } = useDoc<Event>(eventRef);
 
   // Charger les catégories depuis Firestore
-  const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(
-    firestore ? collection(firestore, 'categories') : null
+  const categoriesQuery = useMemo(
+    () => (areServicesAvailable ? collection(firestore, 'categories') : null),
+    [areServicesAvailable, firestore]
   );
+  const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
   const form = useForm<EventFormValues>({
     resolver: zodResolver(formSchema),

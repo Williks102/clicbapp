@@ -1,10 +1,8 @@
 
-import { auth } from "@/auth";
+import NextAuth from 'next-auth';
+import { authConfig } from '@/auth';
 
-export default auth((req) => {
-  // La logique du middleware peut être ajoutée ici si nécessaire à l'avenir.
-  // Pour l'instant, la protection des routes est gérée par la configuration ci-dessous.
-});
+export default NextAuth(authConfig).auth;
 
 // https://nextjs.org/docs/app/building-your-application/routing/middleware#matcher
 export const config = {
@@ -23,5 +21,3 @@ export const config = {
     "/account/:path*"
   ],
 };
-
-export const runtime = 'nodejs';

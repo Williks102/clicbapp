@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { CloudinaryUploadWidget } from '@/components/cloudinary-upload-widget';
 import { z } from 'zod';
@@ -48,7 +48,7 @@ import { toast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { createEvent } from '@/app/actions/event-actions';
-import { useCollection, useFirestore } from '@/firebase';
+import { useCollection, useFirebase } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import type { Category } from '@/lib/types';
 
@@ -78,12 +78,14 @@ export type EventFormValues = z.infer<typeof formSchema>;
 export default function CreateEventPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const router = useRouter();
-  const firestore = useFirestore();
+  const { firestore, areServicesAvailable } = useFirebase();
 
   // Fetch categories from Firestore
-  const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(
-    firestore ? collection(firestore, 'categories') : null
+  const categoriesQuery = useMemo(
+    () => (areServicesAvailable ? collection(firestore, 'categories') : null),
+    [areServicesAvailable, firestore]
   );
+  const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
 
   const form = useForm<EventFormValues>({
     resolver: zodResolver(formSchema),

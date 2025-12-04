@@ -1,12 +1,12 @@
 // src/auth.ts
 export const runtime = 'nodejs'; // Force l'exécution dans l'environnement Node.js
 
-import NextAuth from 'next-auth';
+import NextAuth, { type NextAuthConfig } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import admin, { firestore } from '@/lib/firebase-admin';
 import type { User } from '@/lib/types';
 
-export const { handlers, signIn, signOut, auth } = NextAuth({
+export const authConfig = {
   session: {
     strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 jours
@@ -107,4 +107,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   },
   
   debug: process.env.NODE_ENV === 'development',
-});
+} satisfies NextAuthConfig;
+
+export const { handlers, signIn, signOut, auth } = NextAuth(authConfig);
