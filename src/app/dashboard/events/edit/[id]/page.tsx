@@ -43,15 +43,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { categories } from '@/lib/data';
 import { toast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 import { updateEvent } from '@/app/actions/event-actions';
-import { useDoc, useFirestore } from '@/firebase';
-import { doc } from 'firebase/firestore';
-import type { Event } from '@/lib/types';
+import { useCollection, useDoc, useFirestore } from '@/firebase';
+import { collection, doc } from 'firebase/firestore';
+import type { Event, Category } from '@/lib/types';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
-import { CloudinaryUploadWidget } from '@/components/cloudinary-upload-widget'; // ✅ Import Cloudinary
+import { CloudinaryUploadWidget } from '@/components/cloudinary-upload-widget';
 
 // ==================== SCHEMAS ====================
 
@@ -84,7 +83,6 @@ export default function EditEventPage() {
   const firestore = useFirestore();
   
   const [isGenerating, setIsGenerating] = useState(false);
-  // ✅ Plus besoin de imagePreview ni fileInputRef !
 
   // Charger l'événement depuis Firestore
   const eventRef = useMemo(
@@ -92,6 +90,11 @@ export default function EditEventPage() {
     [firestore, eventId]
   );
   const { data: event, isLoading } = useDoc<Event>(eventRef);
+
+  // Charger les catégories depuis Firestore
+  const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(
+    firestore ? collection(firestore, 'categories') : null
+  );
 
   const form = useForm<EventFormValues>({
     resolver: zodResolver(formSchema),
@@ -102,7 +105,7 @@ export default function EditEventPage() {
       eventLocation: '',
       eventDescription: '',
       tickets: [{ name: 'Standard', price: 10000, quantity: 100 }],
-      image: '', // ✅ URL Cloudinary
+      image: '',
     },
   });
 
@@ -111,13 +114,11 @@ export default function EditEventPage() {
     name: 'tickets',
   });
 
-  // ✅ Initialiser le formulaire avec les données de l'événement
+  // Initialiser le formulaire avec les données de l'événement
   useEffect(() => {
     if (event) {
-      // Déterminer l'URL de l'image
       let imageUrl = event.image;
       
-      // Si c'est un placeholder ID, convertir en URL
       if (event.image && !event.image.startsWith('http')) {
         const placeholderImage = PlaceHolderImages.find(img => img.id === event.image);
         if (placeholderImage) {
@@ -125,7 +126,6 @@ export default function EditEventPage() {
         }
       }
       
-      // Initialiser le formulaire
       form.reset({
         eventName: event.name,
         eventCategory: event.category,
@@ -134,7 +134,7 @@ export default function EditEventPage() {
         eventDescription: event.description,
         eventDescriptionKeywords: '',
         tickets: event.tickets,
-        image: imageUrl, // ✅ CloudinaryUploadWidget affichera le preview
+        image: imageUrl,
       });
     }
   }, [event, form]);
@@ -183,10 +183,9 @@ export default function EditEventPage() {
     }
   };
 
-  // ✅ Soumission du formulaire (plus de formData !)
   async function onSubmit(data: EventFormValues) {
     try {
-      await updateEvent(eventId, data); // ✅ Plus de formData
+      await updateEvent(eventId, data);
 
       toast({
         title: 'Événement mis à jour !',
@@ -205,7 +204,7 @@ export default function EditEventPage() {
   }
 
   // Loading state
-  if (isLoading) {
+  if (isLoading || isLoadingCategories) {
     return (
       <div className="space-y-8">
         <PageHeader title="Chargement..." description="" />
@@ -246,7 +245,6 @@ export default function EditEventPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Nom */}
               <FormField
                 control={form.control}
                 name="eventName"
@@ -261,7 +259,6 @@ export default function EditEventPage() {
                 )}
               />
 
-              {/* Catégorie */}
               <FormField
                 control={form.control}
                 name="eventCategory"
@@ -275,7 +272,7 @@ export default function EditEventPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {categories.map((category) => (
+                        {categories?.map((category) => (
                           <SelectItem key={category.id} value={category.name}>
                             {category.name}
                           </SelectItem>
@@ -287,7 +284,6 @@ export default function EditEventPage() {
                 )}
               />
 
-              {/* Date et Lieu */}
               <div className="grid gap-4 md:grid-cols-2">
                 <FormField
                   control={form.control}
@@ -318,7 +314,6 @@ export default function EditEventPage() {
                 />
               </div>
 
-              {/* ✅ IMAGE CLOUDINARY - Simple ! */}
               <FormField
                 control={form.control}
                 name="image"
@@ -337,7 +332,6 @@ export default function EditEventPage() {
                 )}
               />
 
-              {/* Description avec IA */}
               <FormField
                 control={form.control}
                 name="eventDescription"
@@ -377,7 +371,6 @@ export default function EditEventPage() {
                 )}
               />
 
-              {/* Keywords optionnel */}
               <FormField
                 control={form.control}
                 name="eventDescriptionKeywords"
@@ -400,7 +393,6 @@ export default function EditEventPage() {
             </CardContent>
           </Card>
 
-          {/* Billets */}
           <Card>
             <CardHeader>
               <CardTitle className="font-headline">Types de Billets</CardTitle>
@@ -488,7 +480,6 @@ export default function EditEventPage() {
             </CardContent>
           </Card>
 
-          {/* Submit */}
           <div className="flex justify-end gap-4">
             <Button
               type="button"

@@ -2,7 +2,7 @@
 
 'use client';
 
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { CloudinaryUploadWidget } from '@/components/cloudinary-upload-widget';
 import { z } from 'zod';
@@ -11,8 +11,6 @@ import {
   Wand2,
   Trash,
   PlusCircle,
-  Upload,
-  X,
 } from 'lucide-react';
 import {
   generateEventDescription,
@@ -46,16 +44,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { categories } from '@/lib/data';
 import { toast } from '@/hooks/use-toast';
-import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useRouter } from 'next/navigation';
 import { createEvent } from '@/app/actions/event-actions';
-import Image from 'next/image';
+import { useCollection, useFirestore } from '@/firebase';
+import { collection } from 'firebase/firestore';
+import type { Category } from '@/lib/types';
 
 
 const ticketSchema = z.object({
+  id: z.string().optional(),
   name: z.string().min(1, 'Le nom du billet est requis.'),
   price: z.coerce.number().min(0, 'Le prix doit être positif.'),
   quantity: z.coerce.number().int().min(1, 'La quantité doit être au moins 1.'),
@@ -79,6 +78,12 @@ export type EventFormValues = z.infer<typeof formSchema>;
 export default function CreateEventPage() {
   const [isGenerating, setIsGenerating] = useState(false);
   const router = useRouter();
+  const firestore = useFirestore();
+
+  // Fetch categories from Firestore
+  const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(
+    firestore ? collection(firestore, 'categories') : null
+  );
 
   const form = useForm<EventFormValues>({
     resolver: zodResolver(formSchema),
@@ -145,8 +150,6 @@ export default function CreateEventPage() {
   
 
   async function onSubmit(data: EventFormValues) {
-    
-
     try {
       await createEvent(data);
 
@@ -204,6 +207,7 @@ export default function CreateEventPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Catégorie</FormLabel>
+                      {isLoadingCategories ? <Skeleton className="h-10 w-full" /> : (
                       <Select
                         onValueChange={field.onChange}
                         defaultValue={field.value}
@@ -214,13 +218,14 @@ export default function CreateEventPage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {categories.map((cat) => (
+                          {categories?.map((cat) => (
                             <SelectItem key={cat.id} value={cat.name}>
                               {cat.name}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}
@@ -347,7 +352,7 @@ export default function CreateEventPage() {
                     name={`tickets.${index}.name`}
                     render={({ field }) => (
                       <FormItem className="md:col-span-2">
-                        <FormLabel className={cn(index !== 0 && 'sr-only')}>
+                        <FormLabel>
                           Nom du billet
                         </FormLabel>
                         <FormControl>
@@ -362,7 +367,7 @@ export default function CreateEventPage() {
                     name={`tickets.${index}.price`}
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel className={cn(index !== 0 && 'sr-only')}>
+                        <FormLabel>
                           Prix (FCFA)
                         </FormLabel>
                         <FormControl>
@@ -378,7 +383,7 @@ export default function CreateEventPage() {
                       name={`tickets.${index}.quantity`}
                       render={({ field }) => (
                         <FormItem className="flex-1">
-                          <FormLabel className={cn(index !== 0 && 'sr-only')}>
+                          <FormLabel>
                             Quantité
                           </FormLabel>
                           <FormControl>
