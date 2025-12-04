@@ -1,4 +1,6 @@
 // src/auth.ts
+export const runtime = 'nodejs'; // Force l'exécution dans l'environnement Node.js
+
 import NextAuth from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import admin, { firestore } from '@/lib/firebase-admin';
