@@ -1,6 +1,6 @@
 'use server';
 
-import { adminDb } from '@/lib/firebase-admin';
+import { firestore } from '@/lib/firebase-admin';
 import { QueueUser, QueueConfig } from '@/lib/types';
 
 /**
@@ -8,7 +8,7 @@ import { QueueUser, QueueConfig } from '@/lib/types';
  */
 export async function getQueueConfig(eventId: string): Promise<QueueConfig | null> {
   try {
-    const queueConfigRef = adminDb.collection('queueConfigs').doc(eventId);
+    const queueConfigRef = firestore.collection('queueConfigs').doc(eventId);
     const doc = await queueConfigRef.get();
 
     if (!doc.exists) {
@@ -37,7 +37,7 @@ export async function setQueueEnabled(
   averageCheckoutTime?: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    const queueConfigRef = adminDb.collection('queueConfigs').doc(eventId);
+    const queueConfigRef = firestore.collection('queueConfigs').doc(eventId);
 
     const config: QueueConfig = {
       enabled,
@@ -63,7 +63,7 @@ export async function setQueueEnabled(
 export async function cleanExpiredQueueUsers(): Promise<{ success: boolean; cleaned: number }> {
   try {
     const now = new Date();
-    const queuesRef = adminDb.collection('queues');
+    const queuesRef = firestore.collection('queues');
 
     // Rechercher tous les utilisateurs expirés
     const expiredSnapshot = await queuesRef
@@ -71,7 +71,7 @@ export async function cleanExpiredQueueUsers(): Promise<{ success: boolean; clea
       .get();
 
     // Supprimer en batch
-    const batch = adminDb.batch();
+    const batch = firestore.batch();
     expiredSnapshot.docs.forEach((doc) => {
       batch.delete(doc.ref);
     });
@@ -96,7 +96,7 @@ export async function cleanExpiredQueueUsers(): Promise<{ success: boolean; clea
  */
 export async function getQueueStats(eventId: string, ticketId: string) {
   try {
-    const queuesRef = adminDb.collection('queues');
+    const queuesRef = firestore.collection('queues');
     const snapshot = await queuesRef
       .where('eventId', '==', eventId)
       .where('ticketId', '==', ticketId)
