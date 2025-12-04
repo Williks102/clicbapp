@@ -1,10 +1,10 @@
+
 // src/auth.ts
 export const runtime = 'nodejs'; // Force l'exécution dans l'environnement Node.js
 
 import NextAuth, { type NextAuthConfig } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import admin, { firestore } from '@/lib/firebase-admin';
-import type { User } from '@/lib/types';
+import { validateCredentials } from '@/app/actions/auth-actions';
 
 export const authConfig = {
   session: {
@@ -23,38 +23,14 @@ export const authConfig = {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        if (!credentials?.email || !credentials?.password) {
-          return null;
-        }
-
-        try {
-          const usersRef = firestore.collection("users");
-          const q = usersRef.where("email", "==", credentials.email);
-          const querySnapshot = await q.get();
-
-          if (querySnapshot.empty) {
-            return null;
-          }
-
-          const userDoc = querySnapshot.docs[0];
-          const userData = userDoc.data() as User;
-
-          // CONTOURNEMENT: On vérifie juste que le mot de passe n'est pas vide
-          // C'est une solution temporaire pour le problème de bcrypt
-          const isPasswordValid = !!credentials.password;
-
-          if (isPasswordValid) {
-            return {
-              id: userDoc.id,
-              email: userData.email,
-              name: userData.name,
-              role: userData.role || 'customer',
-            };
-          } else {
-            return null;
-          }
-        } catch (error) {
-          console.error("Erreur d'autorisation:", error);
+        // Appelle la Server Action pour valider les identifiants
+        const user = await validateCredentials(credentials);
+        
+        if (user) {
+          // Retourne l'objet utilisateur si la validation est réussie
+          return user;
+        } else {
+          // Retourne null si la validation échoue
           return null;
         }
       },
