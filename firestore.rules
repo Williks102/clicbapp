@@ -135,6 +135,30 @@ match /ticket_scans/{scanId} {
   allow update: if false;
 }
 
+    // ==================== QUEUE SYSTEM ====================
+
+    /**
+     * @description   Manages queue sessions for events.
+     * @path          /queues/{queueId}
+     * @allow         Public read, authenticated users can create/update/delete.
+     */
+    match /queues/{queueId} {
+      allow read: if true;
+      allow create: if isSignedIn();
+      allow update, delete: if isSignedIn();
+    }
+
+    /**
+     * @description   Manages queue configurations for events.
+     * @path          /queueConfigs/{eventId}
+     * @allow         Public read, only organizers/admins can write.
+     */
+    match /queueConfigs/{eventId} {
+      allow read: if true;
+      allow write: if isSignedIn() &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'organizer' ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+    }
 
     // ==================== SALES DATA ====================
     

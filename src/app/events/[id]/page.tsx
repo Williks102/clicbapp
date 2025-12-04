@@ -30,6 +30,7 @@ import { doc } from 'firebase/firestore';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQueue } from '@/hooks/use-queue';
 import { QueueWaitingRoom } from '@/components/queue-waiting-room';
+import { getQueueConfig } from '@/app/actions/queue-actions';
 
 
 export default function EventPage() {
@@ -83,9 +84,20 @@ export default function EventPage() {
     if (!event) return;
     setSelectedTicket(ticket);
 
-    // Pour cet exemple, activons toujours la queue (vous pouvez ajouter une logique conditionnelle)
-    // Par exemple : vérifier si l'événement a activé la queue ou si beaucoup d'utilisateurs achètent
-    const shouldUseQueue = ticket.quantity < 20; // Active la queue si moins de 20 billets restants
+    // Approche hybride: Configuration Firebase + activation automatique intelligente
+    const config = await getQueueConfig(event.id);
+
+    let shouldUseQueue = false;
+
+    // 1. Si l'organisateur a activé manuellement la queue
+    if (config?.enabled) {
+      shouldUseQueue = true;
+    }
+    // 2. Sinon, activation automatique basée sur la demande
+    else {
+      // Activer si moins de 20 billets restants
+      shouldUseQueue = ticket.quantity < 20;
+    }
 
     if (shouldUseQueue) {
       setShowQueue(true);
@@ -106,6 +118,7 @@ export default function EventPage() {
   };
 
   const handleQueueProceed = () => {
+    if (!event) return;
     setShowQueue(false);
     if (isMobile) {
       setIsSheetOpen(true);
