@@ -1,4 +1,6 @@
 
+'use client';
+
 import { PageHeader } from '@/components/page-header';
 import { Button } from '@/components/ui/button';
 import {
@@ -12,14 +14,62 @@ import {
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { initializeCategories } from '@/app/actions/category-actions';
+import { toast } from '@/hooks/use-toast';
+import { useState } from 'react';
 
 export default function AdminSettingsPage() {
+  const [isInitializingCategories, setIsInitializingCategories] = useState(false);
+
+  const handleInitializeCategories = async () => {
+    setIsInitializingCategories(true);
+    try {
+      const result = await initializeCategories();
+      toast({
+        title: result.success ? 'Succès' : 'Erreur',
+        description: result.message,
+        variant: result.success ? 'default' : 'destructive'
+      });
+    } catch (error) {
+      toast({
+        title: 'Erreur',
+        description: 'Une erreur est survenue',
+        variant: 'destructive'
+      });
+    } finally {
+      setIsInitializingCategories(false);
+    }
+  };
   return (
     <div className="space-y-8">
       <PageHeader
         title="Paramètres de la Plateforme"
         description="Gérez les paramètres globaux de ClicBillet."
       />
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline">Catégories d'événements</CardTitle>
+          <CardDescription>
+            Initialisez les catégories par défaut pour les événements.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            Cliquez sur le bouton ci-dessous pour créer les catégories par défaut si elles n'existent pas encore.
+            Les catégories incluent: Concert, Festival, Théâtre, Conférence, Sport, Exposition, Formation, Autre.
+          </p>
+        </CardContent>
+        <CardFooter className="border-t px-6 py-4">
+          <Button
+            onClick={handleInitializeCategories}
+            disabled={isInitializingCategories}
+          >
+            {isInitializingCategories ? 'Initialisation...' : 'Initialiser les catégories'}
+          </Button>
+        </CardFooter>
+      </Card>
+
       <Card>
         <CardHeader>
           <CardTitle className="font-headline">Passerelles de Paiement</CardTitle>
