@@ -49,7 +49,7 @@
     "html5-qrcode": "^2.3.8",
     "jspdf": "^2.5.1",
     "lucide-react": "^0.475.0",
-    "next": "15.3.3",
+    "next": "15.3.8",
     "next-auth": "^5.0.0-beta.20",
     "next-cloudinary": "^6.17.5",
     "patch-package": "^8.0.0",

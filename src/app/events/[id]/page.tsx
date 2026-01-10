@@ -40,6 +40,7 @@ export default function EventPage() {
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<TicketTier | null>(null);
   const [showQueue, setShowQueue] = useState(false);
+  const [queueConfigEnabled, setQueueConfigEnabled] = useState(false);
   const id = params.id as string;
 
   const { areServicesAvailable, firestore } = useFirebase();
@@ -80,17 +81,24 @@ export default function EventPage() {
     (img) => img.id === organizer.avatar
   ) : null;
 
+  // Charger la configuration de la queue au chargement de la page
+  useEffect(() => {
+    if (event?.id) {
+      getQueueConfig(event.id).then(config => {
+        setQueueConfigEnabled(config?.enabled ?? false);
+      });
+    }
+  }, [event?.id]);
+
   const handleBuyClick = async (ticket: TicketTier) => {
     if (!event) return;
     setSelectedTicket(ticket);
 
     // Approche hybride: Configuration Firebase + activation automatique intelligente
-    const config = await getQueueConfig(event.id);
-
     let shouldUseQueue = false;
 
     // 1. Si l'organisateur a activé manuellement la queue
-    if (config?.enabled) {
+    if (queueConfigEnabled) {
       shouldUseQueue = true;
     }
     // 2. Sinon, activation automatique basée sur la demande
