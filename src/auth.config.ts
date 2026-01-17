@@ -4,6 +4,7 @@
 import type { NextAuthConfig } from 'next-auth';
 
 export const authConfig = {
+  providers: [], // Ajout de la propriété `providers` vide pour satisfaire le type
   session: {
     strategy: 'jwt',
     maxAge: 30 * 24 * 60 * 60, // 30 jours
