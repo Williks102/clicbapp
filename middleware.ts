@@ -39,7 +39,7 @@ export async function middleware(req: NextRequest) {
   if (token) {
     try {
       // Manually verify the JWT using 'jose'
-      const { payload } = await jwtVerify(token, await getJwtSecret());
+      const { payload } = await jwtVerify(token, getJwtSecret());
       isAuthenticated = !!payload;
       // @ts-ignore - The 'role' property exists on our custom JWT payload
       role = payload.role as string | undefined;
