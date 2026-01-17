@@ -1,15 +1,44 @@
 
-import NextAuth from 'next-auth';
-import { authConfig } from '@/auth.config';
+import { NextResponse } from 'next/server'
+import type { NextRequest } from 'next/server'
+import { getToken } from 'next-auth/jwt'
 
-// Le middleware est maintenant initialisé uniquement avec la configuration compatible "Edge"
-// En utilisant cette syntaxe simple, NextAuth gère la séparation des routes publiques et protégées.
-// Les pages de connexion, d'erreur, etc., définies dans auth.config.ts sont automatiquement exclues.
-export default NextAuth(authConfig).auth;
+export async function middleware(req: NextRequest) {
+  const token = await getToken({ req, secret: process.env.AUTH_SECRET });
+  const { pathname } = req.nextUrl;
+  
+  const isAuthenticated = !!token;
+  // @ts-ignore
+  const userRole = token?.role as string | undefined;
 
-// https://nextjs.org/docs/app/building-your-application/routing/middleware#matcher
-// En supprimant le matcher, on laisse NextAuth appliquer la protection à tout le site par défaut,
-// ce qui est souvent plus simple et plus sûr. Les routes API et les fichiers statiques sont ignorés par défaut.
+  // If the user is not logged in, redirect to the login page
+  if (!isAuthenticated) {
+    const loginUrl = new URL('/login', req.url);
+    loginUrl.searchParams.set('callbackUrl', req.nextUrl.pathname);
+    return NextResponse.redirect(loginUrl);
+  }
+
+  // If authenticated, handle role-based access
+  if (isAuthenticated) {
+    // Admins can access anything
+    if (userRole === 'admin') {
+      return NextResponse.next();
+    }
+
+    // If trying to access admin pages without admin role, redirect
+    if (pathname.startsWith('/admin')) {
+      return NextResponse.redirect(new URL('/account', req.url));
+    }
+    
+    // If a customer tries to access organizer dashboard, redirect
+    if (pathname.startsWith('/dashboard') && userRole === 'customer') {
+      return NextResponse.redirect(new URL('/account', req.url));
+    }
+  }
+
+  return NextResponse.next();
+}
+
 export const config = {
-  matcher: ["/dashboard/:path*", "/admin/:path*", "/account/:path*"]
+  matcher: ['/dashboard/:path*', '/admin/:path*', '/account/:path*'],
 };

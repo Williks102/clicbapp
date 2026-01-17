@@ -1,7 +1,5 @@
 
 // src/auth.ts
-export const runtime = 'nodejs'; // Force l'exécution dans l'environnement Node.js
-
 import NextAuth, { type NextAuthConfig } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { validateCredentials } from '@/app/actions/auth-actions';
