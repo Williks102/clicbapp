@@ -5,7 +5,10 @@ import Credentials from 'next-auth/providers/credentials';
 import { validateCredentials } from '@/app/actions/auth-actions';
 import { authConfig as baseAuthConfig } from '@/auth.config';
 
-// Étendre la configuration de base avec les providers (nécessite Node.js runtime)
+// Force this file and its dependencies to run in the Node.js environment
+export const runtime = 'nodejs';
+
+// Extend the base configuration with providers that require Node.js
 const authConfig = {
   ...baseAuthConfig,
   providers: [
