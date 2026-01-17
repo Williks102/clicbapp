@@ -1,15 +1,16 @@
+import NextAuth from 'next-auth';
+import { authConfig } from './auth.config';
+import { NextResponse } from 'next/server';
 
-import { NextResponse } from 'next/server'
-import type { NextRequest } from 'next/server'
-import { getToken } from 'next-auth/jwt'
-
-export async function middleware(req: NextRequest) {
-  const token = await getToken({ req, secret: process.env.AUTH_SECRET });
-  const { pathname } = req.nextUrl;
-  
-  const isAuthenticated = !!token;
+export default NextAuth(authConfig).auth((req) => {
+  const { auth } = req;
+  const isAuthenticated = !!auth;
   // @ts-ignore
-  const userRole = token?.role as string | undefined;
+  const userRole = auth?.user?.role as string | undefined;
+  const { pathname } = req.nextUrl;
+
+  // The middleware only runs for paths in the matcher.
+  // So we can assume we are on a protected route.
 
   // If the user is not logged in, redirect to the login page
   if (!isAuthenticated) {
@@ -19,26 +20,27 @@ export async function middleware(req: NextRequest) {
   }
 
   // If authenticated, handle role-based access
-  if (isAuthenticated) {
-    // Admins can access anything
-    if (userRole === 'admin') {
-      return NextResponse.next();
-    }
-
-    // If trying to access admin pages without admin role, redirect
-    if (pathname.startsWith('/admin')) {
-      return NextResponse.redirect(new URL('/account', req.url));
-    }
-    
-    // If a customer tries to access organizer dashboard, redirect
-    if (pathname.startsWith('/dashboard') && userRole === 'customer') {
-      return NextResponse.redirect(new URL('/account', req.url));
-    }
+  // Admins can access anything
+  if (userRole === 'admin') {
+    return; // Allow request to proceed
   }
 
-  return NextResponse.next();
-}
+  // If trying to access admin pages without admin role, redirect
+  if (pathname.startsWith('/admin')) {
+    // a non-admin is trying to access an admin page
+    return NextResponse.redirect(new URL('/account', req.url));
+  }
+    
+  // If a customer tries to access organizer dashboard, redirect
+  if (pathname.startsWith('/dashboard') && userRole === 'customer') {
+    return NextResponse.redirect(new URL('/account', req.url));
+  }
 
+  // Allow access if none of the above conditions are met
+  return;
+});
+
+// The matcher configuration remains the same.
 export const config = {
   matcher: ['/dashboard/:path*', '/admin/:path*', '/account/:path*'],
 };
