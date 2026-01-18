@@ -58,12 +58,6 @@ export function PurchaseModal({
   const ticket = event.tickets.find(t => t.id === ticketId);
   const totalPrice = ticket ? ticket.price * quantity : 0;
 
-  // Si l'utilisateur est déjà connecté, procéder directement
-  if (session?.user) {
-    onProceedAsUser();
-    return null;
-  }
-
   // Validation du formulaire invité
   const validateGuestForm = () => {
     const errors: {email?: string; name?: string} = {};
