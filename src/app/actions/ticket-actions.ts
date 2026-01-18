@@ -23,12 +23,13 @@ function generateTicketNumber(orderId: string): string {
   return `TKT-${uniquePart}`;
 }
 
-function generateTicketQRData(sale: Sale, event: Event): string {
+function generateTicketQRData(sale: Sale, event: Event, ticketNumber: string): string {
   return JSON.stringify({
-    saleId: sale.id,
+    ticketNumber: ticketNumber, // Le numéro de billet unique
+    saleId: sale.id, // La référence de la commande
     eventId: sale.eventId,
-    ticketId: sale.ticketId,
-    quantity: sale.quantity,
+    ticketId: sale.ticketId, // Le type de billet
+    quantity: 1, // Ce QR code est valable pour 1 personne
     holder: sale.customerName,
     purchaseDate: sale.purchaseDate,
     eventName: event.name,
@@ -57,12 +58,12 @@ export async function createPurchaseAndSendTicket(
     if (!ticket) return { success: false, error: 'Type de billet introuvable' };
 
     const orderId = generateOrderNumber();
-    const ticketNumber = generateTicketNumber(orderId);
+    const mainTicketNumber = generateTicketNumber(orderId);
     const purchaseDate = new Date().toISOString();
 
     const sale: Sale = {
       id: orderId,
-      ticketNumber: ticketNumber,
+      ticketNumber: mainTicketNumber,
       eventId: data.eventId,
       ticketId: data.ticketId,
       customerName: data.fullName,
@@ -76,10 +77,17 @@ export async function createPurchaseAndSendTicket(
     await firestore.collection('sales').doc(orderId).set(sale);
     console.log('[PURCHASE] ✅ Sale created in Firestore:', orderId);
 
-    const qrData = generateTicketQRData(sale, event);
-    const qrCodeURL = generateQRCodeURL(qrData);
+    // Générer les données pour chaque billet individuel
+    const ticketsForEmail: { ticketNumber: string; qrCodeURL: string }[] = [];
+    for (let i = 1; i <= sale.quantity; i++) {
+        // Crée un numéro de billet unique pour chaque billet, ex: ORD-XXXX-I1, ORD-XXXX-I2
+        const uniqueTicketNumber = `${sale.id}-I${i}`;
+        const qrData = generateTicketQRData(sale, event, uniqueTicketNumber);
+        const qrCodeURL = generateQRCodeURL(qrData);
+        ticketsForEmail.push({ ticketNumber: uniqueTicketNumber, qrCodeURL });
+    }
 
-    // Envoyer l'email au client
+    // Envoyer l'email au client avec tous les billets
     try {
       await sendCustomerTicketEmail({
         to: data.email,
@@ -87,9 +95,9 @@ export async function createPurchaseAndSendTicket(
         event,
         ticket,
         sale,
-        qrCodeURL,
+        tickets: ticketsForEmail,
       });
-      console.log('[PURCHASE] ✅ Customer email sent');
+      console.log('[PURCHASE] ✅ Customer email sent with', ticketsForEmail.length, 'tickets.');
     } catch (emailError) {
       console.error('[PURCHASE] ⚠️ Customer email failed:', emailError);
     }
@@ -130,7 +138,7 @@ export async function createPurchaseAndSendTicket(
     return {
       success: true,
       saleId: orderId,
-      message: 'Achat confirmé ! Vérifiez votre email pour votre billet.',
+      message: 'Achat confirmé ! Vérifiez votre email pour vos billets.',
     };
 
   } catch (error: any) {
@@ -151,11 +159,11 @@ type CustomerEmailData = {
   event: Event;
   ticket: TicketTier;
   sale: Sale;
-  qrCodeURL: string;
+  tickets: { ticketNumber: string; qrCodeURL: string }[];
 };
 
 async function sendCustomerTicketEmail(data: CustomerEmailData) {
-  const { to, customerName, event, ticket, sale, qrCodeURL } = data;
+  const { to, customerName, event, ticket, sale, tickets } = data;
   const eventDate = new Date(event.date);
   const formattedDate = eventDate.toLocaleDateString('fr-FR', {
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
@@ -164,14 +172,26 @@ async function sendCustomerTicketEmail(data: CustomerEmailData) {
     hour: '2-digit', minute: '2-digit',
   });
 
-  const emailHtml = `
-    <!DOCTYPE html>... (Contenu de l'email client - inchangé) ...</html>
-  `; // Le contenu HTML est long, je le garde tel quel mais je le place dans la fonction correcte
+  // Générer le HTML pour chaque billet
+  const ticketsHtml = tickets.map((ticketData, index) => `
+    <div class="ticket-card" style="page-break-inside: avoid; margin-bottom: 20px;">
+      <h3 class="ticket-header">Billet ${index + 1} / ${tickets.length}</h3>
+      <div class="event-name">${event.name}</div>
+      <div class="info-row"><span>🎫 Billet</span><span>${ticket.name}</span></div>
+      <div class="info-row"><span>👤 Détenteur</span><span>${customerName}</span></div>
+      <div class="info-row"><span>🔢 N° Billet</span><span style="font-family: monospace;">${ticketData.ticketNumber}</span></div>
+      <div class="qr-section">
+        <h3>Votre QR Code d'Entrée</h3>
+        <p>Présentez ce code à l'entrée</p>
+        <img src="${ticketData.qrCodeURL}" alt="QR Code pour le billet ${ticketData.ticketNumber}" />
+      </div>
+    </div>
+  `).join('');
 
   await resend.emails.send({
     from: 'ClicBillet <contact@monticket.online>',
     to,
-    subject: `🎫 Votre billet pour ${event.name}`,
+    subject: `🎫 Vos ${sale.quantity} billets pour ${event.name}`,
     html: `
     <!DOCTYPE html>
     <html>
@@ -181,31 +201,32 @@ async function sendCustomerTicketEmail(data: CustomerEmailData) {
         body { font-family: sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; padding: 20px; }
         .header { background: #667eea; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
         .content { background: #f7f7f7; padding: 20px; }
-        .ticket-card { background: white; border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px; margin: 20px 0; }
+        .ticket-card { background: white; border: 1px solid #e0e0e0; border-radius: 10px; padding: 20px; }
         .event-name { font-size: 24px; font-weight: bold; color: #667eea; margin-bottom: 15px; }
         .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
         .qr-section { text-align: center; padding: 20px; }
         .footer { text-align: center; padding: 20px; color: #666; font-size: 14px; }
+        .summary-card { background: #fff; border-radius: 10px; padding: 20px; margin: 20px 0; border: 1px solid #e0e0e0;}
+        .ticket-header { font-size: 16px; font-weight: bold; color: #333; margin-bottom: 15px; text-align: center; background: #eee; padding: 5px; border-radius: 5px;}
       </style>
     </head>
     <body>
-      <div class="header"><h1>ClicBillet</h1><p>Votre billet électronique</p></div>
+      <div class="header"><h1>ClicBillet</h1><p>Votre confirmation de commande</p></div>
       <div class="content">
         <p>Bonjour ${customerName},</p>
-        <p>Merci pour votre achat ! Voici votre billet pour :</p>
-        <div class="ticket-card">
+        <p>Merci pour votre achat ! Voici vos <strong>${sale.quantity} billets</strong> pour l'événement :</p>
+        
+        <div class="summary-card">
           <div class="event-name">${event.name}</div>
           <div class="info-row"><span>📅 Date</span><span>${formattedDate} à ${formattedTime}</span></div>
           <div class="info-row"><span>📍 Lieu</span><span>${event.location}</span></div>
-          <div class="info-row"><span>🎫 Billet</span><span>${ticket.name} (x${sale.quantity})</span></div>
-          <div class="info-row"><span>💰 Total</span><span>${sale.totalPrice.toLocaleString('fr-FR')} F CFA</span></div>
-          <div class="info-row"><span>🔢 N° Commande</span><span>${sale.id}</span></div>
+          <div class="info-row"><span>N° Commande</span><span style="font-family: monospace;">${sale.id}</span></div>
+          <div class="info-row"><strong>Total Payé</strong><strong>${sale.totalPrice.toLocaleString('fr-FR')} F CFA</strong></div>
         </div>
-        <div class="qr-section">
-          <h3>Votre QR Code d'Entrée</h3>
-          <p>Présentez ce code à l'entrée</p>
-          <img src="${qrCodeURL}" alt="QR Code" />
-        </div>
+
+        <h2 style="text-align: center; margin-top: 30px;">Vos Billets Individuels</h2>
+        ${ticketsHtml}
+
         <p>À bientôt !<br><strong>L'équipe ClicBillet</strong></p>
       </div>
       <div class="footer"><p>© ${new Date().getFullYear()} ClicBillet</p></div>
@@ -214,6 +235,7 @@ async function sendCustomerTicketEmail(data: CustomerEmailData) {
     `,
   });
 }
+
 
 // --- Email pour l'organisateur ---
 type OrganizerEmailData = {
@@ -261,7 +283,7 @@ async function sendAdminNotificationEmail(data: AdminEmailData) {
   const { sale, event, ticketName, organizerName } = data;
   await resend.emails.send({
     from: 'ClicBillet Admin <noreply@monticket.online>',
-    to: ADMIN_EMAIL!,
+    to: ADMIN_EMAIL,
     subject: `[ADMIN] Nouvelle Vente sur ClicBillet : #${sale.id.slice(-6)}`,
     html: `
       <div style="font-family: sans-serif; padding: 20px; border: 1px solid #ccc;">
@@ -299,8 +321,14 @@ export async function resendTicketEmail(saleId: string): Promise<PurchaseResult>
     const ticket = event.tickets.find(t => t.id === sale.ticketId);
     if (!ticket) return { success: false, error: 'Type de billet introuvable' };
 
-    const qrData = generateTicketQRData(sale, event);
-    const qrCodeURL = generateQRCodeURL(qrData);
+    // Régénérer les données pour chaque billet individuel
+    const ticketsForEmail: { ticketNumber: string; qrCodeURL: string }[] = [];
+    for (let i = 1; i <= sale.quantity; i++) {
+        const uniqueTicketNumber = `${sale.id}-I${i}`;
+        const qrData = generateTicketQRData(sale, event, uniqueTicketNumber);
+        const qrCodeURL = generateQRCodeURL(qrData);
+        ticketsForEmail.push({ ticketNumber: uniqueTicketNumber, qrCodeURL });
+    }
 
     await sendCustomerTicketEmail({
       to: sale.customerEmail,
@@ -308,7 +336,7 @@ export async function resendTicketEmail(saleId: string): Promise<PurchaseResult>
       event,
       ticket,
       sale,
-      qrCodeURL,
+      tickets: ticketsForEmail,
     });
 
     console.log('[RESEND] ✅ Email resent successfully');

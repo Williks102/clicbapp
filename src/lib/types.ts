@@ -1,3 +1,4 @@
+
 export type TicketTier = {
   id: string;
   name: string;
@@ -40,6 +41,19 @@ export type Sale = {
   totalPrice: number;
   purchaseDate: string;
   organizerId: string;
+};
+
+export type TicketScan = {
+  id: string;
+  saleId: string;
+  ticketNumber: string; // Identifiant unique du billet scanné
+  eventId: string;
+  ticketId: string;
+  scannedBy: string;
+  scannedByName: string;
+  scannedAt: string;
+  holderName: string;
+  quantity: number;
 };
 
 export type User = {

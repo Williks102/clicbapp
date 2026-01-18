@@ -1,3 +1,4 @@
+
 'use server';
 
 import { auth } from '@/auth';
@@ -9,7 +10,7 @@ export type EnrichedTicket = {
   sale: Sale;
   event: Event | null;
   ticketTier: TicketTier | null;
-  ticketNumber: string;
+  ticketNumber: string; // Numéro unique du billet individuel
 };
 
 /**
@@ -81,22 +82,27 @@ export async function getUserTickets(): Promise<{
     console.log('[GET USER TICKETS] 🎪 Loaded', eventsMap.size, 'events');
 
     // 5. Enrichir les billets avec les données des événements
-    const enrichedTickets: EnrichedTicket[] = sales.map(sale => {
+    const enrichedTickets: EnrichedTicket[] = [];
+    sales.forEach(sale => {
       const event = eventsMap.get(sale.eventId) || null;
       const ticketTier = event?.tickets.find(t => t.id === sale.ticketId) || null;
 
-      // ✅ Utiliser le ticketNumber stocké, sinon le générer (pour les anciennes ventes)
-      const ticketNumber = sale.ticketNumber || `TKT-${sale.id.split('-')[1] || sale.id.substring(0, 8)}`;
+      // Boucler sur la quantité pour créer un billet individuel pour chaque
+      for (let i = 1; i <= sale.quantity; i++) {
+        // Générer un numéro de billet unique pour chaque instance
+        // Ex: ORD-XXXX-1, ORD-XXXX-2
+        const uniqueTicketNumber = `${sale.id}-I${i}`;
 
-      return {
-        sale,
-        event,
-        ticketTier,
-        ticketNumber,
-      };
+        enrichedTickets.push({
+          sale,
+          event,
+          ticketTier,
+          ticketNumber: uniqueTicketNumber,
+        });
+      }
     });
 
-    console.log('[GET USER TICKETS] ✅ Success - returning', enrichedTickets.length, 'tickets');
+    console.log('[GET USER TICKETS] ✅ Success - returning', enrichedTickets.length, 'individual tickets');
 
     return {
       success: true,
