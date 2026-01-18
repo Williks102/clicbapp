@@ -169,7 +169,7 @@ async function sendCustomerTicketEmail(data: CustomerEmailData) {
   `; // Le contenu HTML est long, je le garde tel quel mais je le place dans la fonction correcte
 
   await resend.emails.send({
-    from: 'ClicBillet <contact@clicbillet.com>',
+    from: 'ClicBillet <contact@monticket.online>',
     to,
     subject: `🎫 Votre billet pour ${event.name}`,
     html: `
@@ -226,7 +226,7 @@ type OrganizerEmailData = {
 async function sendOrganizerNotificationEmail(data: OrganizerEmailData) {
   const { sale, event, ticketName, organizerEmail } = data;
   await resend.emails.send({
-    from: 'ClicBillet Ventes <ventes@clicbillet.com>',
+    from: 'ClicBillet Ventes <ventes@monticket.online>',
     to: organizerEmail,
     subject: `🎉 Nouvelle vente pour votre événement : ${event.name}`,
     html: `
@@ -260,7 +260,7 @@ type AdminEmailData = {
 async function sendAdminNotificationEmail(data: AdminEmailData) {
   const { sale, event, ticketName, organizerName } = data;
   await resend.emails.send({
-    from: 'ClicBillet Admin <noreply@clicbillet.com>',
+    from: 'ClicBillet Admin <noreply@monticket.online>',
     to: ADMIN_EMAIL!,
     subject: `[ADMIN] Nouvelle Vente sur ClicBillet : #${sale.id.slice(-6)}`,
     html: `
