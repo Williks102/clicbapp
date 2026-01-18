@@ -132,7 +132,8 @@ export async function validateAndScanTicket(
     if (!event) return { success: false, error: 'Données événement invalides' };
 
     // Vérifier les permissions
-    const isAdmin = await firestore.collection('roles_admin').doc(session.user.id).get().then(doc => doc.exists);
+    const isAdminDoc = await firestore.collection('roles_admin').doc(session.user.id).get();
+    const isAdmin = isAdminDoc.exists;
     const isOrganizer = event.organizerId === session.user.id;
 
     if (!isAdmin && !isOrganizer) {
@@ -213,7 +214,8 @@ export async function getEventScans(eventId: string): Promise<TicketScan[]> {
     const event = eventDoc.data();
     if (!event) return [];
     
-    const isAdmin = await firestore.collection('roles_admin').doc(session.user.id).get().then(doc => doc.exists);
+    const isAdminDoc = await firestore.collection('roles_admin').doc(session.user.id).get();
+    const isAdmin = isAdminDoc.exists;
     const isOrganizer = event.organizerId === session.user.id;
 
     if (!isAdmin && !isOrganizer) return [];
@@ -287,8 +289,9 @@ export async function cancelScan(scanId: string): Promise<{ success: boolean; er
     if (!scan) {
       return { success: false, error: 'Données scan invalides' };
     }
-
-    const isAdmin = await firestore.collection('roles_admin').doc(session.user.id).get().then(doc => doc.exists);
+    
+    const isAdminDoc = await firestore.collection('roles_admin').doc(session.user.id).get();
+    const isAdmin = isAdminDoc.exists;
     const isScanner = scan.scannedBy === session.user.id;
 
     if (!isAdmin && !isScanner) {
