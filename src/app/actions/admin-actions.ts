@@ -5,21 +5,23 @@ import { firestore } from '@/lib/firebase-admin';
 import type { Event, User } from '@/lib/types';
 
 /**
+ * Helper function to verify admin role
+ */
+async function ensureAdmin() {
+  const session = await auth();
+  if (!session?.user || session.user.role !== 'admin') {
+    throw new Error('Accès non autorisé. Seuls les administrateurs sont permis.');
+  }
+  return session.user;
+}
+
+/**
  * Récupère tous les événements (admin seulement)
  */
 export async function getAllEvents(): Promise<Event[]> {
   try {
+    await ensureAdmin();
     console.log('[ADMIN EVENTS] 📋 Fetching all events...');
-    
-    // Vérifier la session
-    const session = await auth();
-    if (!session?.user?.id) {
-      console.log('[ADMIN EVENTS] ❌ Not authenticated');
-      return [];
-    }
-
-    // TODO: Vérifier que c'est un admin
-    // Pour l'instant, on récupère tous les événements
     
     const eventsSnapshot = await firestore.collection('events').get();
     
@@ -33,6 +35,9 @@ export async function getAllEvents(): Promise<Event[]> {
 
   } catch (error) {
     console.error('[ADMIN EVENTS] ❌ Error:', error);
+    if (error instanceof Error && error.message.includes('Accès non autorisé')) {
+      throw error;
+    }
     return [];
   }
 }
@@ -42,16 +47,8 @@ export async function getAllEvents(): Promise<Event[]> {
  */
 export async function getAllUsers(): Promise<User[]> {
   try {
+    await ensureAdmin();
     console.log('[ADMIN USERS] 👥 Fetching all users...');
-    
-    // Vérifier la session
-    const session = await auth();
-    if (!session?.user?.id) {
-      console.log('[ADMIN USERS] ❌ Not authenticated');
-      return [];
-    }
-
-    // TODO: Vérifier que c'est un admin
     
     const usersSnapshot = await firestore.collection('users').get();
     
@@ -65,6 +62,9 @@ export async function getAllUsers(): Promise<User[]> {
 
   } catch (error) {
     console.error('[ADMIN USERS] ❌ Error:', error);
+    if (error instanceof Error && error.message.includes('Accès non autorisé')) {
+      throw error;
+    }
     return [];
   }
 }
@@ -74,15 +74,8 @@ export async function getAllUsers(): Promise<User[]> {
  */
 export async function deleteEvent(eventId: string): Promise<{ success: boolean; error?: string }> {
   try {
+    await ensureAdmin();
     console.log('[ADMIN DELETE EVENT] 🗑️ Deleting event:', eventId);
-    
-    // Vérifier la session
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: 'Non authentifié' };
-    }
-
-    // TODO: Vérifier que c'est un admin
     
     await firestore.collection('events').doc(eventId).delete();
 
@@ -91,7 +84,8 @@ export async function deleteEvent(eventId: string): Promise<{ success: boolean; 
 
   } catch (error) {
     console.error('[ADMIN DELETE EVENT] ❌ Error:', error);
-    return { success: false, error: 'Erreur lors de la suppression' };
+    const errorMessage = error instanceof Error ? error.message : 'Erreur lors de la suppression';
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -103,15 +97,8 @@ export async function updateUserStatus(
   disabled: boolean
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    await ensureAdmin();
     console.log('[ADMIN UPDATE USER] 👤 Updating user:', userId);
-    
-    // Vérifier la session
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: 'Non authentifié' };
-    }
-
-    // TODO: Vérifier que c'est un admin
     
     await firestore.collection('users').doc(userId).update({
       disabled,
@@ -122,6 +109,7 @@ export async function updateUserStatus(
 
   } catch (error) {
     console.error('[ADMIN UPDATE USER] ❌ Error:', error);
-    return { success: false, error: 'Erreur lors de la mise à jour' };
+    const errorMessage = error instanceof Error ? error.message : 'Erreur lors de la mise à jour';
+    return { success: false, error: errorMessage };
   }
 }

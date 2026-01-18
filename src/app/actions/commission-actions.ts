@@ -36,6 +36,19 @@ export type CommissionSettings = {
   transactionFeePercentage: number;
 };
 
+// ==================== HELPERS ====================
+
+/**
+ * Helper function to verify admin role
+ */
+async function ensureAdmin() {
+  const session = await auth();
+  if (!session?.user || session.user.role !== 'admin') {
+    throw new Error('Accès non autorisé. Seuls les administrateurs sont permis.');
+  }
+  return session.user;
+}
+
 // ==================== ACTIONS ====================
 
 /**
@@ -43,15 +56,9 @@ export type CommissionSettings = {
  */
 export async function getCommissionSettings(): Promise<CommissionSettings> {
   try {
+    await ensureAdmin();
     console.log('[COMMISSION SETTINGS] 📊 Fetching settings...');
     
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error('Non authentifié');
-    }
-
-    // TODO: Vérifier que c'est un admin
-
     // Récupérer les paramètres depuis Firestore
     const settingsDoc = await firestore
       .collection('percentageConfigurations')
@@ -74,6 +81,7 @@ export async function getCommissionSettings(): Promise<CommissionSettings> {
 
   } catch (error) {
     console.error('[COMMISSION SETTINGS] ❌ Error:', error);
+    // Retourner les valeurs par défaut en cas d'erreur (y compris d'auth)
     return {
       platformFeePercentage: 5,
       transactionFeePercentage: 2.5,
@@ -89,14 +97,8 @@ export async function updateCommissionSettings(
   transactionFee: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const user = await ensureAdmin();
     console.log('[UPDATE COMMISSION] 📝 Updating settings...');
-    
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: 'Non authentifié' };
-    }
-
-    // TODO: Vérifier que c'est un admin
 
     // Validation
     if (platformFee < 0 || platformFee > 100) {
@@ -114,7 +116,7 @@ export async function updateCommissionSettings(
         platformFeePercentage: platformFee,
         transactionFeePercentage: transactionFee,
         updatedAt: new Date().toISOString(),
-        updatedBy: session.user.id,
+        updatedBy: user.id,
       }, { merge: true });
 
     console.log('[UPDATE COMMISSION] ✅ Settings updated');
@@ -123,7 +125,8 @@ export async function updateCommissionSettings(
 
   } catch (error) {
     console.error('[UPDATE COMMISSION] ❌ Error:', error);
-    return { success: false, error: 'Erreur lors de la mise à jour' };
+    const errorMessage = error instanceof Error ? error.message : 'Erreur lors de la mise à jour';
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -132,15 +135,9 @@ export async function updateCommissionSettings(
  */
 export async function getOrganizerPayouts(): Promise<OrganizerPayout[]> {
   try {
+    await ensureAdmin();
     console.log('[ORGANIZER PAYOUTS] 📊 Fetching payouts...');
     
-    const session = await auth();
-    if (!session?.user?.id) {
-      return [];
-    }
-
-    // TODO: Vérifier que c'est un admin
-
     // Récupérer les paramètres de commission
     const settings = await getCommissionSettings();
     const totalFeePercentage = settings.platformFeePercentage + settings.transactionFeePercentage;
@@ -209,15 +206,9 @@ export async function getOrganizerPayouts(): Promise<OrganizerPayout[]> {
  */
 export async function getRecentTransactions(limit: number = 10): Promise<Transaction[]> {
   try {
+    await ensureAdmin();
     console.log('[RECENT TRANSACTIONS] 📋 Fetching transactions...');
     
-    const session = await auth();
-    if (!session?.user?.id) {
-      return [];
-    }
-
-    // TODO: Vérifier que c'est un admin
-
     // Pour l'instant, on génère des transactions basées sur les ventes récentes
     // Plus tard, on créera une vraie collection 'transactions'
     const salesSnapshot = await firestore
@@ -266,15 +257,9 @@ export async function fundOrganizer(
   amount: number
 ): Promise<{ success: boolean; error?: string; transactionId?: string }> {
   try {
+    const user = await ensureAdmin();
     console.log('[FUND ORGANIZER] 💰 Processing payment...');
     
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: 'Non authentifié' };
-    }
-
-    // TODO: Vérifier que c'est un admin
-
     // Validation
     if (amount <= 0) {
       return { success: false, error: 'Le montant doit être supérieur à 0' };
@@ -297,8 +282,8 @@ export async function fundOrganizer(
       type: 'payout',
       status: 'paid',
       date: new Date().toISOString(),
-      description: `Versement effectué par ${session.user.name || session.user.email}`,
-      createdBy: session.user.id,
+      description: `Versement effectué par ${user.name || user.email}`,
+      createdBy: user.id,
       createdAt: new Date().toISOString(),
     });
 
@@ -312,7 +297,8 @@ export async function fundOrganizer(
 
   } catch (error) {
     console.error('[FUND ORGANIZER] ❌ Error:', error);
-    return { success: false, error: 'Erreur lors du traitement du paiement' };
+    const errorMessage = error instanceof Error ? error.message : 'Erreur lors du traitement du paiement';
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -325,15 +311,9 @@ export async function refundTransaction(
   reason: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
+    const user = await ensureAdmin();
     console.log('[REFUND TRANSACTION] 💸 Processing refund...');
     
-    const session = await auth();
-    if (!session?.user?.id) {
-      return { success: false, error: 'Non authentifié' };
-    }
-
-    // TODO: Vérifier que c'est un admin
-
     // Récupérer la vente
     const saleDoc = await firestore.collection('sales').doc(saleId).get();
     if (!saleDoc.exists) {
@@ -356,7 +336,7 @@ export async function refundTransaction(
       status: 'paid',
       date: new Date().toISOString(),
       description: `Remboursement: ${reason}`,
-      createdBy: session.user.id,
+      createdBy: user.id,
       createdAt: new Date().toISOString(),
     });
 
@@ -365,7 +345,7 @@ export async function refundTransaction(
       await firestore.collection('sales').doc(saleId).update({
         status: 'refunded',
         refundedAt: new Date().toISOString(),
-        refundedBy: session.user.id,
+        refundedBy: user.id,
         refundReason: reason,
       });
     }
@@ -378,6 +358,7 @@ export async function refundTransaction(
 
   } catch (error) {
     console.error('[REFUND TRANSACTION] ❌ Error:', error);
-    return { success: false, error: 'Erreur lors du remboursement' };
+    const errorMessage = error instanceof Error ? error.message : 'Erreur lors du remboursement';
+    return { success: false, error: errorMessage };
   }
 }

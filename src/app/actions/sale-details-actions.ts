@@ -12,20 +12,23 @@ export type SaleDetails = Sale & {
 };
 
 /**
+ * Helper function to verify admin role
+ */
+async function ensureAdmin() {
+  const session = await auth();
+  if (!session?.user || session.user.role !== 'admin') {
+    throw new Error('Accès non autorisé. Seuls les administrateurs sont permis.');
+  }
+  return session.user;
+}
+
+/**
  * Récupère les détails complets d'une vente (admin seulement)
  */
 export async function getAdminSaleDetails(saleId: string): Promise<SaleDetails | null> {
   try {
+    await ensureAdmin();
     console.log('[SALE DETAILS] 📋 Fetching sale details for:', saleId);
-    
-    // Vérifier la session
-    const session = await auth();
-    if (!session?.user?.id) {
-      console.log('[SALE DETAILS] ❌ Not authenticated');
-      return null;
-    }
-
-    // TODO: Vérifier que c'est un admin
     
     // Récupérer la vente
     const saleDoc = await firestore.collection('sales').doc(saleId).get();
@@ -108,6 +111,9 @@ export async function getAdminSaleDetails(saleId: string): Promise<SaleDetails |
 
   } catch (error) {
     console.error('[SALE DETAILS] ❌ Error:', error);
+    if (error instanceof Error && error.message.includes('Accès non autorisé')) {
+        throw error;
+    }
     return null;
   }
 }
