@@ -1,10 +1,16 @@
-
 'use server';
 
 import { Resend } from 'resend';
 import { auth } from '@/auth';
 import { firestore } from '@/lib/firebase-admin';
-import type { Event, Sale, PurchaseData, PurchaseResult, TicketTier, User } from '@/lib/types';
+import type {
+  Event,
+  Sale,
+  PurchaseData,
+  PurchaseResult,
+  TicketTier,
+  User,
+} from '@/lib/types';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 const ADMIN_EMAIL = 'admin@clicbillet.com';
@@ -19,11 +25,16 @@ function generateOrderNumber(): string {
 
 function generateTicketNumber(orderId: string): string {
   const parts = orderId.split('-');
-  const uniquePart = parts[parts.length - 1] || parts[1] || orderId.substring(4, 12);
+  const uniquePart =
+    parts[parts.length - 1] || parts[1] || orderId.substring(4, 12);
   return `TKT-${uniquePart}`;
 }
 
-function generateTicketQRData(sale: Sale, event: Event, ticketNumber: string): string {
+function generateTicketQRData(
+  sale: Sale,
+  event: Event,
+  ticketNumber: string
+): string {
   return JSON.stringify({
     ticketNumber: ticketNumber, // Le numéro de billet unique
     saleId: sale.id, // La référence de la commande
@@ -49,45 +60,92 @@ export async function createPurchaseAndSendTicket(
   try {
     console.log('[PURCHASE] 🎫 Creating purchase...');
     const session = await auth();
-    
-    const eventDoc = await firestore.collection('events').doc(data.eventId).get();
-    if (!eventDoc.exists) return { success: false, error: 'Événement introuvable' };
-    const event = { id: eventDoc.id, ...eventDoc.data() } as Event;
 
-    const ticket = event.tickets.find(t => t.id === data.ticketId);
-    if (!ticket) return { success: false, error: 'Type de billet introuvable' };
-
+    const eventRef = firestore.collection('events').doc(data.eventId);
     const orderId = generateOrderNumber();
-    const mainTicketNumber = generateTicketNumber(orderId);
-    const purchaseDate = new Date().toISOString();
+    let event: Event | null = null;
+    let ticket: TicketTier | null = null;
+    let sale: Sale | null = null;
 
-    const sale: Sale = {
-      id: orderId,
-      ticketNumber: mainTicketNumber,
-      eventId: data.eventId,
-      ticketId: data.ticketId,
-      customerName: data.fullName,
-      customerEmail: data.email,
-      quantity: data.quantity,
-      totalPrice: data.totalPrice,
-      purchaseDate,
-      organizerId: event.organizerId,
-    };
+    // Utiliser une transaction pour garantir l'atomicité
+    await firestore.runTransaction(async (transaction) => {
+      const eventDoc = await transaction.get(eventRef);
+      if (!eventDoc.exists) {
+        throw new Error('Événement introuvable');
+      }
 
-    await firestore.collection('sales').doc(orderId).set(sale);
-    console.log('[PURCHASE] ✅ Sale created in Firestore:', orderId);
+      const currentEvent = { id: eventDoc.id, ...eventDoc.data() } as Event;
+      event = currentEvent; // Assigner pour l'envoi d'email hors de la transaction
 
-    // Générer les données pour chaque billet individuel
-    const ticketsForEmail: { ticketNumber: string; qrCodeURL: string }[] = [];
-    for (let i = 1; i <= sale.quantity; i++) {
-        // Crée un numéro de billet unique pour chaque billet, ex: ORD-XXXX-I1, ORD-XXXX-I2
-        const uniqueTicketNumber = `${sale.id}-I${i}`;
-        const qrData = generateTicketQRData(sale, event, uniqueTicketNumber);
-        const qrCodeURL = generateQRCodeURL(qrData);
-        ticketsForEmail.push({ ticketNumber: uniqueTicketNumber, qrCodeURL });
+      const ticketIndex = currentEvent.tickets.findIndex(
+        (t) => t.id === data.ticketId
+      );
+      if (ticketIndex === -1) {
+        throw new Error('Type de billet introuvable');
+      }
+
+      const currentTicket = currentEvent.tickets[ticketIndex];
+      ticket = currentTicket; // Assigner pour l'envoi d'email
+
+      if (currentTicket.quantity < data.quantity) {
+        throw new Error('Quantité de billets insuffisante');
+      }
+
+      // Préparer le tableau des billets mis à jour
+      const updatedTickets = [...currentEvent.tickets];
+      updatedTickets[ticketIndex] = {
+        ...currentTicket,
+        quantity: currentTicket.quantity - data.quantity,
+      };
+
+      // Mettre à jour le document de l'événement avec la nouvelle quantité
+      transaction.update(eventRef, { tickets: updatedTickets });
+      console.log(
+        `[PURCHASE] 🔄 Updated ticket quantity for event ${data.eventId}`
+      );
+
+      // Créer le document de vente
+      const saleRef = firestore.collection('sales').doc(orderId);
+      const mainTicketNumber = generateTicketNumber(orderId);
+      const purchaseDate = new Date().toISOString();
+
+      const newSale: Sale = {
+        id: orderId,
+        ticketNumber: mainTicketNumber,
+        eventId: data.eventId,
+        ticketId: data.ticketId,
+        customerName: data.fullName,
+        customerEmail: data.email,
+        quantity: data.quantity,
+        totalPrice: data.totalPrice,
+        purchaseDate,
+        organizerId: currentEvent.organizerId,
+      };
+
+      sale = newSale; // Assigner pour l'envoi d'email
+
+      transaction.set(saleRef, newSale);
+      console.log(
+        '[PURCHASE] ✅ Sale created in Firestore within transaction:',
+        orderId
+      );
+    });
+
+    if (!event || !ticket || !sale) {
+      throw new Error(
+        "La transaction a échoué, les données n'ont pas été préparées."
+      );
     }
 
-    // Envoyer l'email au client avec tous les billets
+    // --- Envoi des emails (en dehors de la transaction) ---
+    const ticketsForEmail: { ticketNumber: string; qrCodeURL: string }[] = [];
+    for (let i = 1; i <= sale.quantity; i++) {
+      const uniqueTicketNumber = `${sale.id}-I${i}`;
+      const qrData = generateTicketQRData(sale, event, uniqueTicketNumber);
+      const qrCodeURL = generateQRCodeURL(qrData);
+      ticketsForEmail.push({ ticketNumber: uniqueTicketNumber, qrCodeURL });
+    }
+
     try {
       await sendCustomerTicketEmail({
         to: data.email,
@@ -97,14 +155,20 @@ export async function createPurchaseAndSendTicket(
         sale,
         tickets: ticketsForEmail,
       });
-      console.log('[PURCHASE] ✅ Customer email sent with', ticketsForEmail.length, 'tickets.');
+      console.log(
+        '[PURCHASE] ✅ Customer email sent with',
+        ticketsForEmail.length,
+        'tickets.'
+      );
     } catch (emailError) {
       console.error('[PURCHASE] ⚠️ Customer email failed:', emailError);
     }
 
-    // Envoyer la notification à l'organisateur
     try {
-      const organizerDoc = await firestore.collection('users').doc(event.organizerId).get();
+      const organizerDoc = await firestore
+        .collection('users')
+        .doc(event.organizerId)
+        .get();
       if (organizerDoc.exists) {
         const organizer = organizerDoc.data() as User;
         await sendOrganizerNotificationEmail({
@@ -119,10 +183,11 @@ export async function createPurchaseAndSendTicket(
       console.error('[PURCHASE] ⚠️ Organizer notification failed:', orgError);
     }
 
-    // Envoyer la notification à l'admin
     if (ADMIN_EMAIL) {
       try {
-        const organizerName = (await firestore.collection('users').doc(event.organizerId).get()).data()?.name || 'Inconnu';
+        const organizerName =
+          (await firestore.collection('users').doc(event.organizerId).get())
+            .data()?.name || 'Inconnu';
         await sendAdminNotificationEmail({
           sale,
           event,
@@ -140,12 +205,11 @@ export async function createPurchaseAndSendTicket(
       saleId: orderId,
       message: 'Achat confirmé ! Vérifiez votre email pour vos billets.',
     };
-
   } catch (error: any) {
     console.error('[PURCHASE] ❌ Fatal error:', error);
     return {
       success: false,
-      error: 'Une erreur est survenue lors de l\'achat',
+      error: error.message || "Une erreur est survenue lors de l'achat",
     };
   }
 }
