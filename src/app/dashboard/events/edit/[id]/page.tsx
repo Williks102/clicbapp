@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -49,9 +50,12 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { updateEvent } from '@/app/actions/event-actions';
 import { useCollection, useDoc, useFirebase } from '@/firebase';
 import { collection, doc } from 'firebase/firestore';
-import type { Event, Category } from '@/lib/types';
+import type { Event, Category, QueueConfig } from '@/lib/types';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { CloudinaryUploadWidget } from '@/components/cloudinary-upload-widget';
+import { QueueConfigForm } from '@/components/queue-config-form';
+import { getQueueConfig } from '@/app/actions/queue-actions';
+
 
 // ==================== SCHEMAS ====================
 
@@ -84,6 +88,8 @@ export default function EditEventPage() {
   const { firestore, areServicesAvailable } = useFirebase();
   
   const [isGenerating, setIsGenerating] = useState(false);
+  const [queueConfig, setQueueConfig] = useState<QueueConfig | null>(null);
+  const [isQueueConfigLoading, setIsQueueConfigLoading] = useState(true);
 
   // Charger l'événement depuis Firestore
   const eventRef = useMemo(
@@ -141,6 +147,17 @@ export default function EditEventPage() {
       });
     }
   }, [event, form]);
+
+  // Charger la configuration de la file d'attente
+  useEffect(() => {
+    if (eventId) {
+      setIsQueueConfigLoading(true);
+      getQueueConfig(eventId).then(config => {
+        setQueueConfig(config);
+        setIsQueueConfigLoading(false);
+      });
+    }
+  }, [eventId]);
 
   // Génération de description IA
   const handleGenerateDescription = async () => {
@@ -495,6 +512,24 @@ export default function EditEventPage() {
           </div>
         </form>
       </Form>
+      
+      {isQueueConfigLoading ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>
+              <Skeleton className="h-7 w-1/3" />
+            </CardTitle>
+            <CardDescription>
+              <Skeleton className="h-4 w-2/3" />
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Skeleton className="h-24 w-full" />
+          </CardContent>
+        </Card>
+      ) : (
+        <QueueConfigForm eventId={eventId} initialConfig={queueConfig ?? undefined} />
+      )}
     </div>
   );
 }
