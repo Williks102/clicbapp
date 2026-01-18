@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from 'next/link';
@@ -41,8 +40,11 @@ export default function MainNav() {
   const navLinks = [
     { href: '/', label: 'Accueil' },
     { href: '/events', label: 'Événements' },
-    { href: '/#contact', label: 'Contact' },
+    { href: '/contact', label: 'Contact' },
   ];
+
+  const userRole = session?.user?.role;
+  const dashboardHref = userRole === 'admin' ? '/admin' : '/dashboard';
 
   const UserMenu = () => {
     if (status === 'loading') {
@@ -73,9 +75,13 @@ export default function MainNav() {
             <DropdownMenuItem asChild>
               <Link href="/account">Mes Billets</Link>
             </DropdownMenuItem>
-            <DropdownMenuItem asChild>
-              <Link href="/dashboard">Tableau de bord</Link>
-            </DropdownMenuItem>
+
+            {(userRole === 'admin' || userRole === 'organizer') && (
+              <DropdownMenuItem asChild>
+                <Link href={dashboardHref}>Tableau de bord</Link>
+              </DropdownMenuItem>
+            )}
+            
             <DropdownMenuSeparator />
             <DropdownMenuItem
               onClick={() => signOut({ callbackUrl: '/' })}
@@ -207,11 +213,14 @@ export default function MainNav() {
                             Mes Billets
                           </Link>
                         </SheetClose>
-                        <SheetClose asChild>
-                          <Link href="/dashboard" className="text-lg">
-                            Tableau de bord
-                          </Link>
-                        </SheetClose>
+                        
+                        {(userRole === 'admin' || userRole === 'organizer') && (
+                          <SheetClose asChild>
+                            <Link href={dashboardHref} className="text-lg">
+                              Tableau de bord
+                            </Link>
+                          </SheetClose>
+                        )}
                       </>
                     )}
 
