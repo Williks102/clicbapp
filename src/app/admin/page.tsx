@@ -1,3 +1,4 @@
+
 import { PageHeader } from '@/components/page-header';
 import {
   Card,
@@ -6,26 +7,59 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Ticket, Users, Wallet, Activity, ShieldCheck } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Ticket, Wallet, Users, Building2, BarChart3 } from 'lucide-react';
+import { getAdminStats } from '@/app/actions/stats-actions';
+import Link from 'next/link';
 
-export default function AdminDashboardPage() {
+export const dynamic = 'force-dynamic';
+
+export default async function AdminDashboardPage() {
+  const stats = await getAdminStats();
+
+  if (!stats) {
+    return (
+      <div className="space-y-8">
+        <PageHeader
+          title="Dashboard Administrateur"
+          description="Vue d'ensemble de la plateforme."
+        />
+        <Card>
+          <CardContent className="py-12 text-center">
+            <p className="text-muted-foreground">Impossible de charger les statistiques.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-8">
-      <PageHeader
-        title="Dashboard Administrateur"
-        description="Vue d'ensemble de la plateforme."
-      />
+      <div className="flex items-center justify-between">
+        <PageHeader
+          title="Dashboard Administrateur"
+          description="Vue d'ensemble de la plateforme."
+        />
+        <Button variant="outline" asChild>
+          <Link href="/admin/analytics">
+            <BarChart3 className="mr-2 h-4 w-4" />
+            Voir les détails
+          </Link>
+        </Button>
+      </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Revenus Totals (Plateforme)</CardTitle>
+            <CardTitle className="text-sm font-medium">Revenus Totals</CardTitle>
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">1,234,567 FCFA</div>
+            <div className="text-2xl font-bold">
+              {stats.totalRevenue.toLocaleString('fr-FR')} FCFA
+            </div>
             <p className="text-xs text-muted-foreground">
-              Commission totale de la plateforme
+              Chiffre d'affaires brut sur la plateforme
             </p>
           </CardContent>
         </Card>
@@ -35,9 +69,9 @@ export default function AdminDashboardPage() {
             <Ticket className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">+12,540</div>
+            <div className="text-2xl font-bold">{stats.totalTicketsSold.toLocaleString('fr-FR')}</div>
             <p className="text-xs text-muted-foreground">
-              Sur toute la plateforme
+              Sur {stats.totalSales.toLocaleString('fr-FR')} commandes
             </p>
           </CardContent>
         </Card>
@@ -46,25 +80,27 @@ export default function AdminDashboardPage() {
             <CardTitle className="text-sm font-medium">
               Total Organisateurs
             </CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">152</div>
+            <div className="text-2xl font-bold">{stats.totalOrganizers}</div>
             <p className="text-xs text-muted-foreground">
-              +5 depuis le mois dernier
+              Organisateurs inscrits
             </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Événements en Attente
+              Total Clients
             </CardTitle>
-            <ShieldCheck className="h-4 w-4 text-muted-foreground" />
+            <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">3</div>
-            <p className="text-xs text-muted-foreground">Prêts pour approbation</p>
+            <div className="text-2xl font-bold">{stats.totalCustomers}</div>
+            <p className="text-xs text-muted-foreground">
+              Clients inscrits
+            </p>
           </CardContent>
         </Card>
       </div>

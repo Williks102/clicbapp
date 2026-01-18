@@ -1,16 +1,20 @@
+
 'use server';
 
 import { auth } from '@/auth';
 import { firestore, firebaseAuth } from '@/lib/firebase-admin';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
+import type { Organizer } from '@/lib/types';
 
 // ==================== SCHÉMAS DE VALIDATION ====================
 
 const updateProfileSchema = z.object({
   name: z.string().min(2, 'Le nom doit contenir au moins 2 caractères'),
-  bio: z.string().optional(),
+  bio: z.string().max(500, 'La biographie est trop longue.').optional(),
+  avatar: z.string().optional(),
 });
+
 
 const updateEmailSchema = z.object({
   newEmail: z.string().email('Email invalide'),
@@ -46,7 +50,7 @@ export type ActionResult = {
 // ==================== ACTIONS ====================
 
 /**
- * Met à jour le profil utilisateur (nom, bio)
+ * Met à jour le profil utilisateur (nom, bio, avatar)
  */
 export async function updateUserProfile(data: UpdateProfileData): Promise<ActionResult> {
   try {
@@ -65,16 +69,16 @@ export async function updateUserProfile(data: UpdateProfileData): Promise<Action
     const userRef = firestore.collection('users').doc(session.user.id);
     await userRef.update({
       name: validatedData.name,
-      ...(validatedData.bio !== undefined && { bio: validatedData.bio }),
     });
 
     // Si c'est un organisateur, mettre à jour aussi le profil public
     const userDoc = await userRef.get();
     if (userDoc.exists && userDoc.data()?.role === 'organizer') {
-      await firestore.collection('organizers').doc(session.user.id).update({
-        name: validatedData.name,
-        ...(validatedData.bio !== undefined && { bio: validatedData.bio }),
-      });
+      const updates: Partial<Organizer> = { name: validatedData.name };
+      if (validatedData.bio !== undefined) updates.bio = validatedData.bio;
+      if (validatedData.avatar) updates.avatar = validatedData.avatar;
+      
+      await firestore.collection('organizers').doc(session.user.id).update(updates);
     }
 
     // Mettre à jour Firebase Auth
@@ -85,6 +89,8 @@ export async function updateUserProfile(data: UpdateProfileData): Promise<Action
     console.log('[UPDATE PROFILE] ✅ Success');
     revalidatePath('/dashboard/settings');
     revalidatePath('/dashboard/profile');
+    revalidatePath('/account/profile');
+    revalidatePath(`/organizers/${session.user.id}`);
     
     return { 
       success: true, 

@@ -15,46 +15,95 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { useDoc, useFirebase } from '@/firebase';
 import { useSession } from 'next-auth/react';
-import { useMemo } from 'react';
+import { useMemo, useEffect, useState } from 'react';
 import { doc } from 'firebase/firestore';
 import type { Organizer } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useForm, Controller } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+import { useToast } from '@/hooks/use-toast';
+import { updateUserProfile } from '@/app/actions/settings-actions';
+import { CloudinaryUploadWidget } from '@/components/cloudinary-upload-widget';
+import { Loader2 } from 'lucide-react';
+
+const profileSchema = z.object({
+  name: z.string().min(2, 'Le nom est requis.'),
+  bio: z.string().optional(),
+  avatar: z.string().optional(),
+});
+type ProfileFormValues = z.infer<typeof profileSchema>;
 
 export default function ProfilePage() {
-    const { data: session, status } = useSession();
-    const { firestore } = useFirebase();
-    const isLoadingSession = status === 'loading';
+  const { data: session, status, update: updateSession } = useSession();
+  const { firestore } = useFirebase();
+  const isLoadingSession = status === 'loading';
+  const { toast } = useToast();
+  const [isSaving, setIsSaving] = useState(false);
 
-    const organizerRef = useMemo(
-      () => (firestore && session?.user?.id ? doc(firestore, 'organizers', session.user.id) : null),
-      [firestore, session]
-    );
+  const organizerRef = useMemo(
+    () => (firestore && session?.user?.id ? doc(firestore, 'organizers', session.user.id) : null),
+    [firestore, session]
+  );
+  const { data: organizer, isLoading: isLoadingOrganizer } = useDoc<Organizer>(organizerRef);
 
-    const { data: organizer, isLoading: isLoadingOrganizer } = useDoc<Organizer>(organizerRef);
+  const form = useForm<ProfileFormValues>({
+    resolver: zodResolver(profileSchema),
+    defaultValues: { name: '', bio: '', avatar: '' },
+  });
 
-    const isLoading = isLoadingSession || isLoadingOrganizer;
-    
-    const organizerAvatar = organizer?.avatar ? PlaceHolderImages.find((i) => i.id === organizer.avatar) : null;
+  useEffect(() => {
+    if (organizer) {
+      const avatarUrl = organizer.avatar && !organizer.avatar.startsWith('http')
+        ? PlaceHolderImages.find(i => i.id === organizer.avatar)?.imageUrl
+        : organizer.avatar;
 
-    if (isLoading) {
-        return <ProfilePageSkeleton />;
+      form.reset({
+        name: organizer.name || '',
+        bio: organizer.bio || '',
+        avatar: avatarUrl || '',
+      });
     }
+  }, [organizer, form]);
+
+  const onSubmit = async (data: ProfileFormValues) => {
+    setIsSaving(true);
+    try {
+      const result = await updateUserProfile(data);
+      if (result.success) {
+        toast({ title: 'Profil mis à jour', description: 'Vos informations publiques ont été enregistrées.' });
+        await updateSession({ name: data.name }); // Update session name
+      } else {
+        toast({ title: 'Erreur', description: result.error, variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Erreur', description: 'Une erreur est survenue.', variant: 'destructive' });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const isLoading = isLoadingSession || isLoadingOrganizer;
+  const currentAvatarUrl = form.watch('avatar');
+
+  if (isLoading) {
+    return <ProfilePageSkeleton />;
+  }
 
   return (
-    <div className="space-y-8">
+    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
       <div className="flex items-start justify-between">
         <PageHeader
           title="Profil Organisateur"
           description="Gérez vos informations publiques."
         />
         {organizer && (
-            <Button asChild variant="outline">
-                <Link href={`/organizers/${organizer.id}`}>Voir mon profil public</Link>
-            </Button>
+          <Button asChild variant="outline">
+            <Link href={`/organizers/${organizer.id}`}>Voir mon profil public</Link>
+          </Button>
         )}
       </div>
       <Card>
@@ -65,79 +114,85 @@ export default function ProfilePage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <div className="flex items-center gap-4">
-            <Avatar className="h-20 w-20">
-                {organizerAvatar && (
-                    <AvatarImage src={organizerAvatar.imageUrl} alt="Avatar" data-ai-hint={organizerAvatar.imageHint} />
-                )}
-              <AvatarFallback>{organizer?.name?.charAt(0) || 'O'}</AvatarFallback>
-            </Avatar>
-            <div className='flex-1 space-y-2'>
-              <Label htmlFor="avatar-file">Photo de profil</Label>
-              <Input id="avatar-file" type="file" />
-              <p className="text-xs text-muted-foreground">PNG, JPG, GIF jusqu'à 10MB</p>
-            </div>
+          <div className="space-y-2">
+            <Label>Photo de profil</Label>
+            <Controller
+              name="avatar"
+              control={form.control}
+              render={({ field }) => (
+                <CloudinaryUploadWidget
+                  value={field.value}
+                  onChange={field.onChange}
+                  onRemove={() => field.onChange('')}
+                />
+              )}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="organizer-name">Nom de l'organisateur</Label>
-            <Input id="organizer-name" defaultValue={organizer?.name} />
+            <Input id="organizer-name" {...form.register('name')} />
+            {form.formState.errors.name && (
+              <p className="text-sm text-destructive">{form.formState.errors.name.message}</p>
+            )}
           </div>
           <div className="space-y-2">
             <Label htmlFor="organizer-bio">Biographie</Label>
             <Textarea
               id="organizer-bio"
-              defaultValue={organizer?.bio}
               className="min-h-[100px]"
+              {...form.register('bio')}
             />
+            {form.formState.errors.bio && (
+              <p className="text-sm text-destructive">{form.formState.errors.bio.message}</p>
+            )}
           </div>
         </CardContent>
         <CardFooter className="border-t px-6 py-4">
-          <Button>Enregistrer les modifications</Button>
+          <Button type="submit" disabled={isSaving}>
+            {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Enregistrer les modifications
+          </Button>
+        </CardFooter>
+      </Card>
+    </form>
+  );
+}
+
+function ProfilePageSkeleton() {
+  return (
+    <div className="space-y-8">
+      <div className="flex items-start justify-between">
+        <PageHeader
+          title="Profil Organisateur"
+          description="Gérez vos informations publiques."
+        />
+      </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="font-headline">Informations</CardTitle>
+          <CardDescription>
+            Ces informations seront visibles par les acheteurs sur votre page de profil.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="aspect-video w-full rounded-lg" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-32" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-4 w-24" />
+            <Skeleton className="h-24 w-full" />
+          </div>
+        </CardContent>
+        <CardFooter className="border-t px-6 py-4">
+          <Skeleton className="h-10 w-40" />
         </CardFooter>
       </Card>
     </div>
   );
-}
-
-
-function ProfilePageSkeleton() {
-    return (
-        <div className="space-y-8">
-            <div className="flex items-start justify-between">
-                <PageHeader
-                title="Profil Organisateur"
-                description="Gérez vos informations publiques."
-                />
-            </div>
-             <Card>
-                <CardHeader>
-                <CardTitle className="font-headline">Informations</CardTitle>
-                <CardDescription>
-                    Ces informations seront visibles par les acheteurs sur votre page de profil.
-                </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-6">
-                <div className="flex items-center gap-4">
-                    <Skeleton className="h-20 w-20 rounded-full" />
-                    <div className='flex-1 space-y-2'>
-                    <Skeleton className="h-4 w-24" />
-                    <Skeleton className="h-10 w-full" />
-                    <Skeleton className="h-3 w-40" />
-                    </div>
-                </div>
-                <div className="space-y-2">
-                    <Skeleton className="h-4 w-32" />
-                    <Skeleton className="h-10 w-full" />
-                </div>
-                <div className="space-y-2">
-                     <Skeleton className="h-4 w-24" />
-                    <Skeleton className="h-24 w-full" />
-                </div>
-                </CardContent>
-                <CardFooter className="border-t px-6 py-4">
-                    <Skeleton className="h-10 w-40" />
-                </CardFooter>
-            </Card>
-        </div>
-    )
 }
