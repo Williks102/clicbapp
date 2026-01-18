@@ -3,8 +3,8 @@ import type { NextConfig } from 'next';
 
 const cspHeader = `
     default-src 'self';
-    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://widget.cloudinary.com;
-    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
+    script-src 'self' 'unsafe-inline' https://widget.cloudinary.com;
+    style-src 'self' https://fonts.googleapis.com;
     img-src 'self' blob: data: https://res.cloudinary.com https://images.unsplash.com https://placehold.co https://picsum.photos https://firebasestorage.googleapis.com https://storage.googleapis.com https://api.qrserver.com https://lh3.googleusercontent.com;
     font-src 'self' https://fonts.gstatic.com;
     object-src 'none';
