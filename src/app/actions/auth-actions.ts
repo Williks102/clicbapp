@@ -5,6 +5,7 @@ import admin, { firestore, firebaseAuth } from '@/lib/firebase-admin';
 import { v4 as uuidv4 } from 'uuid';
 import { z } from 'zod';
 import type { User } from '@/lib/types';
+import { firebaseConfig } from '@/firebase/config';
 
 // Schéma de validation pour l'inscription
 const signupSchema = z.object({
@@ -41,33 +42,49 @@ export async function validateCredentials(credentials: unknown) {
   }
 
   const { email, password } = parsedCredentials.data;
+  const apiKey = firebaseConfig.apiKey;
+  const restApiUrl = `https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${apiKey}`;
 
   try {
-    const usersRef = firestore.collection("users");
-    const q = usersRef.where("email", "==", email);
-    const querySnapshot = await q.get();
+    // Étape 1: Valider le mot de passe avec l'API REST de Firebase Auth
+    const res = await fetch(restApiUrl, {
+      method: 'POST',
+      body: JSON.stringify({
+        email,
+        password,
+        returnSecureToken: true,
+      }),
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
-    if (querySnapshot.empty) {
+    const authData = await res.json();
+
+    if (!res.ok) {
+      console.error('Firebase Auth REST API Error:', authData.error.message);
+      return null; // Identifiants invalides
+    }
+
+    // Étape 2: Les identifiants sont valides, récupérer le profil depuis Firestore
+    const userId = authData.localId; // Ceci est le Firebase UID
+    const userDoc = await firestore.collection('users').doc(userId).get();
+
+    if (!userDoc.exists) {
+      console.error(`Utilisateur avec ID ${userId} authentifié mais non trouvé dans Firestore.`);
+      // On pourrait créer l'utilisateur ici s'il n'existe pas, mais pour la connexion, on considère que c'est une erreur.
       return null;
     }
 
-    const userDoc = querySnapshot.docs[0];
     const userData = userDoc.data() as User;
-    
-    // CONTOURNEMENT: Simule la vérification du mot de passe
-    // C'est une solution temporaire car bcrypt ne fonctionne pas ici.
-    const isPasswordValid = !!password;
-    
-    if (isPasswordValid) {
-        return {
-            id: userDoc.id,
-            email: userData.email,
-            name: userData.name,
-            role: userData.role || 'customer',
-        };
-    } else {
-        return null;
-    }
+
+    // Étape 3: Retourner l'objet utilisateur pour NextAuth
+    return {
+      id: userDoc.id,
+      email: userData.email,
+      name: userData.name,
+      role: userData.role || 'customer',
+    };
   } catch (error) {
     console.error("Erreur de validation des identifiants:", error);
     return null;
