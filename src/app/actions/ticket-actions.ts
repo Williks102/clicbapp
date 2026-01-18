@@ -1,3 +1,4 @@
+
 'use server';
 
 import { Resend } from 'resend';
@@ -6,7 +7,7 @@ import { firestore } from '@/lib/firebase-admin';
 import type { Event, Sale, PurchaseData, PurchaseResult, TicketTier, User } from '@/lib/types';
 
 const resend = new Resend(process.env.RESEND_API_KEY);
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL; // ex: 'admin@clicbillet.com'
+const ADMIN_EMAIL = 'admin@clicbillet.com';
 
 // ==================== HELPERS ====================
 
