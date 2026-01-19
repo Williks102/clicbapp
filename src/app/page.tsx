@@ -1,4 +1,3 @@
-
 'use client';
 import {
   useEffect,
@@ -18,6 +17,7 @@ import {
   PartyPopper,
   Tag,
 } from 'lucide-react';
+import { isSameDay } from 'date-fns';
 
 import { Button } from '@/components/ui/button';
 import EventCard from '@/components/event-card';
@@ -30,6 +30,7 @@ import type { Event } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { EventSearchForm } from '@/components/event-search-form';
 
 
 const categoryIcons: { [key: string]: React.ElementType } = {
@@ -45,10 +46,13 @@ const categoryIcons: { [key: string]: React.ElementType } = {
 export default function Home() {
   const { areServicesAvailable, firestore } = useFirebase();
   const isMobile = useIsMobile();
+  
+  // States for filters
   const [activeFilter, setActiveFilter] = useState('Tous');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterDate, setFilterDate] = useState<Date | undefined>();
+  const [filterLocation, setFilterLocation] = useState('');
 
-  // 🔍 Log de débogage
-  console.log('[Home Page] 🔥 areServicesAvailable:', areServicesAvailable);
 
   const eventsQuery = useMemo(
     () => (areServicesAvailable ? query(collection(firestore, 'events')) : null),
@@ -56,29 +60,12 @@ export default function Home() {
   );
   const { data: events, isLoading, error } = useCollection<Event>(eventsQuery);
 
-  // 🔍 Logs de débogage
-  console.log('[Home Page] 📊 Events data:', events);
-  console.log('[Home Page] ⏳ Is loading:', isLoading);
-  console.log('[Home Page] ❌ Error:', error);
-
-  // 🔍 Log pour vérifier les IDs des événements chargés
-  useEffect(() => {
-    if (events) {
-      console.log('📋 Événements chargés:', events.map(e => ({ id: e.id, name: e.name })));
-      if (events.length > 0) {
-        console.log('✅ Premier événement:', events[0]);
-        console.log('🔗 Lien vers le premier événement: /events/' + events[0].id);
-      }
-    }
-  }, [events]);
-
 
   const categoryFilters = useMemo(() => {
     if (!events) return [];
     const categoriesWithEvents = new Set(events.map(event => event.category));
     const filters = [{ name: 'Tous', icon: Tag }];
     
-    // Use a predefined order or sort them alphabetically
     const sortedCategories = Array.from(categoriesWithEvents).sort();
 
     sortedCategories.forEach(category => {
@@ -92,6 +79,13 @@ export default function Home() {
   }, [events]);
 
 
+  // Handler for search form submission
+  const handleSearch = (filters: { searchTerm: string; date: Date | undefined; location: string }) => {
+    setSearchTerm(filters.searchTerm);
+    setFilterDate(filters.date);
+    setFilterLocation(filters.location);
+  };
+  
   // Fonction pour vérifier si un événement est futur
   const isUpcomingEvent = (eventDate: string) => {
     const eventDateTime = new Date(eventDate).getTime();
@@ -99,17 +93,41 @@ export default function Home() {
     return eventDateTime >= now;
   };
 
-  // Filtrer les événements futurs ET par catégorie
+  // Filtrer les événements
   const filteredEvents = useMemo(() => {
-    // D'abord filtrer les événements futurs
-    const upcomingEvents = events?.filter(event => isUpcomingEvent(event.date));
+    let results = events || [];
 
-    // Ensuite filtrer par catégorie
-    if (activeFilter === 'Tous') {
-      return upcomingEvents;
+    // 1. Filter only upcoming events
+    results = results.filter(event => isUpcomingEvent(event.date));
+
+    // 2. Filter by category
+    if (activeFilter !== 'Tous') {
+      results = results.filter(event => event.category === activeFilter);
     }
-    return upcomingEvents?.filter(event => event.category === activeFilter);
-  }, [events, activeFilter]);
+    
+    // 3. Filter by search term (name)
+    if (searchTerm) {
+      results = results.filter(event =>
+        event.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    // 4. Filter by date
+    if (filterDate) {
+      results = results.filter(event => 
+        isSameDay(new Date(event.date), filterDate)
+      );
+    }
+
+    // 5. Filter by location
+    if (filterLocation) {
+        results = results.filter(event => 
+            event.location.toLowerCase().includes(filterLocation.toLowerCase())
+        );
+    }
+
+    return results;
+  }, [events, activeFilter, searchTerm, filterDate, filterLocation]);
 
 
   return (
@@ -165,13 +183,17 @@ export default function Home() {
            <div className="container mx-auto px-4">
             <div className="mb-8 text-center">
                 <h2 className="font-headline text-3xl font-bold tracking-tight">
-                Événements à la une
+                Trouvez votre prochain événement
                 </h2>
                 <p className="text-lg text-muted-foreground">
-                Découvrez les événements les plus populaires du moment
+                Recherchez et filtrez pour découvrir les événements qui vous correspondent.
                 </p>
             </div>
+            
+            {/* Search Form */}
+            <EventSearchForm onSearch={handleSearch} />
 
+            {/* Category Filters */}
              <div className="mb-8 flex flex-wrap items-center justify-center gap-2">
                 {categoryFilters.map(({ name, icon: Icon }) => (
                     <Button
@@ -202,7 +224,7 @@ export default function Home() {
             {events && filteredEvents?.length === 0 && !isLoading && (
               <div className="col-span-full flex h-40 flex-col items-center justify-center rounded-lg border-2 border-dashed">
                 <p className="text-muted-foreground">
-                  Aucun événement trouvé dans cette catégorie.
+                  Aucun événement trouvé pour les filtres actuels.
                 </p>
               </div>
             )}
