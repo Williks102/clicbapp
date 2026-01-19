@@ -63,7 +63,9 @@ export default function Home() {
 
   const categoryFilters = useMemo(() => {
     if (!events) return [];
-    const categoriesWithEvents = new Set(events.map(event => event.category));
+    // Use a Set to get unique categories, and filter out any falsy values (null, undefined, '')
+    const categoriesWithEvents = new Set(events.map(event => event.category).filter(Boolean) as string[]);
+    
     const filters = [{ name: 'Tous', icon: Tag }];
     
     const sortedCategories = Array.from(categoriesWithEvents).sort();
@@ -95,39 +97,36 @@ export default function Home() {
 
   // Filtrer les événements
   const filteredEvents = useMemo(() => {
-    let results = events || [];
+    if (!events) {
+      return [];
+    }
 
-    // 1. Filter only upcoming events
-    results = results.filter(event => isUpcomingEvent(event.date));
+    let results = events.filter(event => event.date && isUpcomingEvent(event.date));
 
-    // 2. Filter by category
     if (activeFilter !== 'Tous') {
       results = results.filter(event => event.category === activeFilter);
     }
     
-    // 3. Filter by search term (name)
     if (searchTerm) {
       results = results.filter(event =>
-        event.name.toLowerCase().includes(searchTerm.toLowerCase())
+        event.name?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
-    // 4. Filter by date
     if (filterDate) {
       results = results.filter(event => 
-        isSameDay(new Date(event.date), filterDate)
+        event.date && isSameDay(new Date(event.date), filterDate)
       );
     }
 
-    // 5. Filter by location
     if (filterLocation) {
         results = results.filter(event => 
-            event.location.toLowerCase().includes(filterLocation.toLowerCase())
+            event.location?.toLowerCase().includes(filterLocation.toLowerCase())
         );
     }
 
     return results;
-  }, [events, activeFilter, searchTerm, filterDate, filterLocation]);
+}, [events, activeFilter, searchTerm, filterDate, filterLocation]);
 
 
   return (
