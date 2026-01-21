@@ -46,5 +46,11 @@
     "description": "A profile picture of another event organizer.",
     "imageUrl": "https://images.unsplash.com/photo-1573497019940-1c28c88b4f3e?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwzfHxjb3Jwb3JhdGUlMjBwb3J0cmFpdHxlbnwwfHx8fDE3NjM1ODg2MDJ8MA&ixlib=rb-4.1.0&q=80&w=1080",
     "imageHint": "corporate portrait"
+  },
+  {
+    "id": "livestream-1",
+    "description": "A person streaming live video from a home studio setup.",
+    "imageUrl": "https://images.unsplash.com/photo-1593344484962-796b36d4134c?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw0fHxsaXZlJTIwc3RyZWFtfGVufDB8fHx8MTc2MzU4ODYwMnww&ixlib=rb-4.1.0&q=80&w=1080",
+    "imageHint": "live stream"
   }
 ]

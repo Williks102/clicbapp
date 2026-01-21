@@ -1,4 +1,5 @@
 
+
 export type TicketTier = {
   id: string;
   name: string;
@@ -72,6 +73,17 @@ export type User = {
   deleted?: boolean;
   deletedAt?: string;
 }
+
+export type Livestream = {
+  id: string;
+  eventId: string;
+  title: string;
+  description: string;
+  startTime: string;
+  status: 'upcoming' | 'live' | 'finished';
+  ticketPrice: number;
+  coverImage: string;
+};
 
 // ==================== ACTION TYPES ====================
 
