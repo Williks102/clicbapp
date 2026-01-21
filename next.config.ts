@@ -26,7 +26,7 @@ const nextConfig: NextConfig = {
         base-uri 'self';
         form-action 'self';
         frame-ancestors 'none';
-        connect-src 'self' https://*.googleapis.com https://*.firebaseapp.com https://vitals.vercel-insights.com https://api.cloudinary.com;
+        connect-src 'self' https://*.googleapis.com https://*.firebaseapp.com https://vitals.vercel-insights.com https://api.cloudinary.com https://*.cloudworkstations.dev wss://*.cloudworkstations.dev ${isDev ? 'ws:' : ''};
         frame-src 'self' https://widget.cloudinary.com;
         upgrade-insecure-requests;
     `.replace(/\s{2,}/g, ' ').trim();
