@@ -269,6 +269,10 @@
           "type": "string",
           "description": "Reference to the Event this livestream is for."
         },
+        "organizerId": {
+          "type": "string",
+          "description": "Reference to the Organizer of the event. (Denormalized for security rules)"
+        },
         "title": {
           "type": "string",
           "description": "Title of the livestream."
@@ -303,6 +307,7 @@
       "required": [
         "id",
         "eventId",
+        "organizerId",
         "title",
         "startTime",
         "status",

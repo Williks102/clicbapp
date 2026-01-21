@@ -77,6 +77,7 @@ export type User = {
 export type Livestream = {
   id: string;
   eventId: string;
+  organizerId: string;
   title: string;
   description: string;
   startTime: string;
