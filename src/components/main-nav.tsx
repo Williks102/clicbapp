@@ -17,6 +17,7 @@ import {
   SheetContent,
   SheetTrigger,
   SheetClose,
+  SheetTitle,
 } from '@/components/ui/sheet';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
@@ -167,6 +168,7 @@ export default function MainNav() {
                 </Button>
               </SheetTrigger>
               <SheetContent side="right">
+                <SheetTitle className="sr-only">Menu</SheetTitle>
                 <div className="flex h-full flex-col p-6">
                   <Link href="/" className="mb-8 flex items-center gap-2">
                     <svg
