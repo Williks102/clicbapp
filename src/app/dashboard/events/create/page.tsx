@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -100,6 +98,16 @@ export default function CreateEventPage() {
     [areServicesAvailable, firestore]
   );
   const { data: categories, isLoading: isLoadingCategories } = useCollection<Category>(categoriesQuery);
+
+  const uniqueCategories = useMemo(() => {
+    if (!categories) return [];
+    const seen = new Set();
+    return categories.filter(cat => {
+      const duplicate = seen.has(cat.name);
+      seen.add(cat.name);
+      return !duplicate;
+    });
+  }, [categories]);
 
   const form = useForm<EventFormValues>({
     resolver: zodResolver(formSchema),
@@ -239,7 +247,7 @@ export default function CreateEventPage() {
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {categories?.map((cat) => (
+                          {uniqueCategories?.map((cat) => (
                             <SelectItem key={cat.id} value={cat.name}>
                               {cat.name}
                             </SelectItem>
