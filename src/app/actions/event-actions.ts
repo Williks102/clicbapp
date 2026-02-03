@@ -3,10 +3,13 @@
 
 import { z } from 'zod';
 import { auth } from '@/auth';
-import { firestore } from '@/lib/firebase-admin'; // ✅ Plus besoin de 'storage'
+import { firestore } from '@/lib/firebase-admin';
 import { revalidatePath } from 'next/cache';
 import type { Event, TicketTier, LivestreamAccess, ActionResult } from '@/lib/types';
 import type { EventFormValues } from '@/app/dashboard/events/create/page';
+import { Resend } from 'resend';
+
+const resend = new Resend(process.env.RESEND_API_KEY);
 
 // ==================== SCHEMAS ====================
 
@@ -315,28 +318,104 @@ export async function checkLivestreamAccess(eventId: string): Promise<boolean> {
   }
 }
 
+async function sendLivestreamAccessEmail({
+  user,
+  event,
+}: {
+  user: { name?: string | null; email?: string | null };
+  event: Event;
+}) {
+  if (!user.email || !user.name || !event.livestream) return;
+
+  const eventDate = new Date(event.date);
+  const formattedDate = eventDate.toLocaleDateString('fr-FR', {
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric',
+  });
+  const formattedTime = eventDate.toLocaleTimeString('fr-FR', {
+    hour: '2-digit', minute: '2-digit',
+  });
+
+  const eventUrl = `${process.env.NEXT_PUBLIC_BASE_URL || 'https://clicbillet.com'}/events/${event.id}`;
+  const subject = `📺 Accès confirmé pour le direct : ${event.name}`;
+
+  const htmlBody = `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="utf-8">
+    <style>
+      body { font-family: sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: auto; padding: 20px; }
+      .header { background: #667eea; color: white; padding: 20px; text-align: center; border-radius: 10px 10px 0 0; }
+      .content { background: #f7f7f7; padding: 20px; }
+      .info-card { background: #fff; border-radius: 10px; padding: 20px; margin: 20px 0; border: 1px solid #e0e0e0;}
+      .event-name { font-size: 24px; font-weight: bold; color: #667eea; margin-bottom: 15px; }
+      .info-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; }
+      .action-button { background-color: #667eea; color: white !important; padding: 15px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; margin-top: 20px;}
+      .footer { text-align: center; padding: 20px; color: #666; font-size: 14px; }
+    </style>
+  </head>
+  <body>
+    <div class="header"><h1>ClicBillet</h1><p>Confirmation d'accès au direct</p></div>
+    <div class="content">
+      <p>Bonjour ${user.name},</p>
+      <p>Merci pour votre achat ! Votre accès au direct pour l'événement <strong>${event.name}</strong> est confirmé.</p>
+      
+      <div class="info-card">
+        <div class="event-name">${event.livestream.title}</div>
+        <div class="info-row"><span>Événement</span><span>${event.name}</span></div>
+        <div class="info-row"><span>📅 Date</span><span>${formattedDate} à ${formattedTime}</span></div>
+        <div class="info-row"><strong>Total Payé</strong><strong>${event.livestream.ticketPrice.toLocaleString('fr-FR')} F CFA</strong></div>
+      </div>
+
+      <div style="text-align: center;">
+        <p>Pour regarder le direct, connectez-vous à votre compte ClicBillet et cliquez sur le bouton ci-dessous :</p>
+        <a href="${eventUrl}" class="action-button">Regarder le direct</a>
+      </div>
+
+      <p style="margin-top: 20px;">À bientôt !<br><strong>L'équipe ClicBillet</strong></p>
+    </div>
+    <div class="footer"><p>© ${new Date().getFullYear()} ClicBillet</p></div>
+  </body>
+  </html>
+  `;
+
+  await resend.emails.send({
+    from: 'ClicBillet <contact@monticket.online>',
+    to: user.email,
+    subject,
+    html: htmlBody,
+  });
+}
+
+
 /**
  * Simulates purchasing access to a livestream and records it.
  */
-export async function purchaseLivestreamAccess(eventId: string, price: number): Promise<ActionResult> {
+export async function purchaseLivestreamAccess(eventId: string): Promise<ActionResult> {
   try {
     const session = await auth();
-    if (!session?.user?.id) {
+    if (!session?.user?.id || !session.user.email) {
       return { success: false, error: 'Vous devez être connecté pour acheter un accès.' };
     }
+    
+    const eventDoc = await firestore.collection('events').doc(eventId).get();
+    if (!eventDoc.exists) {
+        return { success: false, error: 'Événement introuvable.' };
+    }
+    const event = { id: eventDoc.id, ...eventDoc.data() } as Event;
 
-    // Check if user already has access
+    if (!event.livestream?.enabled || event.livestream.ticketPrice === undefined) {
+        return { success: false, error: 'Le direct n\'est pas disponible ou son prix n\'est pas défini.' };
+    }
+    const price = event.livestream.ticketPrice;
+
     const alreadyHasAccess = await checkLivestreamAccess(eventId);
     if (alreadyHasAccess) {
       return { success: false, error: 'Vous avez déjà acheté un accès pour ce direct.' };
     }
     
-    // --- Step 1: Payment processing (simulated) ---
-    // In a real app, you would integrate Stripe, PayPal, etc. here.
     console.log(`[PURCHASE LIVESTREAM] Simulating payment of ${price} FCFA for user ${session.user.id}`);
 
-
-    // --- Step 2: Record the purchase and access ---
     const accessData: Omit<LivestreamAccess, 'id'> = {
       userId: session.user.id,
       eventId: eventId,
@@ -347,10 +426,16 @@ export async function purchaseLivestreamAccess(eventId: string, price: number): 
     await firestore.collection('livestream_access').add(accessData);
     console.log(`[PURCHASE LIVESTREAM] Access granted for event ${eventId} to user ${session.user.id}`);
 
-    // --- Step 3: Revalidate path to update UI ---
+    try {
+      await sendLivestreamAccessEmail({ user: session.user, event });
+      console.log(`[PURCHASE LIVESTREAM] Confirmation email sent to ${session.user.email}`);
+    } catch (emailError) {
+      console.error('[PURCHASE LIVESTREAM] ⚠️ Email sending failed:', emailError);
+    }
+
     revalidatePath(`/events/${eventId}`);
 
-    return { success: true, message: 'Accès au direct acheté avec succès !' };
+    return { success: true, message: 'Accès au direct acheté avec succès ! Un email de confirmation a été envoyé.' };
 
   } catch (error) {
     console.error('[PURCHASE LIVESTREAM] ❌ Error:', error);
