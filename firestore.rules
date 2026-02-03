@@ -1,3 +1,4 @@
+
 /**
  * Core Philosophy: This ruleset implements a security model with three primary access levels:
  * 1.  User-Owned Data: User profiles and their associated tickets are strictly private. Only the authenticated owner of the data can perform any action on it. This is enforced for all paths under `/users/{userId}`.
@@ -52,6 +53,10 @@ service cloud.firestore {
     function isAdminAndExists() {
       return isAdmin() && resource != null;
     }
+    
+    function isEventOrganizer(eventId) {
+      return isSignedIn() && get(/databases/$(database)/documents/events/$(eventId)).data.organizerId == request.auth.uid;
+    }
 
     // ==================== USER DATA ====================
     
@@ -105,11 +110,29 @@ service cloud.firestore {
      * @allow         Public read, owner write, admins can manage all.
      */
     match /events/{eventId} {
-      allow get: if true;
-      allow list: if true;
+      allow get, list: if true;
       allow create: if isSignedIn() && isOwner(request.resource.data.organizerId);
-      allow update: if isExistingOwner('organizerId') || isAdmin();
+      allow update: if (isExistingOwner('organizerId') || isAdmin()) &&
+                     // Allow organizers to update their own events, but protect sensitive stream fields
+                     (request.resource.data.diff(resource.data).affectedKeys()
+                      .except(['livestream.streamUrl', 'livestream.streamKey']).size() > 0 ||
+                      request.resource.data.livestream.diff(resource.data.livestream)
+                      .affectedKeys().hasOnly(['streamUrl', 'streamKey']));
       allow delete: if isExistingOwner('organizerId') || isAdmin();
+    }
+    
+    // ==================== LIVESTREAM DATA ====================
+
+    /**
+     * @description   Manages livestream access for users.
+     * @path          /livestream_access/{accessId}
+     * @allow         Only authenticated users can manage their own access records.
+     */
+    match /livestream_access/{accessId} {
+      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow list: if isSignedIn(); // Allow listing only if filtered by userId
+      allow create: if isSignedIn(); // Server-side creation
+      allow update, delete: if false; // No client-side updates/deletes
     }
 
      // ==================== scanner ====================

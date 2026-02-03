@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -10,6 +11,9 @@ import {
   Trash,
   PlusCircle,
   Video,
+  Key,
+  Eye,
+  Settings2,
 } from 'lucide-react';
 import {
   generateEventDescription,
@@ -66,14 +70,15 @@ const formSchema = z.object({
   eventDate: z.string().min(1, 'La date est requise.'),
   eventLocation: z.string().min(1, 'Le lieu est requis.'),
   eventDescription: z.string().min(10, 'La description est trop courte.'),
-  eventDescriptionKeywords: z
-    .string()
-    .optional(),
+  eventDescriptionKeywords: z.string().optional(),
   tickets: z.array(ticketSchema).min(1, 'Au moins un type de billet est requis.'),
   image: z.string().url().optional(),
   livestreamEnabled: z.boolean().default(false),
   livestreamTitle: z.string().optional(),
   livestreamTicketPrice: z.coerce.number().optional(),
+  watchUrl: z.string().url('Veuillez entrer une URL valide').optional().or(z.literal('')),
+  streamUrl: z.string().url('Veuillez entrer une URL valide').optional().or(z.literal('')),
+  streamKey: z.string().optional(),
 }).refine(data => {
     if (data.livestreamEnabled) {
         return !!data.livestreamTitle && data.livestreamTicketPrice !== undefined && data.livestreamTicketPrice >= 0;
@@ -121,7 +126,10 @@ export default function CreateEventPage() {
       tickets: [{ name: 'Standard', price: 10000, quantity: 100 }],
       livestreamEnabled: false,
       livestreamTitle: '',
-      livestreamTicketPrice: 0
+      livestreamTicketPrice: 0,
+      watchUrl: '',
+      streamUrl: '',
+      streamKey: '',
     },
   });
 
@@ -452,10 +460,10 @@ export default function CreateEventPage() {
             <CardHeader>
               <CardTitle className="font-headline">Streaming en Direct</CardTitle>
               <CardDescription>
-                Proposez un accès en direct à votre événement.
+                Proposez un accès payant en direct à votre événement.
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               <FormField
                 control={form.control}
                 name="livestreamEnabled"
@@ -479,37 +487,88 @@ export default function CreateEventPage() {
                 )}
               />
               {livestreamEnabled && (
-                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="livestreamTitle"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Titre du direct</FormLabel>
-                        <FormControl>
-                          <Input placeholder="ex: Le Concert en Direct" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={form.control}
-                    name="livestreamTicketPrice"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Prix de l'accès (FCFA)</FormLabel>
-                        <FormControl>
-                          <Input type="number" placeholder="5000" {...field} />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                <div className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                        <FormField
+                            control={form.control}
+                            name="livestreamTitle"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Titre du direct</FormLabel>
+                                <FormControl>
+                                <Input placeholder="ex: Le Concert en Direct" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                        <FormField
+                            control={form.control}
+                            name="livestreamTicketPrice"
+                            render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Prix de l'accès (FCFA)</FormLabel>
+                                <FormControl>
+                                <Input type="number" placeholder="5000" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                            </FormItem>
+                            )}
+                        />
+                    </div>
+                    <FormField
+                        control={form.control}
+                        name="watchUrl"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="flex items-center gap-2"><Eye className="h-4 w-4" /> URL de visionnage (publique)</FormLabel>
+                                <FormControl>
+                                    <Input placeholder="https://youtube.com/live/..." {...field} />
+                                </FormControl>
+                                <FormDescription>
+                                    Le lien où les spectateurs regarderont le direct.
+                                </FormDescription>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="streamUrl"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="flex items-center gap-2"><Settings2 className="h-4 w-4" /> URL du serveur de streaming (RTMP)</FormLabel>
+                                <FormControl>
+                                    <Input placeholder="rtmp://a.rtmp.youtube.com/live2" {...field} />
+                                </FormControl>
+                                <FormDescription>
+                                    L'URL à utiliser dans votre logiciel de diffusion (ex: OBS).
+                                </FormDescription>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
+                    <FormField
+                        control={form.control}
+                        name="streamKey"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel className="flex items-center gap-2"><Key className="h-4 w-4" /> Clé de streaming</FormLabel>
+                                <FormControl>
+                                    <Input type="password" placeholder="xxxx-xxxx-xxxx-xxxx" {...field} />
+                                </FormControl>
+                                <FormDescription>
+                                    Votre clé de streaming secrète fournie par votre service (YouTube, Vimeo, etc.).
+                                </FormDescription>
+                                <FormMessage />
+                            </FormItem>
+                        )}
+                    />
                 </div>
               )}
             </CardContent>
           </Card>
+
 
           <div className="flex justify-end">
             <Button type="submit" disabled={form.formState.isSubmitting}>

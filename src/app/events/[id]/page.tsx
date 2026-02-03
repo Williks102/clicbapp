@@ -302,9 +302,27 @@ export default function EventPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                       <p className="text-sm text-muted-foreground">
-                        Cet événement sera diffusé en direct. Achetez votre accès pour le regarder en ligne.
-                      </p>
+                      {event.livestream.isLive && event.livestream.watchUrl ? (
+                         <div className="space-y-3">
+                            <div className="flex items-center gap-2">
+                                <div className="relative flex h-3 w-3">
+                                    <div className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></div>
+                                    <div className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></div>
+                                </div>
+                                <span className="font-semibold text-red-600">EN DIRECT MAINTENANT</span>
+                            </div>
+                            <Button asChild className="w-full">
+                                <Link href={event.livestream.watchUrl} target="_blank" rel="noopener noreferrer">
+                                    Regarder le direct
+                                </Link>
+                            </Button>
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground">
+                          Cet événement sera diffusé en direct. Achetez votre accès pour le regarder en ligne.
+                        </p>
+                      )}
+                      
                       <div className="flex items-center justify-between rounded-lg border p-4">
                         <div>
                           <p className="font-semibold">{event.livestream.title}</p>
@@ -314,7 +332,7 @@ export default function EventPage() {
                             {event.livestream.ticketPrice.toLocaleString('fr-FR')} FCFA
                           </p>
                           <Button disabled>
-                            Acheter
+                            Acheter l'accès
                           </Button>
                         </div>
                       </div>

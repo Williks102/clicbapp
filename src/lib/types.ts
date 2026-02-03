@@ -21,6 +21,10 @@ export type Event = {
     enabled: boolean;
     title: string;
     ticketPrice: number;
+    isLive?: boolean;
+    watchUrl?: string;
+    streamUrl?: string;
+    streamKey?: string;
   };
 };
 

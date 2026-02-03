@@ -1,3 +1,4 @@
+
 'use server';
 
 import { z } from 'zod';
@@ -28,6 +29,9 @@ const formSchema = z.object({
   livestreamEnabled: z.boolean().default(false),
   livestreamTitle: z.string().optional(),
   livestreamTicketPrice: z.coerce.number().optional(),
+  watchUrl: z.string().url('Veuillez entrer une URL valide').optional().or(z.literal('')),
+  streamUrl: z.string().url('Veuillez entrer une URL valide').optional().or(z.literal('')),
+  streamKey: z.string().optional(),
 }).refine(data => {
     if (data.livestreamEnabled) {
         return !!data.livestreamTitle && data.livestreamTicketPrice !== undefined && data.livestreamTicketPrice >= 0;
@@ -70,7 +74,10 @@ export async function createEvent(data: EventFormValues) {
       image,
       livestreamEnabled,
       livestreamTitle,
-      livestreamTicketPrice
+      livestreamTicketPrice,
+      watchUrl,
+      streamUrl,
+      streamKey,
     } = validatedData.data;
 
     // ✅ L'image vient directement du Cloudinary widget (URL)
@@ -101,7 +108,11 @@ export async function createEvent(data: EventFormValues) {
       newEvent.livestream = {
         enabled: true,
         title: livestreamTitle,
-        ticketPrice: livestreamTicketPrice
+        ticketPrice: livestreamTicketPrice,
+        isLive: false,
+        watchUrl: watchUrl || '',
+        streamUrl: streamUrl || '',
+        streamKey: streamKey || '',
       }
     }
 
@@ -169,7 +180,10 @@ export async function updateEvent(eventId: string, data: EventFormValues) {
       image,
       livestreamEnabled,
       livestreamTitle,
-      livestreamTicketPrice
+      livestreamTicketPrice,
+      watchUrl,
+      streamUrl,
+      streamKey,
     } = validatedData.data;
 
     // ✅ Utiliser nouvelle image ou garder l'ancienne
@@ -199,13 +213,21 @@ export async function updateEvent(eventId: string, data: EventFormValues) {
       updatedEventData.livestream = {
         enabled: true,
         title: livestreamTitle,
-        ticketPrice: livestreamTicketPrice
+        ticketPrice: livestreamTicketPrice,
+        isLive: eventData.livestream?.isLive || false, // preserve existing live status
+        watchUrl: watchUrl || '',
+        streamUrl: streamUrl || '',
+        streamKey: streamKey || '',
       };
     } else {
       updatedEventData.livestream = {
         enabled: false,
         title: '',
-        ticketPrice: 0
+        ticketPrice: 0,
+        isLive: false,
+        watchUrl: '',
+        streamUrl: '',
+        streamKey: '',
       };
     }
 
@@ -227,5 +249,44 @@ export async function updateEvent(eventId: string, data: EventFormValues) {
       throw new Error(`Erreur mise à jour événement: ${error.message}`);
     }
     throw new Error('Une erreur inconnue est survenue lors de la mise à jour de l\'événement.');
+  }
+}
+
+
+export async function setLiveStatus(eventId: string, isLive: boolean): Promise<{ success: boolean; error?: string }> {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      throw new Error('Non authentifié.');
+    }
+
+    const eventDocRef = firestore.collection('events').doc(eventId);
+    const eventDoc = await eventDocRef.get();
+
+    if (!eventDoc.exists) {
+      throw new Error('Événement introuvable.');
+    }
+
+    const eventData = eventDoc.data() as Event;
+    if (eventData.organizerId !== session.user.id) {
+      throw new Error('Non autorisé.');
+    }
+
+    if (!eventData.livestream?.enabled) {
+        throw new Error('Le livestream n\'est pas activé pour cet événement.');
+    }
+
+    await eventDocRef.update({
+      'livestream.isLive': isLive,
+    });
+
+    revalidatePath(`/events/${eventId}`);
+    revalidatePath(`/dashboard/events/edit/${eventId}`);
+
+    return { success: true };
+  } catch (error) {
+    console.error(`[SET LIVE STATUS] ❌ Error:`, error);
+    const errorMessage = error instanceof Error ? error.message : 'Erreur lors de la mise à jour du statut';
+    return { success: false, error: errorMessage };
   }
 }
