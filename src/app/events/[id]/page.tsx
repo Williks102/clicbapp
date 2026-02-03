@@ -19,6 +19,16 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { Badge } from '@/components/ui/badge';
 import MainNav from '@/components/main-nav';
 import Footer from '@/components/footer';
@@ -53,6 +63,7 @@ export default function EventPage() {
   const [hasLivestreamAccess, setHasLivestreamAccess] = useState(false);
   const [isCheckingAccess, setIsCheckingAccess] = useState(true);
   const [isBuyingAccess, setIsBuyingAccess] = useState(false);
+  const [showLivestreamPurchaseDialog, setShowLivestreamPurchaseDialog] = useState(false);
 
 
   const { areServicesAvailable, firestore } = useFirebase();
@@ -172,12 +183,19 @@ export default function EventPage() {
     }
 
     if (!event?.livestream) return;
+    
+    setShowLivestreamPurchaseDialog(true);
+};
 
+const processLivestreamPurchase = async () => {
+    if (!event?.livestream) return;
+
+    setShowLivestreamPurchaseDialog(false);
     setIsBuyingAccess(true);
     try {
         const result = await purchaseLivestreamAccess(event.id, event.livestream.ticketPrice);
         if (result.success) {
-            toast({ title: "Achat réussi!", description: "Vous avez maintenant accès au direct. La page va s'actualiser." });
+            toast({ title: "Achat réussi!", description: "Vous avez maintenant accès au direct." });
             setHasLivestreamAccess(true);
         } else {
             toast({ title: "Erreur", description: result.error, variant: "destructive" });
@@ -187,7 +205,7 @@ export default function EventPage() {
     } finally {
         setIsBuyingAccess(false);
     }
-};
+}
 
 
   // Gérer l'activation automatique du checkout quand l'utilisateur devient actif
@@ -422,6 +440,38 @@ export default function EventPage() {
         </Sheet>
       </main>
       )}
+
+      {event && (
+        <AlertDialog open={showLivestreamPurchaseDialog} onOpenChange={setShowLivestreamPurchaseDialog}>
+            <AlertDialogContent>
+                <AlertDialogHeader>
+                    <AlertDialogTitle>Confirmer votre achat</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        Vous êtes sur le point d'acheter un accès au direct pour l'événement "{event.name}".
+                    </AlertDialogDescription>
+                </AlertDialogHeader>
+                <div className="py-4">
+                    <div className="flex justify-between items-center bg-muted p-4 rounded-lg">
+                        <span className="font-semibold">{event.livestream?.title}</span>
+                        <span className="text-xl font-bold text-primary">
+                            {event.livestream?.ticketPrice.toLocaleString('fr-FR')} FCFA
+                        </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-2">
+                        En cliquant sur "Confirmer et Payer", vous acceptez nos conditions de vente. L'accès sera lié à votre compte.
+                    </p>
+                </div>
+                <AlertDialogFooter>
+                    <AlertDialogCancel disabled={isBuyingAccess}>Annuler</AlertDialogCancel>
+                    <AlertDialogAction onClick={processLivestreamPurchase} disabled={isBuyingAccess}>
+                        {isBuyingAccess && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                        {isBuyingAccess ? 'Paiement en cours...' : 'Confirmer et Payer'}
+                    </AlertDialogAction>
+                </AlertDialogFooter>
+            </AlertDialogContent>
+        </AlertDialog>
+      )}
+
       <Footer />
     </div>
   );
