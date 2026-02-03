@@ -14,6 +14,7 @@ import {
   Key,
   Eye,
   Settings2,
+  Lightbulb,
 } from 'lucide-react';
 import {
   generateEventDescription,
@@ -55,6 +56,7 @@ import { useCollection, useFirebase } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import type { Category } from '@/lib/types';
 import { Switch } from '@/components/ui/switch';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 
 const ticketSchema = z.object({
@@ -488,6 +490,16 @@ export default function CreateEventPage() {
               />
               {livestreamEnabled && (
                 <div className="space-y-4">
+                    <Alert>
+                        <Lightbulb className="h-4 w-4" />
+                        <AlertTitle>Conseils pour l'hébergement</AlertTitle>
+                        <AlertDescription>
+                            <ul className="list-disc pl-5 mt-2 space-y-1">
+                                <li><b>YouTube Live (non répertorié) :</b> Idéal pour commencer, gratuit et simple à configurer.</li>
+                                <li><b>Vimeo (Pro/Premium) :</b> Recommandé pour une meilleure qualité et une expérience sans publicité pour vos directs payants.</li>
+                            </ul>
+                        </AlertDescription>
+                    </Alert>
                     <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                         <FormField
                             control={form.control}
