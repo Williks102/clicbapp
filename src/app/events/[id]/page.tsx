@@ -1,9 +1,10 @@
 
+
 'use client';
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { Calendar, MapPin, Ticket } from 'lucide-react';
+import { Calendar, MapPin, Ticket, Video } from 'lucide-react';
 import { notFound, useRouter, useParams } from 'next/navigation';
 import { useEffect, useMemo } from 'react';
 
@@ -292,6 +293,34 @@ export default function EventPage() {
                     ))}
                   </CardContent>
                 </Card>
+
+                 {event.livestream?.enabled && (
+                  <Card className="mt-8">
+                    <CardHeader>
+                      <CardTitle className="flex items-center gap-2 font-headline">
+                        <Video className="h-6 w-6" /> Accès au Direct
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                       <p className="text-sm text-muted-foreground">
+                        Cet événement sera diffusé en direct. Achetez votre accès pour le regarder en ligne.
+                      </p>
+                      <div className="flex items-center justify-between rounded-lg border p-4">
+                        <div>
+                          <p className="font-semibold">{event.livestream.title}</p>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <p className="font-bold">
+                            {event.livestream.ticketPrice.toLocaleString('fr-FR')} FCFA
+                          </p>
+                          <Button disabled>
+                            Acheter
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
             </div>
           </div>

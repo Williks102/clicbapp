@@ -25,6 +25,17 @@ const formSchema = z.object({
   eventDescriptionKeywords: z.string().optional(),
   tickets: z.array(ticketSchema).min(1, 'Au moins un type de billet est requis.'),
   image: z.string().url().optional(), // ✅ URL Cloudinary
+  livestreamEnabled: z.boolean().default(false),
+  livestreamTitle: z.string().optional(),
+  livestreamTicketPrice: z.coerce.number().optional(),
+}).refine(data => {
+    if (data.livestreamEnabled) {
+        return !!data.livestreamTitle && data.livestreamTicketPrice !== undefined && data.livestreamTicketPrice >= 0;
+    }
+    return true;
+}, {
+    message: 'Le titre et le prix du livestream sont requis si le streaming est activé.',
+    path: ['livestreamTitle'],
 });
 
 // ==================== CREATE EVENT ====================
@@ -57,6 +68,9 @@ export async function createEvent(data: EventFormValues) {
       eventDescription,
       tickets,
       image,
+      livestreamEnabled,
+      livestreamTitle,
+      livestreamTicketPrice
     } = validatedData.data;
 
     // ✅ L'image vient directement du Cloudinary widget (URL)
@@ -82,6 +96,14 @@ export async function createEvent(data: EventFormValues) {
       tickets: ticketsWithIds,
       image: imageUrl, // ✅ URL Cloudinary directe
     };
+
+    if (livestreamEnabled && livestreamTitle && livestreamTicketPrice !== undefined) {
+      newEvent.livestream = {
+        enabled: true,
+        title: livestreamTitle,
+        ticketPrice: livestreamTicketPrice
+      }
+    }
 
     console.log('[CREATE EVENT] 💾 Saving to Firestore...');
 
@@ -145,6 +167,9 @@ export async function updateEvent(eventId: string, data: EventFormValues) {
       eventDescription,
       tickets,
       image,
+      livestreamEnabled,
+      livestreamTitle,
+      livestreamTicketPrice
     } = validatedData.data;
 
     // ✅ Utiliser nouvelle image ou garder l'ancienne
@@ -160,7 +185,7 @@ export async function updateEvent(eventId: string, data: EventFormValues) {
     }));
 
     // 5. Mettre à jour l'événement
-    const updatedEvent = {
+    const updatedEventData: Partial<Event> = {
       name: eventName,
       category: eventCategory,
       date: new Date(eventDate).toISOString(),
@@ -170,9 +195,23 @@ export async function updateEvent(eventId: string, data: EventFormValues) {
       image: imageUrl, // ✅ URL Cloudinary
     };
 
+    if (livestreamEnabled && livestreamTitle && livestreamTicketPrice !== undefined) {
+      updatedEventData.livestream = {
+        enabled: true,
+        title: livestreamTitle,
+        ticketPrice: livestreamTicketPrice
+      };
+    } else {
+      updatedEventData.livestream = {
+        enabled: false,
+        title: '',
+        ticketPrice: 0
+      };
+    }
+
     console.log('[UPDATE EVENT] 💾 Updating in Firestore...');
 
-    await firestore.collection('events').doc(eventId).update(updatedEvent);
+    await firestore.collection('events').doc(eventId).update(updatedEventData);
 
     console.log('[UPDATE EVENT] ✅ Event updated successfully');
 

@@ -11,6 +11,7 @@ import {
   Wand2,
   Trash,
   PlusCircle,
+  Video,
 } from 'lucide-react';
 import {
   generateEventDescription,
@@ -51,6 +52,7 @@ import { createEvent } from '@/app/actions/event-actions';
 import { useCollection, useFirebase } from '@/firebase';
 import { collection } from 'firebase/firestore';
 import type { Category } from '@/lib/types';
+import { Switch } from '@/components/ui/switch';
 
 
 const ticketSchema = z.object({
@@ -70,8 +72,20 @@ const formSchema = z.object({
     .string()
     .optional(),
   tickets: z.array(ticketSchema).min(1, 'Au moins un type de billet est requis.'),
-  image: z.string().url().optional()
+  image: z.string().url().optional(),
+  livestreamEnabled: z.boolean().default(false),
+  livestreamTitle: z.string().optional(),
+  livestreamTicketPrice: z.coerce.number().optional(),
+}).refine(data => {
+    if (data.livestreamEnabled) {
+        return !!data.livestreamTitle && data.livestreamTicketPrice !== undefined && data.livestreamTicketPrice >= 0;
+    }
+    return true;
+}, {
+    message: 'Le titre et le prix du livestream sont requis si le streaming est activé.',
+    path: ['livestreamTitle'],
 });
+
 
 export type EventFormValues = z.infer<typeof formSchema>;
 
@@ -97,6 +111,9 @@ export default function CreateEventPage() {
       image: '',
       eventDescription: '',
       tickets: [{ name: 'Standard', price: 10000, quantity: 100 }],
+      livestreamEnabled: false,
+      livestreamTitle: '',
+      livestreamTicketPrice: 0
     },
   });
 
@@ -104,6 +121,8 @@ export default function CreateEventPage() {
     control: form.control,
     name: 'tickets',
   });
+
+  const livestreamEnabled = form.watch('livestreamEnabled');
 
   const handleGenerateDescription = async () => {
     const {
@@ -420,6 +439,70 @@ export default function CreateEventPage() {
               </Button>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-headline">Streaming en Direct</CardTitle>
+              <CardDescription>
+                Proposez un accès en direct à votre événement.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="livestreamEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">
+                        Activer le streaming en direct
+                      </FormLabel>
+                      <FormDescription>
+                        Permettez aux utilisateurs d'acheter un accès pour regarder l'événement en ligne.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              {livestreamEnabled && (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="livestreamTitle"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Titre du direct</FormLabel>
+                        <FormControl>
+                          <Input placeholder="ex: Le Concert en Direct" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="livestreamTicketPrice"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Prix de l'accès (FCFA)</FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder="5000" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
           <div className="flex justify-end">
             <Button type="submit" disabled={form.formState.isSubmitting}>
                 {form.formState.isSubmitting ? 'Création en cours...' : 'Créer l\'événement'}

@@ -49,6 +49,24 @@
           "items": {
             "type": "string"
           }
+        },
+        "livestream": {
+          "type": "object",
+          "description": "Optional details for the livestream if enabled for the event.",
+          "properties": {
+            "enabled": {
+              "type": "boolean",
+              "description": "Whether livestream is enabled for this event."
+            },
+            "title": {
+              "type": "string",
+              "description": "Title of the livestream."
+            },
+            "ticketPrice": {
+              "type": "number",
+              "description": "Price to access the livestream."
+            }
+          }
         }
       },
       "required": [
@@ -254,65 +272,6 @@
         "percentage",
         "description"
       ]
-    },
-    "Livestream": {
-      "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Livestream",
-      "type": "object",
-      "description": "Represents a live streaming session for an event.",
-      "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the livestream."
-        },
-        "eventId": {
-          "type": "string",
-          "description": "Reference to the Event this livestream is for."
-        },
-        "organizerId": {
-          "type": "string",
-          "description": "Reference to the Organizer of the event. (Denormalized for security rules)"
-        },
-        "title": {
-          "type": "string",
-          "description": "Title of the livestream."
-        },
-        "description": {
-          "type": "string",
-          "description": "Description of the livestream content."
-        },
-        "startTime": {
-          "type": "string",
-          "description": "Start date and time of the livestream.",
-          "format": "date-time"
-        },
-        "status": {
-          "type": "string",
-          "enum": [
-            "upcoming",
-            "live",
-            "finished"
-          ],
-          "description": "Current status of the livestream."
-        },
-        "ticketPrice": {
-          "type": "number",
-          "description": "Price to access the livestream."
-        },
-        "coverImage": {
-          "type": "string",
-          "description": "URL of the livestream's cover image."
-        }
-      },
-      "required": [
-        "id",
-        "eventId",
-        "organizerId",
-        "title",
-        "startTime",
-        "status",
-        "ticketPrice"
-      ]
     }
   },
   "auth": {
@@ -451,22 +410,6 @@
             {
               "name": "userId",
               "description": "The unique identifier for the user."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/livestreams/{livestreamId}",
-        "definition": {
-          "entityName": "Livestream",
-          "schema": {
-            "$ref": "#/backend/entities/Livestream"
-          },
-          "description": "Stores livestream sessions. Publicly readable, but only organizers can manage their streams.",
-          "params": [
-            {
-              "name": "livestreamId",
-              "description": "The unique identifier for the livestream."
             }
           ]
         }

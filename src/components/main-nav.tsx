@@ -41,7 +41,6 @@ export default function MainNav() {
   const navLinks = [
     { href: '/', label: 'Accueil' },
     { href: '/events', label: 'Événements' },
-    { href: '/livestreams', label: 'En Direct' },
     { href: '/contact', label: 'Contact' },
   ];
 

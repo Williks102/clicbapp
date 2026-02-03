@@ -112,21 +112,6 @@ service cloud.firestore {
       allow delete: if isExistingOwner('organizerId') || isAdmin();
     }
 
-    // ==================== LIVESTREAM DATA ====================
-    
-    /**
-     * @description   Manages livestreams for events.
-     * @path          /livestreams/{livestreamId}
-     * @allow         Public read, owner write, admins can manage all.
-     */
-    match /livestreams/{livestreamId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if isSignedIn() && isOwner(request.resource.data.organizerId);
-      allow update: if isExistingOwner('organizerId') || isAdmin();
-      allow delete: if isExistingOwner('organizerId') || isAdmin();
-    }
-
      // ==================== scanner ====================
 
   /**

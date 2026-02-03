@@ -55,6 +55,7 @@ import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { CloudinaryUploadWidget } from '@/components/cloudinary-upload-widget';
 import { QueueConfigForm } from '@/components/queue-config-form';
 import { getQueueConfig } from '@/app/actions/queue-actions';
+import { Switch } from '@/components/ui/switch';
 
 
 // ==================== SCHEMAS ====================
@@ -75,6 +76,17 @@ const formSchema = z.object({
   eventDescriptionKeywords: z.string().optional(),
   tickets: z.array(ticketSchema).min(1, 'Au moins un type de billet est requis.'),
   image: z.string().url().optional(), // ✅ URL Cloudinary
+  livestreamEnabled: z.boolean().default(false),
+  livestreamTitle: z.string().optional(),
+  livestreamTicketPrice: z.coerce.number().optional(),
+}).refine(data => {
+    if (data.livestreamEnabled) {
+        return !!data.livestreamTitle && data.livestreamTicketPrice !== undefined && data.livestreamTicketPrice >= 0;
+    }
+    return true;
+}, {
+    message: 'Le titre et le prix du livestream sont requis si le streaming est activé.',
+    path: ['livestreamTitle'],
 });
 
 export type EventFormValues = z.infer<typeof formSchema>;
@@ -115,6 +127,9 @@ export default function EditEventPage() {
       eventDescription: '',
       tickets: [{ name: 'Standard', price: 10000, quantity: 100 }],
       image: '',
+      livestreamEnabled: false,
+      livestreamTitle: '',
+      livestreamTicketPrice: 0,
     },
   });
 
@@ -122,6 +137,8 @@ export default function EditEventPage() {
     control: form.control,
     name: 'tickets',
   });
+  
+  const livestreamEnabled = form.watch('livestreamEnabled');
 
   // Initialiser le formulaire avec les données de l'événement
   useEffect(() => {
@@ -144,6 +161,9 @@ export default function EditEventPage() {
         eventDescriptionKeywords: '',
         tickets: event.tickets,
         image: imageUrl,
+        livestreamEnabled: event.livestream?.enabled || false,
+        livestreamTitle: event.livestream?.title || '',
+        livestreamTicketPrice: event.livestream?.ticketPrice || 0,
       });
     }
   }, [event, form]);
@@ -497,6 +517,69 @@ export default function EditEventPage() {
                 <PlusCircle className="mr-2 h-4 w-4" />
                 Ajouter un type de billet
               </Button>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="font-headline">Streaming en Direct</CardTitle>
+              <CardDescription>
+                Proposez un accès en direct à votre événement.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <FormField
+                control={form.control}
+                name="livestreamEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5">
+                      <FormLabel className="text-base">
+                        Activer le streaming en direct
+                      </FormLabel>
+                      <FormDescription>
+                        Permettez aux utilisateurs d'acheter un accès pour regarder l'événement en ligne.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch
+                        checked={field.value}
+                        onCheckedChange={field.onChange}
+                      />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+              {livestreamEnabled && (
+                <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <FormField
+                    control={form.control}
+                    name="livestreamTitle"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Titre du direct</FormLabel>
+                        <FormControl>
+                          <Input placeholder="ex: Le Concert en Direct" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="livestreamTicketPrice"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Prix de l'accès (FCFA)</FormLabel>
+                        <FormControl>
+                          <Input type="number" placeholder="5000" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              )}
             </CardContent>
           </Card>
 
