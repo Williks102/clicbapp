@@ -131,7 +131,7 @@ service cloud.firestore {
     match /livestream_access/{accessId} {
       allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
       allow list: if isSignedIn(); // Allow listing only if filtered by userId
-      allow create: if isSignedIn(); // Server-side creation
+      allow create: if false; // Server-side creation
       allow update, delete: if false; // No client-side updates/deletes
     }
 

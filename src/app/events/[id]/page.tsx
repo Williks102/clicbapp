@@ -4,9 +4,12 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import { Calendar, MapPin, Ticket, Video } from 'lucide-react';
+import { Calendar, MapPin, Ticket, Video, Loader2 } from 'lucide-react';
 import { notFound, useRouter, useParams } from 'next/navigation';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { useSession } from 'next-auth/react';
+import { useToast } from '@/hooks/use-toast';
+
 
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Button } from '@/components/ui/button';
@@ -22,7 +25,6 @@ import Footer from '@/components/footer';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { useState } from 'react';
 import { TicketTier, Organizer, Event } from '@/lib/types';
 import {CheckoutForm} from '@/components/checkout-form';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -32,17 +34,26 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useQueue } from '@/hooks/use-queue';
 import { QueueWaitingRoom } from '@/components/queue-waiting-room';
 import { getQueueConfig } from '@/app/actions/queue-actions';
+import { purchaseLivestreamAccess, checkLivestreamAccess } from '@/app/actions/event-actions';
 
 
 export default function EventPage() {
   const isMobile = useIsMobile();
   const router = useRouter();
   const params = useParams();
+  const { data: session } = useSession();
+  const { toast } = useToast();
+
   const [isSheetOpen, setIsSheetOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState<TicketTier | null>(null);
   const [showQueue, setShowQueue] = useState(false);
   const [queueConfigEnabled, setQueueConfigEnabled] = useState(false);
   const id = params.id as string;
+  
+  const [hasLivestreamAccess, setHasLivestreamAccess] = useState(false);
+  const [isCheckingAccess, setIsCheckingAccess] = useState(true);
+  const [isBuyingAccess, setIsBuyingAccess] = useState(false);
+
 
   const { areServicesAvailable, firestore } = useFirebase();
 
@@ -71,6 +82,19 @@ export default function EventPage() {
   );
 
   const isLoading = isEventLoading;
+
+  // Check livestream access on load
+  useEffect(() => {
+    if (session?.user && event?.id) {
+        setIsCheckingAccess(true);
+        checkLivestreamAccess(event.id)
+            .then(access => setHasLivestreamAccess(access))
+            .finally(() => setIsCheckingAccess(false));
+    } else {
+        setIsCheckingAccess(false);
+    }
+  }, [session, event?.id]);
+
 
   useEffect(() => {
     if (!isEventLoading && !event && areServicesAvailable) {
@@ -135,6 +159,36 @@ export default function EventPage() {
       router.push(`/events/${event.id}/checkout?ticketId=${selectedTicket?.id}`);
     }
   };
+
+  const handleBuyLivestreamAccess = async () => {
+    if (!session?.user) {
+      toast({
+        title: 'Connexion requise',
+        description: 'Veuillez vous connecter pour acheter un accès au direct.',
+        variant: 'destructive',
+      });
+      router.push(`/login?callbackUrl=/events/${event.id}`);
+      return;
+    }
+
+    if (!event?.livestream) return;
+
+    setIsBuyingAccess(true);
+    try {
+        const result = await purchaseLivestreamAccess(event.id, event.livestream.ticketPrice);
+        if (result.success) {
+            toast({ title: "Achat réussi!", description: "Vous avez maintenant accès au direct. La page va s'actualiser." });
+            setHasLivestreamAccess(true);
+        } else {
+            toast({ title: "Erreur", description: result.error, variant: "destructive" });
+        }
+    } catch (error) {
+        toast({ title: 'Erreur inattendue', description: 'Une erreur est survenue.', variant: 'destructive' });
+    } finally {
+        setIsBuyingAccess(false);
+    }
+};
+
 
   // Gérer l'activation automatique du checkout quand l'utilisateur devient actif
   useEffect(() => {
@@ -302,40 +356,46 @@ export default function EventPage() {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                      {event.livestream.isLive && event.livestream.watchUrl ? (
-                         <div className="space-y-3">
-                            <div className="flex items-center gap-2">
+                       {isCheckingAccess ? (
+                          <div className="flex items-center justify-center p-4">
+                              <Loader2 className="h-6 w-6 animate-spin" />
+                          </div>
+                      ) : hasLivestreamAccess ? (
+                           <div className="space-y-3 text-center">
+                              <p className="text-sm font-medium text-green-600">Vous avez accès à ce direct.</p>
+                              <Button asChild className="w-full" disabled={!event.livestream?.isLive || !event.livestream?.watchUrl}>
+                                  <Link href={event.livestream?.watchUrl || '#'} target="_blank" rel="noopener noreferrer">
+                                      Regarder le Direct
+                                  </Link>
+                              </Button>
+                               {!event.livestream.isLive && <p className="text-xs text-muted-foreground">Le direct n'a pas encore commencé.</p>}
+                          </div>
+                      ) : (
+                        <>
+                          {event.livestream.isLive && event.livestream.watchUrl && (
+                             <div className="flex items-center gap-2">
                                 <div className="relative flex h-3 w-3">
                                     <div className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></div>
                                     <div className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></div>
                                 </div>
                                 <span className="font-semibold text-red-600">EN DIRECT MAINTENANT</span>
                             </div>
-                            <Button asChild className="w-full">
-                                <Link href={event.livestream.watchUrl} target="_blank" rel="noopener noreferrer">
-                                    Regarder le direct
-                                </Link>
-                            </Button>
-                        </div>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">
-                          Cet événement sera diffusé en direct. Achetez votre accès pour le regarder en ligne.
-                        </p>
+                          )}
+                          <div className="flex items-center justify-between rounded-lg border p-4">
+                            <div>
+                              <p className="font-semibold">{event.livestream.title}</p>
+                            </div>
+                            <div className="flex items-center gap-4">
+                              <p className="font-bold">
+                                {event.livestream.ticketPrice.toLocaleString('fr-FR')} FCFA
+                              </p>
+                              <Button onClick={handleBuyLivestreamAccess} disabled={isBuyingAccess}>
+                                {isBuyingAccess ? <Loader2 className="h-4 w-4 animate-spin" /> : "Acheter"}
+                              </Button>
+                            </div>
+                          </div>
+                        </>
                       )}
-                      
-                      <div className="flex items-center justify-between rounded-lg border p-4">
-                        <div>
-                          <p className="font-semibold">{event.livestream.title}</p>
-                        </div>
-                        <div className="flex items-center gap-4">
-                          <p className="font-bold">
-                            {event.livestream.ticketPrice.toLocaleString('fr-FR')} FCFA
-                          </p>
-                          <Button disabled>
-                            Acheter l'accès
-                          </Button>
-                        </div>
-                      </div>
                     </CardContent>
                   </Card>
                 )}

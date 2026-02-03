@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { auth } from '@/auth';
 import { firestore } from '@/lib/firebase-admin'; // ✅ Plus besoin de 'storage'
 import { revalidatePath } from 'next/cache';
-import type { Event, TicketTier } from '@/lib/types';
+import type { Event, TicketTier, LivestreamAccess, ActionResult } from '@/lib/types';
 import type { EventFormValues } from '@/app/dashboard/events/create/page';
 
 // ==================== SCHEMAS ====================
@@ -287,6 +287,74 @@ export async function setLiveStatus(eventId: string, isLive: boolean): Promise<{
   } catch (error) {
     console.error(`[SET LIVE STATUS] ❌ Error:`, error);
     const errorMessage = error instanceof Error ? error.message : 'Erreur lors de la mise à jour du statut';
+    return { success: false, error: errorMessage };
+  }
+}
+
+/**
+ * Checks if the current user has purchased access to a specific livestream.
+ */
+export async function checkLivestreamAccess(eventId: string): Promise<boolean> {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return false; // Not logged in, no access
+    }
+
+    const accessRef = firestore.collection('livestream_access');
+    const snapshot = await accessRef
+      .where('userId', '==', session.user.id)
+      .where('eventId', '==', eventId)
+      .limit(1)
+      .get();
+
+    return !snapshot.empty;
+  } catch (error) {
+    console.error('[CHECK LIVESTREAM ACCESS] Error:', error);
+    return false;
+  }
+}
+
+/**
+ * Simulates purchasing access to a livestream and records it.
+ */
+export async function purchaseLivestreamAccess(eventId: string, price: number): Promise<ActionResult> {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) {
+      return { success: false, error: 'Vous devez être connecté pour acheter un accès.' };
+    }
+
+    // Check if user already has access
+    const alreadyHasAccess = await checkLivestreamAccess(eventId);
+    if (alreadyHasAccess) {
+      return { success: false, error: 'Vous avez déjà acheté un accès pour ce direct.' };
+    }
+    
+    // --- Step 1: Payment processing (simulated) ---
+    // In a real app, you would integrate Stripe, PayPal, etc. here.
+    console.log(`[PURCHASE LIVESTREAM] Simulating payment of ${price} FCFA for user ${session.user.id}`);
+
+
+    // --- Step 2: Record the purchase and access ---
+    const accessData: Omit<LivestreamAccess, 'id'> = {
+      userId: session.user.id,
+      eventId: eventId,
+      purchaseDate: new Date().toISOString(),
+      pricePaid: price,
+    };
+    
+    await firestore.collection('livestream_access').add(accessData);
+    console.log(`[PURCHASE LIVESTREAM] Access granted for event ${eventId} to user ${session.user.id}`);
+
+    // --- Step 3: Revalidate path to update UI ---
+    revalidatePath(`/events/${eventId}`);
+
+    return { success: true, message: 'Accès au direct acheté avec succès !' };
+
+  } catch (error) {
+    console.error('[PURCHASE LIVESTREAM] ❌ Error:', error);
+    const errorMessage = error instanceof Error ? error.message : 'Une erreur inconnue est survenue.';
     return { success: false, error: errorMessage };
   }
 }

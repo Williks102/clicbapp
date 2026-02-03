@@ -53,6 +53,14 @@ export type Sale = {
   organizerId: string;
 };
 
+export type LivestreamAccess = {
+  id: string;
+  userId: string;
+  eventId: string;
+  purchaseDate: string;
+  pricePaid: number;
+};
+
 export type TicketScan = {
   id: string;
   saleId: string;
