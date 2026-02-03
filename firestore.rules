@@ -120,7 +120,8 @@ service cloud.firestore {
      * @allow         Public read, owner write, admins can manage all.
      */
     match /livestreams/{livestreamId} {
-      allow read: if true;
+      allow get: if true;
+      allow list: if true;
       allow create: if isSignedIn() && isOwner(request.resource.data.organizerId);
       allow update: if isExistingOwner('organizerId') || isAdmin();
       allow delete: if isExistingOwner('organizerId') || isAdmin();
