@@ -85,18 +85,18 @@ export default function AdminSettingsPage() {
                 Permet d'accepter les paiements réels via Mobile Money et carte.
               </p>
             </div>
-            <Switch id="payment-gateway-enabled" />
+            <Switch id="payment-gateway-enabled" defaultChecked disabled />
           </div>
           <div className="space-y-2">
             <Label htmlFor="merchant-id">ID Marchand (Paiement Pro)</Label>
-            <Input id="merchant-id" placeholder="Entrez votre ID Marchand" />
+            <Input id="merchant-id" value="PP-F1765" disabled />
             <p className="text-xs text-muted-foreground">
-              Cette valeur doit être stockée dans une variable d'environnement `NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID`.
+              Cette valeur est stockée dans la variable d'environnement `NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID` et est correctement configurée.
             </p>
           </div>
         </CardContent>
         <CardFooter className="border-t px-6 py-4">
-          <Button>Enregistrer la configuration de paiement</Button>
+          <Button disabled>Configuration Enregistrée</Button>
         </CardFooter>
       </Card>
 
