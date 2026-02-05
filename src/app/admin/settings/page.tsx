@@ -11,12 +11,12 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { initializeCategories } from '@/app/actions/category-actions';
 import { toast } from '@/hooks/use-toast';
 import { useState } from 'react';
+import { Switch } from '@/components/ui/switch';
 
 export default function AdminSettingsPage() {
   const [isInitializingCategories, setIsInitializingCategories] = useState(false);
@@ -72,51 +72,37 @@ export default function AdminSettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline">Passerelles de Paiement</CardTitle>
+          <CardTitle className="font-headline">Passerelle de Paiement</CardTitle>
           <CardDescription>
-            Configurez les options de paiement disponibles pour tous les organisateurs.
+            Configurez la passerelle de paiement professionnelle (ex: CinetPay) pour la plateforme.
           </CardDescription>
         </CardHeader>
-        <CardContent className="grid gap-6 sm:grid-cols-2">
-          <Card>
-            <CardHeader>
-                <CardTitle className='text-base'>Mobile Money</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Checkbox id="om" defaultChecked />
-                <Label htmlFor="om">Activer Orange Money</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox id="momo" defaultChecked />
-                <Label htmlFor="momo">Activer MTN Mobile Money</Label>
-              </div>
-              <div className="flex items-center space-x-2">
-                <Checkbox id="wave" defaultChecked />
-                <Label htmlFor="wave">Activer Wave</Label>
-              </div>
-            </CardContent>
-          </Card>
-           <Card>
-            <CardHeader>
-                <CardTitle className='text-base'>Cartes Bancaires</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center space-x-2">
-                <Checkbox id="stripe" />
-                <Label htmlFor="stripe">Activer Stripe (Visa, Mastercard)</Label>
-              </div>
-               <div className="flex items-center space-x-2">
-                <Checkbox id="paypal" />
-                <Label htmlFor="paypal">Activer PayPal</Label>
-              </div>
-            </CardContent>
-          </Card>
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between rounded-lg border p-4">
+            <div>
+              <h3 className="font-semibold">Activer la passerelle de paiement</h3>
+              <p className="text-sm text-muted-foreground">
+                Permet d'accepter les paiements réels via Mobile Money et carte.
+              </p>
+            </div>
+            <Switch id="payment-gateway-enabled" />
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="api-key">Clé API (API Key)</Label>
+              <Input id="api-key" type="password" placeholder="••••••••••••••••" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="site-id">ID du Site (Site ID)</Label>
+              <Input id="site-id" placeholder="123456" />
+            </div>
+          </div>
         </CardContent>
         <CardFooter className="border-t px-6 py-4">
-          <Button>Enregistrer les modifications</Button>
+          <Button>Enregistrer la configuration de paiement</Button>
         </CardFooter>
       </Card>
+
        <Card>
         <CardHeader>
           <CardTitle className="font-headline">Informations sur l'entreprise</CardTitle>

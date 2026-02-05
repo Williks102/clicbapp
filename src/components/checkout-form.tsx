@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -30,6 +31,8 @@ import { useToast } from '@/hooks/use-toast';
 import type { Event } from '@/lib/types';
 import { createPurchaseAndSendTicket } from '@/app/actions/ticket-actions';
 import { PurchaseModal } from '@/components/purchase-modal';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Label } from '@/components/ui/label';
 
 // Schéma de validation conditionnel
 const formSchema = z.object({
@@ -196,7 +199,7 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
         
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-6">
               {/* Sélection de la quantité */}
               <FormField
                 control={form.control}
@@ -232,6 +235,28 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
                   <span>Total</span>
                   <span>{totalPrice.toLocaleString('fr-FR')} F CFA</span>
                 </div>
+              </div>
+              
+               {/* Méthode de paiement */}
+              <div className="space-y-3">
+                  <Label>Méthode de paiement</Label>
+                  <RadioGroup defaultValue="mobile-money" className="grid grid-cols-1 gap-2">
+                      <Label className="flex items-center gap-4 rounded-lg border p-4 cursor-pointer hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-primary has-[:checked]:text-primary-foreground has-[:checked]:border-primary">
+                          <RadioGroupItem value="mobile-money" id="mobile-money" />
+                          <div className="flex flex-col">
+                          <span>Mobile Money</span>
+                          <span className="text-xs opacity-70">Orange, MTN, Wave</span>
+                          </div>
+                      </Label>
+                      <Label className="flex items-center gap-4 rounded-lg border p-4 cursor-pointer hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-primary has-[:checked]:text-primary-foreground has-[:checked]:border-primary">
+                          <RadioGroupItem value="card" id="card" />
+                          <div className="flex flex-col">
+                              <span>Carte Bancaire</span>
+                              <span className="text-xs opacity-70">Visa, Mastercard</span>
+                          </div>
+                      </Label>
+                  </RadioGroup>
+                  <p className="text-xs text-muted-foreground text-center pt-2">Paiement sécurisé via CinetPay</p>
               </div>
 
               {/* Afficher les infos utilisateur si connecté */}
