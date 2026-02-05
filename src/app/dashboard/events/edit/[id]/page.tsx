@@ -336,8 +336,8 @@ export default function EditEventPage() {
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>
-                        {uniqueCategories?.map((category) => (
-                          <SelectItem key={category.id} value={category.name}>
+                        {uniqueCategories?.map((category, index) => (
+                          <SelectItem key={`${category.id}-${index}`} value={category.name}>
                             {category.name}
                           </SelectItem>
                         ))}
