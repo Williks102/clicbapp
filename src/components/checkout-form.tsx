@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -7,7 +6,8 @@ import { useSession } from 'next-auth/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { Loader2, Mail, User, CreditCard } from 'lucide-react';
+import { Loader2, Mail, User, CreditCard, Phone } from 'lucide-react';
+import Script from 'next/script';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -29,16 +29,17 @@ import {
 } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
 import type { Event } from '@/lib/types';
-import { createPurchaseAndSendTicket } from '@/app/actions/ticket-actions';
-import { PurchaseModal } from '@/components/purchase-modal';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
+import { generateId } from '@/lib/utils';
 
-// Schéma de validation conditionnel
+
+// Schéma de validation incluant le numéro de téléphone
 const formSchema = z.object({
-  fullName: z.string().optional(),
-  email: z.string().optional(),
-  quantity: z.number().min(1).max(10),
+  fullName: z.string().min(2, "Le nom complet est requis."),
+  email: z.string().email("L'adresse email est invalide."),
+  phoneNumber: z.string().min(10, "Le numéro de téléphone est requis."),
+  quantity: z.number().min(1, "La quantité doit être d'au moins 1.").max(10, "Vous ne pouvez pas acheter plus de 10 billets à la fois."),
 });
 
 type CheckoutFormProps = {
@@ -51,31 +52,25 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
   const { toast } = useToast();
   const { data: session } = useSession();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
-  const [guestInfo, setGuestInfo] = useState<{ email: string; name: string } | null>(null);
+  const [paymentChannel, setPaymentChannel] = useState('mobile-money');
 
   const ticket = event.tickets.find((t) => t.id === ticketId);
 
-  // ✅ FIX: Don't use session in defaultValues to prevent React hook errors
-  // when session changes after login during checkout
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
-      fullName: '',
-      email: '',
+      fullName: session?.user?.name || '',
+      email: session?.user?.email || '',
+      phoneNumber: '',
       quantity: 1,
     },
   });
 
-  // ✅ FIX: Update form values when session changes
+  // Mettre à jour le formulaire si l'utilisateur se connecte
   useEffect(() => {
     if (session?.user) {
-      if (session.user.name && !form.getValues('fullName')) {
-        form.setValue('fullName', session.user.name);
-      }
-      if (session.user.email && !form.getValues('email')) {
-        form.setValue('email', session.user.email);
-      }
+      if (session.user.name) form.setValue('fullName', session.user.name);
+      if (session.user.email) form.setValue('email', session.user.email);
     }
   }, [session, form]);
 
@@ -94,135 +89,143 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
   const quantity = form.watch('quantity');
   const totalPrice = ticket.price * quantity;
 
-  // Gestion de l'achat en mode invité
-  const handleGuestPurchase = async (email: string, name: string) => {
-    setGuestInfo({ email, name });
-    setShowPurchaseModal(false);
-    
-    // Procéder directement au paiement avec les infos invité
-    await processPurchase({
-      fullName: name,
-      email: email,
-      quantity: form.getValues('quantity')
-    });
-  };
-
-  // Gestion de l'achat en mode connecté
-  const handleUserPurchase = async () => {
-    setShowPurchaseModal(false);
-    
-    // Utiliser les infos de la session
-    await processPurchase({
-      fullName: session?.user?.name || '',
-      email: session?.user?.email || '',
-      quantity: form.getValues('quantity')
-    });
-  };
-
-  // Traitement de l'achat
-  const processPurchase = async (purchaseData: {
-    fullName: string;
-    email: string;
-    quantity: number;
-  }) => {
+  // Soumission du formulaire pour initier le paiement
+  async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!ticket) return;
-    
     setIsProcessing(true);
 
-    try {
+    if (typeof (window as any).PaiementPro === 'undefined') {
       toast({
-        title: 'Traitement en cours...',
-        description: 'Création de votre commande',
-      });
-
-      const result = await createPurchaseAndSendTicket({
-        eventId: event.id,
-        ticketId: ticket.id,
-        quantity: purchaseData.quantity,
-        fullName: purchaseData.fullName,
-        email: purchaseData.email,
-        totalPrice: ticket.price * purchaseData.quantity,
-      });
-
-      if (result.success) {
-        toast({
-          title: '✅ Achat confirmé !',
-          description: 'Votre billet a été envoyé par email.',
-        });
-        
-        // Rediriger vers une page de confirmation
-        router.push(`/purchase/success?orderId=${result.saleId}`);
-      } else {
-        toast({
-          title: 'Erreur',
-          description: result.error || 'Une erreur est survenue',
-          variant: 'destructive',
-        });
-      }
-    } catch (error) {
-      console.error('Erreur:', error);
-      toast({
-        title: 'Erreur',
-        description: 'Une erreur est survenue lors du traitement',
+        title: 'Erreur de paiement',
+        description: 'La passerelle de paiement n\'a pas pu être chargée. Veuillez rafraîchir la page.',
         variant: 'destructive',
       });
-    } finally {
       setIsProcessing(false);
-    }
-  };
-
-  // Soumission du formulaire
-  async function onSubmit(values: z.infer<typeof formSchema>) {
-    // Ouvrir le modal de choix si pas connecté
-    if (!session?.user && !guestInfo) {
-      setShowPurchaseModal(true);
       return;
     }
 
-    // Si connecté ou déjà invité, procéder directement
-    await processPurchase({
-      fullName: guestInfo?.name || session?.user?.name || values.fullName || '',
-      email: guestInfo?.email || session?.user?.email || values.email || '',
-      quantity: values.quantity
+    const referenceNumber = generateId(`clicbillet-${event.id.slice(0, 4)}`);
+    const [firstName, ...lastNameParts] = values.fullName.split(' ');
+    const lastName = lastNameParts.join(' ') || firstName;
+    const description = `Achat de ${values.quantity} billet(s) pour "${event.name}"`;
+
+    // Contexte pour le webhook - NE PAS UTILISER EN PRODUCTION SANS SÉCURISATION
+    // Idéalement, enregistrer la transaction en base de données avant le paiement
+    const returnContext = JSON.stringify({
+      eventId: event.id,
+      ticketId: ticket.id,
+      quantity: values.quantity,
+      fullName: values.fullName,
+      email: values.email,
+      totalPrice: totalPrice,
+      organizerId: event.organizerId
     });
+
+    const params = {
+      amount: totalPrice,
+      description: description,
+      channel: paymentChannel === 'mobile-money' ? 'MOBILE_MONEY_CI' : 'CREDIT_CARD',
+      countryCurrencyCode: '952',
+      referenceNumber: referenceNumber,
+      customerEmail: values.email,
+      customerFirstName: firstName,
+      customerLastname: lastName,
+      customerPhoneNumber: values.phoneNumber,
+      notificationURL: `${window.location.origin}/api/payment/webhook`,
+      returnURL: `${window.location.origin}/purchase/success?orderId=${referenceNumber}`,
+      returnContext: returnContext,
+    };
+    
+    console.log("Déclenchement de Paiement Pro avec les paramètres :", params);
+    (window as any).PaiementPro.RequestPayment(params);
   }
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle>Finaliser votre commande</CardTitle>
-          <CardDescription>
-            {event.name} - {ticket.name}
-          </CardDescription>
-        </CardHeader>
-        
+      <Script src="https://www.paiementpro.net/webservice/onlinepayment/js/paiementpro.v1.0.1.js" strategy="afterInteractive" />
+      <Card className="border-none shadow-none">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
-            <CardContent className="space-y-6">
-              {/* Sélection de la quantité */}
-              <FormField
-                control={form.control}
-                name="quantity"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Nombre de billets</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="number"
-                        min="1"
-                        max="10"
-                        {...field}
-                        onChange={(e) => field.onChange(parseInt(e.target.value))}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+            <CardContent className="space-y-6 p-0">
+               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                 {/* Nom complet */}
+                <FormField
+                  control={form.control}
+                  name="fullName"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Nom complet</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                          <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+                          <Input placeholder="Jean Kouassi" className="pl-10" {...field} />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                 {/* Email */}
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Adresse e-mail</FormLabel>
+                      <FormControl>
+                        <div className="relative">
+                           <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+                           <Input type="email" placeholder="jean@example.com" className="pl-10" {...field} />
+                        </div>
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+               </div>
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {/* Numéro de téléphone */}
+                  <FormField
+                    control={form.control}
+                    name="phoneNumber"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Numéro de téléphone</FormLabel>
+                        <FormControl>
+                          <div className="relative">
+                              <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground"/>
+                              <Input type="tel" placeholder="0701020304" className="pl-10" {...field} />
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  {/* Quantité */}
+                  <FormField
+                    control={form.control}
+                    name="quantity"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Nombre de billets</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            min="1"
+                            max={Math.min(10, ticket.quantity)}
+                            {...field}
+                            onChange={(e) => field.onChange(parseInt(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
 
               {/* Récapitulatif */}
-              <div className="rounded-lg border p-4 space-y-2">
+              <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Prix unitaire</span>
                   <span>{ticket.price.toLocaleString('fr-FR')} F CFA</span>
@@ -231,16 +234,16 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
                   <span>Quantité</span>
                   <span>× {quantity}</span>
                 </div>
-                <div className="border-t pt-2 flex justify-between font-semibold">
-                  <span>Total</span>
-                  <span>{totalPrice.toLocaleString('fr-FR')} F CFA</span>
+                <div className="border-t pt-2 mt-2 flex justify-between font-semibold text-lg">
+                  <span>Total à payer</span>
+                  <span className="text-primary">{totalPrice.toLocaleString('fr-FR')} F CFA</span>
                 </div>
               </div>
               
                {/* Méthode de paiement */}
               <div className="space-y-3">
                   <Label>Méthode de paiement</Label>
-                  <RadioGroup defaultValue="mobile-money" className="grid grid-cols-1 gap-2">
+                  <RadioGroup defaultValue={paymentChannel} onValueChange={setPaymentChannel} className="grid grid-cols-1 gap-2">
                       <Label className="flex items-center gap-4 rounded-lg border p-4 cursor-pointer hover:bg-accent hover:text-accent-foreground has-[:checked]:bg-primary has-[:checked]:text-primary-foreground has-[:checked]:border-primary">
                           <RadioGroupItem value="mobile-money" id="mobile-money" />
                           <div className="flex flex-col">
@@ -256,43 +259,12 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
                           </div>
                       </Label>
                   </RadioGroup>
-                  <p className="text-xs text-muted-foreground text-center pt-2">Paiement sécurisé via CinetPay</p>
+                  <p className="text-xs text-muted-foreground text-center pt-2">Paiement sécurisé</p>
               </div>
 
-              {/* Afficher les infos utilisateur si connecté */}
-              {session?.user && (
-                <div className="rounded-lg bg-muted p-4 space-y-1">
-                  <p className="text-sm font-medium">Achat pour :</p>
-                  <p className="text-sm text-muted-foreground">
-                    {session.user.name} ({session.user.email})
-                  </p>
-                </div>
-              )}
-
-              {/* Afficher les infos invité si renseignées */}
-              {guestInfo && !session?.user && (
-                <div className="rounded-lg bg-muted p-4 space-y-1">
-                  <p className="text-sm font-medium">Achat pour :</p>
-                  <p className="text-sm text-muted-foreground">
-                    {guestInfo.name} ({guestInfo.email})
-                  </p>
-                  <Button
-                    type="button"
-                    variant="link"
-                    size="sm"
-                    onClick={() => {
-                      setGuestInfo(null);
-                      setShowPurchaseModal(true);
-                    }}
-                    className="p-0 h-auto"
-                  >
-                    Modifier
-                  </Button>
-                </div>
-              )}
             </CardContent>
 
-            <CardFooter>
+            <CardFooter className="p-0 pt-6">
               <Button 
                 type="submit" 
                 className="w-full" 
@@ -307,9 +279,7 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
                 ) : (
                   <>
                     <CreditCard className="mr-2 h-4 w-4" />
-                    {session?.user || guestInfo 
-                      ? `Payer ${totalPrice.toLocaleString('fr-FR')} F CFA` 
-                      : 'Continuer vers le paiement'}
+                    Payer {totalPrice.toLocaleString('fr-FR')} F CFA
                   </>
                 )}
               </Button>
@@ -317,17 +287,6 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
           </form>
         </Form>
       </Card>
-
-      {/* Modal de choix : connexion ou invité */}
-      <PurchaseModal
-        isOpen={showPurchaseModal}
-        onClose={() => setShowPurchaseModal(false)}
-        event={event}
-        ticketId={ticketId}
-        quantity={form.getValues('quantity')}
-        onProceedAsGuest={handleGuestPurchase}
-        onProceedAsUser={handleUserPurchase}
-      />
     </>
   );
 }
