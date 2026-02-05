@@ -56,37 +56,22 @@ export const FirebaseProvider: React.FC<FirebaseProviderProps> = ({
 
 /**
  * Hook to access core Firebase services.
- * Throws error if core services are not available or used outside provider.
+ * Returns the memoized context value directly to ensure reference stability.
  */
-export const useFirebase = (): { areServicesAvailable: boolean, firebaseApp: FirebaseApp, firestore: Firestore, auth: Auth } => {
+export const useFirebase = (): FirebaseContextState => {
   const context = useContext(FirebaseContext);
 
   if (context === undefined) {
     throw new Error('useFirebase must be used within a FirebaseProvider.');
   }
 
-  if (!context.areServicesAvailable || !context.firebaseApp || !context.firestore || !context.auth) {
-    // Return services as unavailable
-    return {
-        areServicesAvailable: false,
-        firebaseApp: null as any, // Cast to satisfy type, will be guarded by areServicesAvailable
-        firestore: null as any,
-        auth: null as any
-    };
-  }
-
-  return {
-    areServicesAvailable: context.areServicesAvailable,
-    firebaseApp: context.firebaseApp,
-    firestore: context.firestore,
-    auth: context.auth,
-  };
+  return context;
 };
 
 /** Hook to access Firebase Auth instance. */
 export const useAuth = (): Auth => {
   const { auth, areServicesAvailable } = useFirebase();
-  if (!areServicesAvailable) {
+  if (!areServicesAvailable || !auth) {
       throw new Error('Firebase Auth not available. Check FirebaseProvider setup.');
   }
   return auth;
@@ -95,7 +80,7 @@ export const useAuth = (): Auth => {
 /** Hook to access Firestore instance. */
 export const useFirestore = (): Firestore => {
   const { firestore, areServicesAvailable } = useFirebase();
-   if (!areServicesAvailable) {
+   if (!areServicesAvailable || !firestore) {
       throw new Error('Firebase Firestore not available. Check FirebaseProvider setup.');
   }
   return firestore;
@@ -104,7 +89,7 @@ export const useFirestore = (): Firestore => {
 /** Hook to access Firebase App instance. */
 export const useFirebaseApp = (): FirebaseApp => {
   const { firebaseApp, areServicesAvailable } = useFirebase();
-   if (!areServicesAvailable) {
+   if (!areServicesAvailable || !firebaseApp) {
       throw new Error('Firebase App not available. Check FirebaseProvider setup.');
   }
   return firebaseApp;
