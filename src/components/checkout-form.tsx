@@ -53,6 +53,7 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
   const { data: session } = useSession();
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentChannel, setPaymentChannel] = useState('mobile-money');
+  const [scriptReady, setScriptReady] = useState(false); // New state
 
   const ticket = event.tickets.find((t) => t.id === ticketId);
 
@@ -106,7 +107,7 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
       return;
     }
     
-    if (typeof (window as any).PaiementPro === 'undefined') {
+    if (!scriptReady || typeof (window as any).PaiementPro === 'undefined') {
       toast({
         title: 'Erreur de paiement',
         description: 'La passerelle de paiement n\'a pas pu être chargée. Veuillez rafraîchir la page.',
@@ -170,7 +171,19 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
 
   return (
     <>
-      <Script src="https://www.paiementpro.net/webservice/onlinepayment/js/paiementpro.v1.0.1.js" strategy="afterInteractive" />
+      <Script 
+        src="https://www.paiementpro.net/webservice/onlinepayment/js/paiementpro.v1.0.1.js" 
+        strategy="afterInteractive"
+        onLoad={() => setScriptReady(true)}
+        onError={() => {
+            toast({
+                title: 'Erreur critique',
+                description: 'Le script de paiement externe n\'a pas pu être chargé. Veuillez vérifier votre connexion internet ou désactiver votre bloqueur de publicités.',
+                variant: 'destructive',
+                duration: 10000,
+            });
+        }}
+      />
       <Card className="border-none shadow-none">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -296,7 +309,7 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
               <Button 
                 type="submit" 
                 className="w-full" 
-                disabled={isProcessing || !ticket}
+                disabled={isProcessing || !ticket || !scriptReady}
                 size="lg"
               >
                 {isProcessing ? (
@@ -304,6 +317,11 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     Traitement en cours...
                   </>
+                ) : !scriptReady ? (
+                    <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Chargement du paiement...
+                    </>
                 ) : (
                   <>
                     <CreditCard className="mr-2 h-4 w-4" />
