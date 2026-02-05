@@ -74,7 +74,7 @@ export default function AdminSettingsPage() {
         <CardHeader>
           <CardTitle className="font-headline">Passerelle de Paiement</CardTitle>
           <CardDescription>
-            Configurez la passerelle de paiement professionnelle (ex: CinetPay) pour la plateforme.
+            Configurez la passerelle de paiement professionnelle (Paiement Pro) pour la plateforme.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -87,15 +87,12 @@ export default function AdminSettingsPage() {
             </div>
             <Switch id="payment-gateway-enabled" />
           </div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="api-key">Clé API (API Key)</Label>
-              <Input id="api-key" type="password" placeholder="••••••••••••••••" />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="site-id">ID du Site (Site ID)</Label>
-              <Input id="site-id" placeholder="123456" />
-            </div>
+          <div className="space-y-2">
+            <Label htmlFor="merchant-id">ID Marchand (Paiement Pro)</Label>
+            <Input id="merchant-id" placeholder="Entrez votre ID Marchand" />
+            <p className="text-xs text-muted-foreground">
+              Cette valeur doit être stockée dans une variable d'environnement `NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID`.
+            </p>
           </div>
         </CardContent>
         <CardFooter className="border-t px-6 py-4">

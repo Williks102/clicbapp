@@ -94,6 +94,18 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
     if (!ticket) return;
     setIsProcessing(true);
 
+    const merchantId = process.env.NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID;
+
+    if (!merchantId) {
+      toast({
+        title: 'Configuration requise',
+        description: "L'ID marchand de la passerelle de paiement n'est pas configuré.",
+        variant: 'destructive',
+      });
+      setIsProcessing(false);
+      return;
+    }
+    
     if (typeof (window as any).PaiementPro === 'undefined') {
       toast({
         title: 'Erreur de paiement',
@@ -109,8 +121,6 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
     const lastName = lastNameParts.join(' ') || firstName;
     const description = `Achat de ${values.quantity} billet(s) pour "${event.name}"`;
 
-    // Contexte pour le webhook - NE PAS UTILISER EN PRODUCTION SANS SÉCURISATION
-    // Idéalement, enregistrer la transaction en base de données avant le paiement
     const returnContext = JSON.stringify({
       eventId: event.id,
       ticketId: ticket.id,
@@ -121,23 +131,41 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
       organizerId: event.organizerId
     });
 
-    const params = {
-      amount: totalPrice,
-      description: description,
-      channel: paymentChannel === 'mobile-money' ? 'MOBILE_MONEY_CI' : 'CREDIT_CARD',
-      countryCurrencyCode: '952',
-      referenceNumber: referenceNumber,
-      customerEmail: values.email,
-      customerFirstName: firstName,
-      customerLastname: lastName,
-      customerPhoneNumber: values.phoneNumber,
-      notificationURL: `${window.location.origin}/api/payment/webhook`,
-      returnURL: `${window.location.origin}/purchase/success?orderId=${referenceNumber}`,
-      returnContext: returnContext,
-    };
-    
-    console.log("Déclenchement de Paiement Pro avec les paramètres :", params);
-    (window as any).PaiementPro.RequestPayment(params);
+    try {
+      const paiementPro = new (window as any).PaiementPro(merchantId);
+      
+      paiementPro.amount = totalPrice;
+      paiementPro.channel = paymentChannel === 'mobile-money' ? 'MOBILE_MONEY_CI' : 'CARD';
+      paiementPro.referenceNumber = referenceNumber;
+      paiementPro.customerEmail = values.email;
+      paiementPro.customerFirstName = firstName;
+      paiementPro.customerLastname = lastName;
+      paiementPro.customerPhoneNumber = values.phoneNumber;
+      paiementPro.description = description;
+      paiementPro.currency = 'XOF';
+      paiementPro.notificationURL = `${window.location.origin}/api/payment/webhook`;
+      paiementPro.returnURL = `${window.location.origin}/purchase/success?orderId=${referenceNumber}`;
+      paiementPro.returnContext = returnContext;
+
+      console.log("Préparation du paiement avec Paiement Pro...");
+      
+      await paiementPro.getUrlPayment();
+      
+      if (paiementPro.success) {
+          console.log("Redirection vers la passerelle de paiement:", paiementPro.url);
+          window.location.href = paiementPro.url;
+      } else {
+          throw new Error("Impossible d'initialiser le paiement. Raison: " + (paiementPro.message || 'Erreur inconnue de la passerelle.'));
+      }
+    } catch(error) {
+      console.error("Erreur lors de l'initialisation de Paiement Pro:", error);
+      toast({
+          title: 'Erreur de paiement',
+          description: error instanceof Error ? error.message : "La passerelle de paiement n'a pas pu être initialisée. Vérifiez la console pour plus de détails.",
+          variant: 'destructive',
+      });
+      setIsProcessing(false);
+    }
   }
 
   return (
