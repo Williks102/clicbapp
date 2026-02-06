@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useEffect } from 'react';
@@ -99,9 +100,10 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
 
     if (!merchantId) {
       toast({
-        title: 'Configuration requise',
-        description: "L'ID marchand de la passerelle de paiement n'est pas configuré.",
+        title: 'Erreur de configuration',
+        description: "L'ID Marchand pour le paiement est manquant. L'administrateur doit configurer la variable d'environnement NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID.",
         variant: 'destructive',
+        duration: 10000,
       });
       setIsProcessing(false);
       return;

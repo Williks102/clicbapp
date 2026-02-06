@@ -16,10 +16,12 @@ import { Label } from '@/components/ui/label';
 import { initializeCategories } from '@/app/actions/category-actions';
 import { toast } from '@/hooks/use-toast';
 import { useState } from 'react';
-import { Switch } from '@/components/ui/switch';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Terminal, AlertTriangle } from 'lucide-react';
 
 export default function AdminSettingsPage() {
   const [isInitializingCategories, setIsInitializingCategories] = useState(false);
+  const merchantId = process.env.NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID;
 
   const handleInitializeCategories = async () => {
     setIsInitializingCategories(true);
@@ -74,29 +76,32 @@ export default function AdminSettingsPage() {
         <CardHeader>
           <CardTitle className="font-headline">Passerelle de Paiement</CardTitle>
           <CardDescription>
-            Configurez la passerelle de paiement professionnelle (Paiement Pro) pour la plateforme.
+            Vérification de la configuration pour la passerelle "Paiement Pro".
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex items-center justify-between rounded-lg border p-4">
-            <div>
-              <h3 className="font-semibold">Activer la passerelle de paiement</h3>
-              <p className="text-sm text-muted-foreground">
-                Permet d'accepter les paiements réels via Mobile Money et carte.
-              </p>
-            </div>
-            <Switch id="payment-gateway-enabled" defaultChecked disabled />
-          </div>
-          <div className="space-y-2">
-            <Label htmlFor="merchant-id">ID Marchand (Paiement Pro)</Label>
-            <Input id="merchant-id" value="PP-F1765" disabled />
-            <p className="text-xs text-muted-foreground">
-              Cette valeur est stockée dans la variable d'environnement `NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID` et est correctement configurée.
-            </p>
-          </div>
+        <CardContent>
+          {merchantId ? (
+            <Alert variant="default" className="border-green-500 bg-green-50 text-green-800">
+              <Terminal className="h-4 w-4" />
+              <AlertTitle>Configuration Détectée</AlertTitle>
+              <AlertDescription>
+                <p>L'ID Marchand suivant est configuré pour l'application :</p>
+                <code className="mt-2 block rounded bg-green-100 p-2 font-mono text-sm">{merchantId}</code>
+              </AlertDescription>
+            </Alert>
+          ) : (
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Action requise : ID Marchand manquant</AlertTitle>
+              <AlertDescription>
+                <p>La variable d'environnement <code className="font-mono text-xs">NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID</code> n'est pas définie.</p>
+                <p className="mt-2">Le paiement ne fonctionnera pas sans cette configuration. Veuillez l'ajouter dans les paramètres de votre plateforme d'hébergement.</p>
+              </AlertDescription>
+            </Alert>
+          )}
         </CardContent>
         <CardFooter className="border-t px-6 py-4">
-          <Button disabled>Configuration Enregistrée</Button>
+          <p className="text-sm text-muted-foreground">Cette valeur est lue depuis les variables d'environnement et ne peut pas être modifiée ici.</p>
         </CardFooter>
       </Card>
 
@@ -118,7 +123,7 @@ export default function AdminSettingsPage() {
           </div>
         </CardContent>
          <CardFooter className="border-t px-6 py-4">
-          <Button>Enregistrer les informations</Button>
+          <Button disabled>Enregistrer les informations</Button>
         </CardFooter>
       </Card>
     </div>
