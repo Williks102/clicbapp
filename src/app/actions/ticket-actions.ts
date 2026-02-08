@@ -63,19 +63,15 @@ export async function createPurchaseAndSendTicket(
 
     const eventRef = firestore.collection('events').doc(data.eventId);
     const orderId = generateOrderNumber();
-    let event: Event | null = null;
-    let ticket: TicketTier | null = null;
-    let sale: Sale | null = null;
 
-    // Utiliser une transaction pour garantir l'atomicité
-    await firestore.runTransaction(async (transaction) => {
+    // The transaction will return the necessary data, ensuring it's available and correctly typed.
+    const { event, ticket, sale } = await firestore.runTransaction(async (transaction) => {
       const eventDoc = await transaction.get(eventRef);
       if (!eventDoc.exists) {
         throw new Error('Événement introuvable');
       }
 
       const currentEvent = { id: eventDoc.id, ...eventDoc.data() } as Event;
-      event = currentEvent; // Assigner pour l'envoi d'email hors de la transaction
 
       const ticketIndex = currentEvent.tickets.findIndex(
         (t) => t.id === data.ticketId
@@ -85,26 +81,25 @@ export async function createPurchaseAndSendTicket(
       }
 
       const currentTicket = currentEvent.tickets[ticketIndex];
-      ticket = currentTicket; // Assigner pour l'envoi d'email
 
       if (currentTicket.quantity < data.quantity) {
         throw new Error('Quantité de billets insuffisante');
       }
 
-      // Préparer le tableau des billets mis à jour
+      // Prepare updated tickets array
       const updatedTickets = [...currentEvent.tickets];
       updatedTickets[ticketIndex] = {
         ...currentTicket,
         quantity: currentTicket.quantity - data.quantity,
       };
 
-      // Mettre à jour le document de l'événement avec la nouvelle quantité
+      // Update the event document with the new ticket quantity
       transaction.update(eventRef, { tickets: updatedTickets });
       console.log(
         `[PURCHASE] 🔄 Updated ticket quantity for event ${data.eventId}`
       );
 
-      // Créer le document de vente
+      // Create the sale document
       const saleRef = firestore.collection('sales').doc(orderId);
       const mainTicketNumber = generateTicketNumber(orderId);
       const purchaseDate = new Date().toISOString();
@@ -122,20 +117,15 @@ export async function createPurchaseAndSendTicket(
         organizerId: currentEvent.organizerId,
       };
 
-      sale = newSale; // Assigner pour l'envoi d'email
-
       transaction.set(saleRef, newSale);
       console.log(
         '[PURCHASE] ✅ Sale created in Firestore within transaction:',
         orderId
       );
+        
+      // Return the created objects to be used outside the transaction
+      return { event: currentEvent, ticket: currentTicket, sale: newSale };
     });
-
-    if (!event || !ticket || !sale) {
-      throw new Error(
-        "La transaction a échoué, les données n'ont pas été préparées."
-      );
-    }
 
     // --- Envoi des emails (en dehors de la transaction) ---
     const ticketsForEmail: { ticketNumber: string; qrCodeURL: string }[] = [];
