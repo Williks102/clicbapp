@@ -7,7 +7,7 @@ import { useSession } from 'next-auth/react';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import * as z from 'zod';
-import { Loader2, Mail, User, CreditCard, Phone } from 'lucide-react';
+import { Loader2, Mail, User, CreditCard, Phone, AlertTriangle } from 'lucide-react';
 import Script from 'next/script';
 
 import { Button } from '@/components/ui/button';
@@ -33,6 +33,7 @@ import type { Event } from '@/lib/types';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { generateId } from '@/lib/utils';
+import { Alert, AlertDescription, AlertTitle } from './ui/alert';
 
 
 // Schéma de validation incluant le numéro de téléphone
@@ -54,7 +55,9 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
   const { data: session } = useSession();
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentChannel, setPaymentChannel] = useState('mobile-money');
-  const [scriptReady, setScriptReady] = useState(false); // New state
+  const [scriptReady, setScriptReady] = useState(false);
+  const [scriptLoadError, setScriptLoadError] = useState<string | null>(null);
+
 
   const ticket = event.tickets.find((t) => t.id === ticketId);
 
@@ -75,6 +78,32 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
       if (session.user.email) form.setValue('email', session.user.email);
     }
   }, [session, form]);
+  
+  // Détecter si le script de paiement ne se charge pas (bloqueur de pub, etc.)
+  useEffect(() => {
+    // Set a timeout to detect if the script fails to load silently.
+    const timer = setTimeout(() => {
+        if (!scriptReady && !isProcessing) {
+            // Check if the PaiementPro object is on window, just in case `onLoad` failed to fire
+            if (typeof (window as any).PaiementPro === 'undefined') {
+                const errorMessage = "Le script de paiement n'a pas pu être chargé. Cela peut être dû à un bloqueur de publicités, une extension de navigateur ou un problème de réseau. Veuillez désactiver votre bloqueur de publicités et rafraîchir la page.";
+                setScriptLoadError(errorMessage);
+                toast({
+                    title: 'Erreur de chargement du paiement',
+                    description: errorMessage,
+                    variant: 'destructive',
+                    duration: 15000,
+                });
+            } else {
+                // The script loaded but onLoad didn't fire. Let's force it.
+                setScriptReady(true);
+            }
+        }
+    }, 10000); // 10 second timeout
+
+    return () => clearTimeout(timer);
+  }, [scriptReady, isProcessing, toast]);
+
 
   if (!ticket) {
     return (
@@ -178,14 +207,25 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
         strategy="afterInteractive"
         onLoad={() => setScriptReady(true)}
         onError={() => {
+            const errorMessage = 'Le script de paiement externe n\'a pas pu être chargé. Veuillez vérifier votre connexion internet ou désactiver votre bloqueur de publicités.';
+            setScriptLoadError(errorMessage);
             toast({
                 title: 'Erreur critique',
-                description: 'Le script de paiement externe n\'a pas pu être chargé. Veuillez vérifier votre connexion internet ou désactiver votre bloqueur de publicités.',
+                description: errorMessage,
                 variant: 'destructive',
                 duration: 10000,
             });
         }}
       />
+      {scriptLoadError && (
+          <Alert variant="destructive" className="mb-4">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Problème de chargement de la passerelle de paiement</AlertTitle>
+              <AlertDescription>
+                  {scriptLoadError}
+              </AlertDescription>
+          </Alert>
+      )}
       <Card className="border-none shadow-none">
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
