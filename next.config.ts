@@ -1,22 +1,6 @@
 
 import type { NextConfig } from 'next';
 
-const cspHeader = `
-    default-src 'self';
-    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://www.paiementpro.net https://paiementpro.net https://*.paiementpro.net;
-    style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-    img-src 'self' blob: data: https://res.cloudinary.com https://placehold.co https://images.unsplash.com https://picsum.photos https://firebasestorage.googleapis.com https://storage.googleapis.com;
-    font-src 'self' https://fonts.gstatic.com;
-    connect-src 'self' https://www.paiementpro.net https://paiementpro.net https://*.paiementpro.net vitals.vercel-insights.com *.googleapis.com;
-    worker-src 'self' blob:;
-    frame-src 'self' https://www.paiementpro.net https://paiementpro.net https://*.paiementpro.net;
-    object-src 'none';
-    base-uri 'self';
-    form-action 'self';
-    frame-ancestors *;
-    upgrade-insecure-requests;
-`;
-
 const nextConfig: NextConfig = {
   /* TypeScript Configuration */
   typescript: {
@@ -79,21 +63,6 @@ const nextConfig: NextConfig = {
 
   /* Performance */
   compress: false, // Cloudinary gère déjà la compression
-
-  /* Security Headers */
-  async headers() {
-    return [
-      {
-        source: '/:path*',
-        headers: [
-          {
-            key: 'Content-Security-Policy',
-            value: cspHeader.replace(/\s{2,}/g, ' ').trim(),
-          },
-        ],
-      },
-    ];
-  },
 };
 
 export default nextConfig;
