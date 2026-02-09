@@ -203,7 +203,7 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
   return (
     <>
       <Script 
-        src="https://www.paiementpro.net/webservice/onlinepayment/js/paiementpro.v1.0.1.js" 
+        src="https://paiementpro.net/webservice/onlinepayment/js/paiementpro.v1.0.1.js" 
         strategy="afterInteractive"
         onLoad={() => setScriptReady(true)}
         onError={() => {
