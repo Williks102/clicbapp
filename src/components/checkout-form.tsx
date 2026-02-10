@@ -170,11 +170,13 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
       paiementPro.channel = paymentChannel === 'mobile-money' ? 'MOBILE_MONEY_CI' : 'CARD';
       paiementPro.referenceNumber = referenceNumber;
       paiementPro.customerEmail = values.email;
-      paiementPro.customerFirstName = firstName;
-      paiementPro.customerLastname = lastName;
+      // ⚠️ CORRECTION: Dans la doc PaiementPro, firstName = Nom de famille, lastname = Prénoms (inversé!)
+      paiementPro.customerFirstName = lastName;  // Nom de famille
+      paiementPro.customerLastname = firstName;   // Prénoms
       paiementPro.customerPhoneNumber = values.phoneNumber;
       paiementPro.description = description;
-      paiementPro.currency = 'XOF';
+      // ✅ CORRECTION: Utiliser countryCurrencyCode au lieu de currency
+      paiementPro.countryCurrencyCode = '952'; // Code pour FCFA
       paiementPro.notificationURL = `${window.location.origin}/api/payment/webhook`;
       paiementPro.returnURL = `${window.location.origin}/purchase/success?orderId=${referenceNumber}`;
       paiementPro.returnContext = returnContext;
@@ -202,8 +204,9 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
 
   return (
     <>
+      {/* ✅ CORRECTION: Ajouter "www." à l'URL */}
       <Script 
-        src="https://paiementpro.net/webservice/onlinepayment/js/paiementpro.v1.0.1.js" 
+        src="https://www.paiementpro.net/webservice/onlinepayment/js/paiementpro.v1.0.1.js" 
         strategy="afterInteractive"
         onLoad={() => setScriptReady(true)}
         onError={() => {
