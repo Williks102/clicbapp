@@ -3,13 +3,13 @@ import type { NextConfig } from 'next';
 
 const cspHeader = `
     default-src 'self';
-    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.paiementpro.net https://paiementpro.net https://apis.google.com;
+    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.paiementpro.net https://paiementpro.net https://www.paiementpro.net https://apis.google.com;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     img-src 'self' blob: data: https://res.cloudinary.com https://placehold.co https://images.unsplash.com https://picsum.photos https://firebasestorage.googleapis.com https://storage.googleapis.com;
     font-src 'self' https://fonts.gstatic.com;
-    connect-src 'self' https://*.paiementpro.net https://paiementpro.net vitals.vercel-insights.com *.googleapis.com https://*.cloudworkstations.dev wss:;
+    connect-src 'self' https://*.paiementpro.net https://paiementpro.net https://www.paiementpro.net vitals.vercel-insights.com *.googleapis.com https://*.cloudworkstations.dev wss:;
     worker-src 'self' blob:;
-    frame-src 'self' https://*.paiementpro.net https://paiementpro.net;
+    frame-src 'self' https://*.paiementpro.net https://paiementpro.net https://www.paiementpro.net;
     object-src 'none';
     base-uri 'self';
     form-action 'self';
