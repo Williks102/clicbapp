@@ -51,6 +51,8 @@ export type Sale = {
   totalPrice: number;
   purchaseDate: string;
   organizerId: string;
+  status: 'PENDING' | 'PAID' | 'FAILED' | 'FLAGGED'; // Ajout du statut de la vente
+  paymentDetails?: any; // Pour stocker les détails du webhook
 };
 
 export type LivestreamAccess = {
