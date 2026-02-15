@@ -7,12 +7,12 @@ const cspHeader = `
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     img-src 'self' blob: data: https://res.cloudinary.com https://placehold.co https://images.unsplash.com https://picsum.photos https://firebasestorage.googleapis.com https://storage.googleapis.com;
     font-src 'self' https://fonts.gstatic.com;
-    connect-src 'self' https://*.paiementpro.net https://paiementpro.net https://www.paiementpro.net vitals.vercel-insights.com *.googleapis.com https://*.cloudworkstations.dev wss:;
+    connect-src 'self' https://*.paiementpro.net https://paiementpro.net https://www.paiementpro.net vitals.vercel-insights.com *.googleapis.com https://*.cloudworkstations.dev wss: https://clicbillet.com https://www.clicbillet.com https://mpayment.orange-money.com https://monticket.online https://*.monticket.online;
     worker-src 'self' blob:;
-    frame-src 'self' https://*.paiementpro.net https://paiementpro.net https://www.paiementpro.net;
+    frame-src 'self' https://*.paiementpro.net https://paiementpro.net https://www.paiementpro.net https://clicbillet.com https://www.clicbillet.com https://mpayment.orange-money.com https://monticket.online https://*.monticket.online;
     object-src 'none';
     base-uri 'self';
-    form-action 'self';
+    form-action 'self' https://clicbillet.com https://www.clicbillet.com https://*.paiementpro.net https://paiementpro.net https://mpayment.orange-money.com https://monticket.online https://*.monticket.online;
     frame-ancestors *;
     upgrade-insecure-requests;
 `;
