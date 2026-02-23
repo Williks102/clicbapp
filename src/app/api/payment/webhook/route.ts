@@ -4,6 +4,8 @@ import { firestore } from '@/lib/firebase-admin';
 import { finalizePurchaseAndSendTicket } from '@/app/actions/ticket-actions';
 import type { Event, Sale } from '@/lib/types';
 
+const SUCCESS_STATUSES = new Set(['SUCCESSFUL', 'SUCCESS', 'PAID', 'success']);
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
