@@ -33,10 +33,8 @@ import type { Event } from '@/lib/types';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
-import { createPaiementProSession } from '@/app/actions/payment-actions';
+import { initializePayment } from '@/app/actions/payment-actions';
 
-
-// Schéma de validation incluant le numéro de téléphone
 const formSchema = z.object({
   fullName: z.string().min(2, "Le nom complet est requis."),
   email: z.string().email("L'adresse email est invalide."),
@@ -58,7 +56,6 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
   const [scriptReady, setScriptReady] = useState(false);
   const [scriptLoadError, setScriptLoadError] = useState<string | null>(null);
 
-
   const ticket = event.tickets.find((t) => t.id === ticketId);
 
   const form = useForm<z.infer<typeof formSchema>>({
@@ -71,47 +68,35 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
     },
   });
 
-  // Mettre à jour le formulaire si l'utilisateur se connecte
   useEffect(() => {
     if (session?.user) {
       if (session.user.name) form.setValue('fullName', session.user.name);
       if (session.user.email) form.setValue('email', session.user.email);
     }
   }, [session, form]);
-  
-  // Détecter si le script de paiement ne se charge pas (bloqueur de pub, etc.)
+
   useEffect(() => {
-    // Set a timeout to detect if the script fails to load silently.
     const timer = setTimeout(() => {
-        if (!scriptReady && !isProcessing) {
-            // Check if the PaiementPro object is on window, just in case `onLoad` failed to fire
-            if (typeof (window as any).PaiementPro === 'undefined') {
-                const errorMessage = "Le script de paiement n'a pas pu être chargé. Cela peut être dû à un bloqueur de publicités, une extension de navigateur ou un problème de réseau. Veuillez désactiver votre bloqueur de publicités et rafraîchir la page.";
-                setScriptLoadError(errorMessage);
-                toast({
-                    title: 'Erreur de chargement du paiement',
-                    description: errorMessage,
-                    variant: 'destructive',
-                    duration: 15000,
-                });
-            } else {
-                // The script loaded but onLoad didn't fire. Let's force it.
-                setScriptReady(true);
-            }
-        }
-    }, 10000); // 10 second timeout
+      if (!scriptReady && !isProcessing && typeof (window as any).PaiementPro === 'undefined') {
+        const errorMessage = "Le script de paiement n'a pas pu être chargé. Cela peut être dû à un bloqueur de publicités ou un problème de réseau. Veuillez désactiver votre bloqueur de publicités et rafraîchir la page.";
+        setScriptLoadError(errorMessage);
+        toast({
+          title: 'Erreur de chargement du paiement',
+          description: errorMessage,
+          variant: 'destructive',
+          duration: 15000,
+        });
+      }
+    }, 10000);
 
     return () => clearTimeout(timer);
   }, [scriptReady, isProcessing, toast]);
-
 
   if (!ticket) {
     return (
       <Card>
         <CardContent className="pt-6">
-          <p className="text-center text-muted-foreground">
-            Billet introuvable
-          </p>
+          <p className="text-center text-muted-foreground">Billet introuvable</p>
         </CardContent>
       </Card>
     );
@@ -120,39 +105,23 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
   const quantity = form.watch('quantity');
   const totalPrice = ticket.price * quantity;
 
-  // Soumission du formulaire pour initier le paiement
   async function onSubmit(values: z.infer<typeof formSchema>) {
     if (!ticket) return;
     setIsProcessing(true);
 
-    const merchantId = process.env.NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID;
-
-    if (!merchantId) {
-      toast({
-        title: 'Erreur de configuration',
-        description: "L'ID Marchand pour le paiement est manquant. L'administrateur doit configurer la variable d'environnement NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID.",
-        variant: 'destructive',
-        duration: 10000,
-      });
-      setIsProcessing(false);
-      return;
-    }
-    
     if (!scriptReady || typeof (window as any).PaiementPro === 'undefined') {
-      toast({
-        title: 'Erreur de paiement',
-        description: 'La passerelle de paiement n\'a pas pu être chargée. Veuillez rafraîchir la page.',
-        variant: 'destructive',
-      });
-      setIsProcessing(false);
-      return;
+        toast({
+            title: 'Erreur de paiement',
+            description: "La passerelle de paiement n'est pas prête. Veuillez patienter ou rafraîchir la page.",
+            variant: 'destructive',
+        });
+        setIsProcessing(false);
+        return;
     }
-
-    const [firstName, ...lastNameParts] = values.fullName.split(' ');
-    const lastName = lastNameParts.join(' ') || firstName;
 
     try {
-      const paymentSession = await createPaiementProSession({
+      // 1. Appeler l'action serveur pour initialiser le paiement
+      const paymentInitData = await initializePayment({
         eventId: event.id,
         ticketId: ticket.id,
         quantity: values.quantity,
@@ -160,29 +129,33 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
         email: values.email,
       });
 
-      if (!paymentSession.success || !paymentSession.referenceNumber || !paymentSession.returnContext || !paymentSession.description || !paymentSession.amount) {
-        throw new Error(paymentSession.error || 'Impossible de préparer la transaction.');
+      if (!paymentInitData.success || !paymentInitData.reference || !paymentInitData.amount || !paymentInitData.merchantId) {
+        throw new Error(paymentInitData.error || "Impossible d'initialiser le paiement côté serveur.");
       }
+
+      // 2. Configurer et rediriger avec Paiement Pro
+      const { reference, amount, merchantId } = paymentInitData;
+      const [firstName, ...lastNameParts] = values.fullName.split(' ');
+      const lastName = lastNameParts.join(' ') || firstName;
+      const description = `Achat de ${values.quantity} billet(s) pour "${event.name}"`;
 
       const paiementPro = new (window as any).PaiementPro(merchantId);
       
-      paiementPro.amount = paymentSession.amount;
+      paiementPro.amount = amount;
       paiementPro.channel = paymentChannel === 'mobile-money' ? 'MOBILE_MONEY_CI' : 'CARD';
-      paiementPro.referenceNumber = paymentSession.referenceNumber;
+      paiementPro.referenceNumber = reference;
       paiementPro.customerEmail = values.email;
-      // ⚠️ CORRECTION: Dans la doc PaiementPro, firstName = Nom de famille, lastname = Prénoms (inversé!)
-      paiementPro.customerFirstName = lastName;  // Nom de famille
-      paiementPro.customerLastname = firstName;   // Prénoms
+      paiementPro.customerFirstName = lastName;
+      paiementPro.customerLastname = firstName;
       paiementPro.customerPhoneNumber = values.phoneNumber;
-      paiementPro.description = paymentSession.description;
-      // ✅ CORRECTION: Utiliser countryCurrencyCode au lieu de currency
-      paiementPro.countryCurrencyCode = '952'; // Code pour FCFA
+      paiementPro.description = description;
+      paiementPro.countryCurrencyCode = '952';
       paiementPro.notificationURL = `${window.location.origin}/api/payment/webhook`;
-      paiementPro.returnURL = `${window.location.origin}/purchase/success?orderId=${paymentSession.referenceNumber}`;
-      paiementPro.returnContext = paymentSession.returnContext;
+      paiementPro.returnURL = `${window.location.origin}/purchase/success?orderId=${reference}`;
+      // returnContext n'est plus la source de vérité, mais peut être utile pour le débogage
+      paiementPro.returnContext = JSON.stringify({ saleId: reference });
 
       console.log("Préparation du paiement avec Paiement Pro...");
-      
       await paiementPro.getUrlPayment();
       
       if (paiementPro.success) {
@@ -191,11 +164,11 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
       } else {
           throw new Error("Impossible d'initialiser le paiement. Raison: " + (paiementPro.message || 'Erreur inconnue de la passerelle.'));
       }
-    } catch(error) {
-      console.error("Erreur lors de l'initialisation de Paiement Pro:", error);
+    } catch (error) {
+      console.error("Erreur lors de la soumission du paiement:", error);
       toast({
           title: 'Erreur de paiement',
-          description: error instanceof Error ? error.message : "La passerelle de paiement n'a pas pu être initialisée. Vérifiez la console pour plus de détails.",
+          description: error instanceof Error ? error.message : "Une erreur est survenue.",
           variant: 'destructive',
       });
       setIsProcessing(false);
@@ -204,7 +177,6 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
 
   return (
     <>
-      {/* ✅ CORRECTION: Ajouter "www." à l'URL */}
       <Script 
         src="https://www.paiementpro.net/webservice/onlinepayment/js/paiementpro.v1.0.1.js" 
         strategy="afterInteractive"
@@ -212,21 +184,13 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
         onError={() => {
             const errorMessage = 'Le script de paiement externe n\'a pas pu être chargé. Veuillez vérifier votre connexion internet ou désactiver votre bloqueur de publicités.';
             setScriptLoadError(errorMessage);
-            toast({
-                title: 'Erreur critique',
-                description: errorMessage,
-                variant: 'destructive',
-                duration: 10000,
-            });
         }}
       />
       {scriptLoadError && (
           <Alert variant="destructive" className="mb-4">
               <AlertTriangle className="h-4 w-4" />
               <AlertTitle>Problème de chargement de la passerelle de paiement</AlertTitle>
-              <AlertDescription>
-                  {scriptLoadError}
-              </AlertDescription>
+              <AlertDescription>{scriptLoadError}</AlertDescription>
           </Alert>
       )}
       <Card className="border-none shadow-none">
@@ -234,7 +198,6 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
           <form onSubmit={form.handleSubmit(onSubmit)}>
             <CardContent className="space-y-6 p-0">
                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                 {/* Nom complet */}
                 <FormField
                   control={form.control}
                   name="fullName"
@@ -251,7 +214,6 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
                     </FormItem>
                   )}
                 />
-                 {/* Email */}
                 <FormField
                   control={form.control}
                   name="email"
@@ -271,7 +233,6 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
                </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  {/* Numéro de téléphone */}
                   <FormField
                     control={form.control}
                     name="phoneNumber"
@@ -288,7 +249,6 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
                       </FormItem>
                     )}
                   />
-                  {/* Quantité */}
                   <FormField
                     control={form.control}
                     name="quantity"
@@ -301,7 +261,7 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
                             min="1"
                             max={Math.min(10, ticket.quantity)}
                             {...field}
-                            onChange={(e) => field.onChange(parseInt(e.target.value))}
+                            onChange={(e) => field.onChange(parseInt(e.target.value) || 1)}
                           />
                         </FormControl>
                         <FormMessage />
@@ -310,7 +270,6 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
                   />
                 </div>
 
-              {/* Récapitulatif */}
               <div className="rounded-lg border bg-muted/50 p-4 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Prix unitaire</span>
@@ -326,7 +285,6 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
                 </div>
               </div>
               
-               {/* Méthode de paiement */}
               <div className="space-y-3">
                   <Label>Méthode de paiement</Label>
                   <RadioGroup defaultValue={paymentChannel} onValueChange={setPaymentChannel} className="grid grid-cols-1 gap-2">

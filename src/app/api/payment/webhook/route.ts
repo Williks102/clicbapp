@@ -1,74 +1,92 @@
+
 import { NextResponse } from 'next/server';
-import { createPurchaseAndSendTicket } from '@/app/actions/ticket-actions';
 import { firestore } from '@/lib/firebase-admin';
-import type { PurchaseData } from '@/lib/types';
+import { finalizePurchaseAndSendTicket } from '@/app/actions/ticket-actions';
+import type { Event, Sale } from '@/lib/types';
 
 const SUCCESS_STATUSES = new Set(['SUCCESSFUL', 'SUCCESS', 'PAID', 'success']);
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    console.log('[Webhook] Received payload from Paiement Pro:', body);
+    console.log('[Webhook] 🔔 Received payload from Paiement Pro:', body);
 
-    // IMPORTANT: in production, verify Paiement Pro signature/header before processing.
+    // 1. Extraire les informations essentielles
     const paymentStatus = body.status;
-    const referenceNumber = body.referenceNumber || body.reference_number;
+    const referenceNumber = body.referenceNumber;
+    const paidAmount = parseFloat(body.amount);
 
     if (!referenceNumber) {
-      console.error('[Webhook] Missing reference number in payload');
-      return NextResponse.json({ error: 'Missing reference number' }, { status: 400 });
+      console.error('[Webhook] ❌ Missing referenceNumber in payload.');
+      return NextResponse.json({ error: 'Missing referenceNumber' }, { status: 400 });
     }
 
-    if (!SUCCESS_STATUSES.has(paymentStatus)) {
-      console.log(`[Webhook] Payment ignored for ${referenceNumber}. Status: ${paymentStatus}`);
-      return NextResponse.json({ status: 'ignored', message: `Payment status was ${paymentStatus}` });
+    // 2. Récupérer la commande en attente depuis Firestore
+    const saleRef = firestore.collection('sales').doc(referenceNumber);
+    const saleDoc = await saleRef.get();
+
+    if (!saleDoc.exists) {
+      console.error(`[Webhook] ❌ Sale with reference ${referenceNumber} not found.`);
+      return NextResponse.json({ error: 'Sale not found' }, { status: 404 });
     }
 
-    const paymentSessionRef = firestore.collection('payment_sessions').doc(referenceNumber);
-    const paymentSessionSnap = await paymentSessionRef.get();
+    const sale = saleDoc.data() as Sale;
 
-    if (!paymentSessionSnap.exists) {
-      console.error(`[Webhook] No payment session found for reference ${referenceNumber}`);
-      return NextResponse.json({ error: 'Unknown payment reference' }, { status: 404 });
+    // 3. Vérifier que la commande est bien en attente
+    if (sale.status !== 'PENDING') {
+      console.warn(`[Webhook] ⚠️ Received webhook for an already processed sale: ${referenceNumber}, status: ${sale.status}`);
+      return NextResponse.json({ status: 'already_processed', message: 'Webhook was already handled.' });
     }
 
-    const paymentSession = paymentSessionSnap.data() as {
-      status?: string;
-      purchaseData?: PurchaseData;
-      saleId?: string | null;
-    };
-
-    if (paymentSession.status === 'completed' && paymentSession.saleId) {
-      console.log(`[Webhook] Duplicate callback for ${referenceNumber}, already completed.`);
-      return NextResponse.json({ status: 'success', message: 'Already processed' });
+    // Si le paiement n'est pas un succès
+    if (paymentStatus !== 'SUCCESSFUL' && paymentStatus !== 'success' && paymentStatus !== 'PAID') {
+        console.log(`[Webhook] 📉 Payment failed for ${referenceNumber}. Status: ${paymentStatus}`);
+        await saleRef.update({ status: 'FAILED', paymentDetails: body });
+        return NextResponse.json({ status: 'ignored', message: `Payment status was ${paymentStatus}` });
     }
 
-    if (!paymentSession.purchaseData) {
-      console.error(`[Webhook] Missing trusted purchase data for ${referenceNumber}`);
-      return NextResponse.json({ error: 'Missing purchase data' }, { status: 400 });
+    // 4. Validation cruciale : comparer les montants
+    if (paidAmount !== sale.totalPrice) {
+      console.error(`[Webhook] 🚨 SECURITY ALERT: Amount mismatch for sale ${referenceNumber}. Expected ${sale.totalPrice}, got ${paidAmount}.`);
+      await saleRef.update({ status: 'FLAGGED', paymentDetails: body });
+      return NextResponse.json({ error: 'Amount mismatch' }, { status: 400 });
     }
+    
+    console.log(`[Webhook] ✅ Payment successful for ${referenceNumber}. Amount validated.`);
 
-    const result = await createPurchaseAndSendTicket(paymentSession.purchaseData);
+    // 5. Exécuter la transaction finale
+    const eventRef = firestore.collection('events').doc(sale.eventId);
 
-    if (!result.success || !result.saleId) {
-      console.error('[Webhook] Error creating ticket after successful payment:', result.error);
-      return NextResponse.json({ status: 'error', message: result.error || 'Ticket creation failed' }, { status: 500 });
-    }
+    await firestore.runTransaction(async (transaction) => {
+      const eventDoc = await transaction.get(eventRef);
+      if (!eventDoc.exists) throw new Error(`Event ${sale.eventId} not found`);
 
-    await paymentSessionRef.set(
-      {
-        status: 'completed',
-        saleId: result.saleId,
-        processedAt: new Date().toISOString(),
-        webhookPayload: body,
-      },
-      { merge: true }
-    );
+      const event = eventDoc.data() as Event;
+      const ticketIndex = event.tickets.findIndex(t => t.id === sale.ticketId);
+      if (ticketIndex === -1) throw new Error(`Ticket ${sale.ticketId} not found`);
 
-    console.log(`[Webhook] Ticket created successfully. Sale ID: ${result.saleId}`);
+      const ticket = event.tickets[ticketIndex];
+      if (ticket.quantity < sale.quantity) throw new Error(`Not enough tickets in stock for ${ticket.name}`);
+
+      // Décrémenter la quantité
+      const updatedTickets = [...event.tickets];
+      updatedTickets[ticketIndex] = { ...ticket, quantity: ticket.quantity - sale.quantity };
+      transaction.update(eventRef, { tickets: updatedTickets });
+
+      // Mettre à jour le statut de la vente
+      transaction.update(saleRef, { status: 'PAID', paymentDetails: body });
+    });
+
+    console.log(`[Webhook] 📦 Stock updated and sale ${referenceNumber} marked as PAID.`);
+
+    // 6. Envoyer les billets (après la transaction réussie)
+    await finalizePurchaseAndSendTicket(referenceNumber);
+
     return NextResponse.json({ status: 'success', message: 'Webhook processed successfully' });
+
   } catch (error) {
-    console.error('[Webhook] Error processing webhook:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    console.error('[Webhook] ❌ Unhandled error processing webhook:', error);
+    const errorMessage = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ error: errorMessage }, { status: 500 });
   }
 }
