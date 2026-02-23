@@ -32,8 +32,8 @@ import { useToast } from '@/hooks/use-toast';
 import type { Event } from '@/lib/types';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
-import { generateId } from '@/lib/utils';
 import { Alert, AlertDescription, AlertTitle } from './ui/alert';
+import { createPaiementProSession } from '@/app/actions/payment-actions';
 
 
 // Schéma de validation incluant le numéro de téléphone
@@ -148,38 +148,38 @@ export function CheckoutForm({ event, ticketId }: CheckoutFormProps) {
       return;
     }
 
-    const referenceNumber = generateId(`clicbillet-${event.id.slice(0, 4)}`);
     const [firstName, ...lastNameParts] = values.fullName.split(' ');
     const lastName = lastNameParts.join(' ') || firstName;
-    const description = `Achat de ${values.quantity} billet(s) pour "${event.name}"`;
-
-    const returnContext = JSON.stringify({
-      eventId: event.id,
-      ticketId: ticket.id,
-      quantity: values.quantity,
-      fullName: values.fullName,
-      email: values.email,
-      totalPrice: totalPrice,
-      organizerId: event.organizerId
-    });
 
     try {
+      const paymentSession = await createPaiementProSession({
+        eventId: event.id,
+        ticketId: ticket.id,
+        quantity: values.quantity,
+        fullName: values.fullName,
+        email: values.email,
+      });
+
+      if (!paymentSession.success || !paymentSession.referenceNumber || !paymentSession.returnContext || !paymentSession.description || !paymentSession.amount) {
+        throw new Error(paymentSession.error || 'Impossible de préparer la transaction.');
+      }
+
       const paiementPro = new (window as any).PaiementPro(merchantId);
       
-      paiementPro.amount = totalPrice;
+      paiementPro.amount = paymentSession.amount;
       paiementPro.channel = paymentChannel === 'mobile-money' ? 'MOBILE_MONEY_CI' : 'CARD';
-      paiementPro.referenceNumber = referenceNumber;
+      paiementPro.referenceNumber = paymentSession.referenceNumber;
       paiementPro.customerEmail = values.email;
       // ⚠️ CORRECTION: Dans la doc PaiementPro, firstName = Nom de famille, lastname = Prénoms (inversé!)
       paiementPro.customerFirstName = lastName;  // Nom de famille
       paiementPro.customerLastname = firstName;   // Prénoms
       paiementPro.customerPhoneNumber = values.phoneNumber;
-      paiementPro.description = description;
+      paiementPro.description = paymentSession.description;
       // ✅ CORRECTION: Utiliser countryCurrencyCode au lieu de currency
       paiementPro.countryCurrencyCode = '952'; // Code pour FCFA
       paiementPro.notificationURL = `${window.location.origin}/api/payment/webhook`;
-      paiementPro.returnURL = `${window.location.origin}/purchase/success?orderId=${referenceNumber}`;
-      paiementPro.returnContext = returnContext;
+      paiementPro.returnURL = `${window.location.origin}/purchase/success?orderId=${paymentSession.referenceNumber}`;
+      paiementPro.returnContext = paymentSession.returnContext;
 
       console.log("Préparation du paiement avec Paiement Pro...");
       

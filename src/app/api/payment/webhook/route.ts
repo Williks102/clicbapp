@@ -1,64 +1,72 @@
 import { NextResponse } from 'next/server';
 import { createPurchaseAndSendTicket } from '@/app/actions/ticket-actions';
+import { firestore } from '@/lib/firebase-admin';
 import type { PurchaseData } from '@/lib/types';
+
+const SUCCESS_STATUSES = new Set(['SUCCESSFUL', 'SUCCESS', 'PAID', 'success']);
 
 export async function POST(request: Request) {
   try {
     const body = await request.json();
     console.log('[Webhook] Received payload from Paiement Pro:', body);
 
-    // IMPORTANT: In a production environment, you MUST verify a signature 
-    // from Paiement Pro to ensure the webhook is legitimate. This is a critical security step.
-
-    // I'm guessing the field names based on common patterns.
-    // You will need to adjust these based on Paiement Pro's actual webhook payload.
+    // IMPORTANT: in production, verify Paiement Pro signature/header before processing.
     const paymentStatus = body.status;
     const referenceNumber = body.referenceNumber || body.reference_number;
-    
-    // Check if the payment was successful
-    if (paymentStatus === 'SUCCESSFUL' || paymentStatus === 'success' || paymentStatus === 'PAID') { // Common success statuses
-      
-      let purchaseData: PurchaseData | null = null;
-      if (body.returnContext || body.return_context) {
-        try {
-          // The context is insecurely passed from the client.
-          // SECURITY WARNING: In a real app, you must not trust this data directly.
-          // You should retrieve the purchase details from your own database using the 'referenceNumber'
-          // which you would have saved before initiating the payment.
-          purchaseData = JSON.parse(body.returnContext || body.return_context);
-        } catch (e) {
-          console.error('[Webhook] Failed to parse return_context', e);
-          return NextResponse.json({ error: 'Invalid context' }, { status: 400 });
-        }
-      }
 
-      if (!purchaseData) {
-        console.error('[Webhook] Missing purchase data in return_context');
-        return NextResponse.json({ error: 'Missing purchase data' }, { status: 400 });
-      }
+    if (!referenceNumber) {
+      console.error('[Webhook] Missing reference number in payload');
+      return NextResponse.json({ error: 'Missing reference number' }, { status: 400 });
+    }
 
-      console.log(`[Webhook] Payment successful for order reference: ${referenceNumber}`);
-      console.log('[Webhook] Creating ticket with data:', purchaseData);
-
-      // Call the trusted server action to create the ticket and send the email
-      const result = await createPurchaseAndSendTicket(purchaseData);
-
-      if (result.success) {
-        console.log(`[Webhook] Ticket created successfully. Sale ID: ${result.saleId}`);
-        // Paiement Pro likely expects a specific JSON response to confirm receipt
-        return NextResponse.json({ status: 'success', message: 'Webhook processed successfully' });
-      } else {
-        console.error('[Webhook] Error creating ticket after successful payment:', result.error);
-        // Even if ticket creation fails, we must return a 200 OK to Paiement Pro to prevent retries.
-        // Log this error for manual intervention.
-        return NextResponse.json({ status: 'error', message: 'Failed to create ticket internally' }, { status: 500 });
-      }
-
-    } else {
-      console.log(`[Webhook] Payment was not successful for order: ${referenceNumber}. Status: ${paymentStatus}`);
+    if (!SUCCESS_STATUSES.has(paymentStatus)) {
+      console.log(`[Webhook] Payment ignored for ${referenceNumber}. Status: ${paymentStatus}`);
       return NextResponse.json({ status: 'ignored', message: `Payment status was ${paymentStatus}` });
     }
 
+    const paymentSessionRef = firestore.collection('payment_sessions').doc(referenceNumber);
+    const paymentSessionSnap = await paymentSessionRef.get();
+
+    if (!paymentSessionSnap.exists) {
+      console.error(`[Webhook] No payment session found for reference ${referenceNumber}`);
+      return NextResponse.json({ error: 'Unknown payment reference' }, { status: 404 });
+    }
+
+    const paymentSession = paymentSessionSnap.data() as {
+      status?: string;
+      purchaseData?: PurchaseData;
+      saleId?: string | null;
+    };
+
+    if (paymentSession.status === 'completed' && paymentSession.saleId) {
+      console.log(`[Webhook] Duplicate callback for ${referenceNumber}, already completed.`);
+      return NextResponse.json({ status: 'success', message: 'Already processed' });
+    }
+
+    if (!paymentSession.purchaseData) {
+      console.error(`[Webhook] Missing trusted purchase data for ${referenceNumber}`);
+      return NextResponse.json({ error: 'Missing purchase data' }, { status: 400 });
+    }
+
+    const result = await createPurchaseAndSendTicket(paymentSession.purchaseData);
+
+    if (!result.success || !result.saleId) {
+      console.error('[Webhook] Error creating ticket after successful payment:', result.error);
+      return NextResponse.json({ status: 'error', message: result.error || 'Ticket creation failed' }, { status: 500 });
+    }
+
+    await paymentSessionRef.set(
+      {
+        status: 'completed',
+        saleId: result.saleId,
+        processedAt: new Date().toISOString(),
+        webhookPayload: body,
+      },
+      { merge: true }
+    );
+
+    console.log(`[Webhook] Ticket created successfully. Sale ID: ${result.saleId}`);
+    return NextResponse.json({ status: 'success', message: 'Webhook processed successfully' });
   } catch (error) {
     console.error('[Webhook] Error processing webhook:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
