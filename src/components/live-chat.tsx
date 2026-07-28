@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { DataError } from '@/components/data-error';
 import { useToast } from '@/hooks/use-toast';
 import { banUserFromChat, hideChatMessage, sendChatMessage } from '@/app/actions/chat-actions';
 import { cn } from '@/lib/utils';
@@ -47,7 +48,11 @@ export function LiveChat({ competitionId, canModerate = false, className }: Live
     [areServicesAvailable, firestore, competitionId]
   );
 
-  const { data: messages, isLoading } = useCollection<ChatMessage>(messagesQuery);
+  const {
+    data: messages,
+    isLoading,
+    error,
+  } = useCollection<ChatMessage>(messagesQuery);
 
   // La requête descend du plus récent : on ré-inverse pour un fil chronologique.
   const orderedMessages = useMemo(() => {
@@ -118,7 +123,9 @@ export function LiveChat({ competitionId, canModerate = false, className }: Live
             </div>
           )}
 
-          {!isLoading && orderedMessages.length === 0 && (
+          <DataError error={error} subject="le chat" />
+
+          {!isLoading && !error && orderedMessages.length === 0 && (
             <p className="py-8 text-center text-sm text-muted-foreground">
               Aucun message pour l&apos;instant. Lancez la conversation !
             </p>

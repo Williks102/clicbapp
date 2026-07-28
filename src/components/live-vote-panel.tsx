@@ -12,6 +12,7 @@ import { useCollection, useFirebase } from '@/firebase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { DataError } from '@/components/data-error';
 import { useToast } from '@/hooks/use-toast';
 import { castFreeVote, getFreeVoteStatus } from '@/app/actions/vote-actions';
 import { formatVotes } from '@/lib/utils';
@@ -46,7 +47,11 @@ export function LiveVotePanel({ competition, votingOpen }: LiveVotePanelProps) {
     [areServicesAvailable, firestore, competition.id]
   );
 
-  const { data: candidates, isLoading } = useCollection<Candidate>(candidatesQuery);
+  const {
+    data: candidates,
+    isLoading,
+    error,
+  } = useCollection<Candidate>(candidatesQuery);
 
   useEffect(() => {
     let cancelled = false;
@@ -104,7 +109,9 @@ export function LiveVotePanel({ competition, votingOpen }: LiveVotePanelProps) {
           </div>
         )}
 
-        {!isLoading && activeCandidates.length === 0 && (
+        <DataError error={error} subject="les candidats" />
+
+        {!isLoading && !error && activeCandidates.length === 0 && (
           <p className="py-6 text-center text-sm text-muted-foreground">
             Aucun candidat en lice.
           </p>

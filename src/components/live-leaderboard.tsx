@@ -8,6 +8,7 @@ import { Crown, Loader2, TrendingUp } from 'lucide-react';
 import { useCollection, useFirebase } from '@/firebase';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { DataError } from '@/components/data-error';
 import { cn, formatVotes } from '@/lib/utils';
 import type { Candidate } from '@/lib/types';
 
@@ -44,7 +45,11 @@ export function LiveLeaderboard({
     [areServicesAvailable, firestore, competitionId]
   );
 
-  const { data: candidates, isLoading } = useCollection<Candidate>(candidatesQuery);
+  const {
+    data: candidates,
+    isLoading,
+    error,
+  } = useCollection<Candidate>(candidatesQuery);
 
   const entries = useMemo(() => {
     if (!candidates) return [];
@@ -72,7 +77,9 @@ export function LiveLeaderboard({
           </div>
         )}
 
-        {!isLoading && entries.length === 0 && (
+        <DataError error={error} subject="le classement" />
+
+        {!isLoading && !error && entries.length === 0 && (
           <p className="py-6 text-center text-sm text-muted-foreground">
             Aucun candidat pour le moment.
           </p>

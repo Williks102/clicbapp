@@ -13,6 +13,7 @@ import Footer from '@/components/footer';
 import CompetitionCard from '@/components/competition-card';
 import { useCollection, useDoc, useFirebase } from '@/firebase';
 import { Skeleton } from '@/components/ui/skeleton';
+import { DataError } from '@/components/data-error';
 import { PUBLIC_COMPETITION_STATUSES } from '@/lib/live-utils';
 import type { Competition, Organizer } from '@/lib/types';
 
@@ -41,8 +42,11 @@ export default function OrganizerPage() {
         : null,
     [areServicesAvailable, firestore, organizerId]
   );
-  const { data: competitions, isLoading: areCompetitionsLoading } =
-    useCollection<Competition>(competitionsQuery);
+  const {
+    data: competitions,
+    isLoading: areCompetitionsLoading,
+    error: competitionsError,
+  } = useCollection<Competition>(competitionsQuery);
 
   if (!isLoading && !organizer) {
     notFound();
@@ -121,11 +125,20 @@ export default function OrganizerPage() {
                   <CompetitionCard.Skeleton key={index} />
                 ))}
 
-              {publicCompetitions.length > 0
+              {competitionsError && (
+                <DataError
+                  error={competitionsError}
+                  subject="les concours"
+                  className="col-span-full"
+                />
+              )}
+
+              {!competitionsError && publicCompetitions.length > 0
                 ? publicCompetitions.map((competition) => (
                     <CompetitionCard key={competition.id} competition={competition} />
                   ))
-                : !areCompetitionsLoading && (
+                : !areCompetitionsLoading &&
+                  !competitionsError && (
                     <p className="col-span-full text-muted-foreground">
                       Cet organisateur n&apos;a aucun concours publié pour le moment.
                     </p>

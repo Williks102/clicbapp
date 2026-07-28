@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
+import { DataError } from '@/components/data-error';
 import { useCollection, useFirebase } from '@/firebase';
 import { PUBLIC_COMPETITION_STATUSES } from '@/lib/live-utils';
 import { formatFCFA } from '@/lib/utils';
@@ -32,7 +33,11 @@ export default function LivePage() {
     [areServicesAvailable, firestore]
   );
 
-  const { data: competitions, isLoading } = useCollection<Competition>(competitionsQuery);
+  const {
+    data: competitions,
+    isLoading,
+    error,
+  } = useCollection<Competition>(competitionsQuery);
 
   const broadcasts = useMemo(() => {
     const withLive = (competitions ?? []).filter((c) => c.live?.enabled);
@@ -136,7 +141,9 @@ export default function LivePage() {
         ))}
       </div>
 
-      {!isLoading && broadcasts.length === 0 && (
+      <DataError error={error} subject="les diffusions" className="mt-8" />
+
+      {!isLoading && !error && broadcasts.length === 0 && (
         <div className="mt-8 flex h-40 flex-col items-center justify-center rounded-lg border-2 border-dashed">
           <p className="text-muted-foreground">
             Aucune diffusion programmée pour le moment.

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/page-header';
 import CompetitionCard from '@/components/competition-card';
+import { DataError } from '@/components/data-error';
 import { useCollection, useFirebase } from '@/firebase';
 import {
   COMPETITION_STATUS_LABELS,
@@ -40,7 +41,11 @@ export default function CompetitionsPage() {
     [areServicesAvailable, firestore]
   );
 
-  const { data: competitions, isLoading } = useCollection<Competition>(competitionsQuery);
+  const {
+    data: competitions,
+    isLoading,
+    error,
+  } = useCollection<Competition>(competitionsQuery);
 
   const publicCompetitions = useMemo(() => competitions ?? [], [competitions]);
 
@@ -123,7 +128,9 @@ export default function CompetitionsPage() {
         ))}
       </div>
 
-      {!isLoading && filtered.length === 0 && (
+      <DataError error={error} subject="les concours" className="mt-8" />
+
+      {!isLoading && !error && filtered.length === 0 && (
         <div className="mt-8 flex h-40 flex-col items-center justify-center rounded-lg border-2 border-dashed">
           <p className="text-muted-foreground">
             Aucun concours ne correspond à ces filtres.

@@ -33,9 +33,13 @@ service cloud.firestore {
 
     // ==================== HELPERS ====================
 
-    /** Un concours est public dès lors qu'il n'est plus en brouillon. */
+    /**
+     * Un concours est public dès lors qu'il n'est plus en brouillon.
+     * `get()` avec valeur par défaut évite qu'un document dépourvu de champ
+     * `status` fasse échouer l'évaluation — et donc toute la requête.
+     */
     function isPublishedCompetition() {
-      return resource != null && resource.data.status != 'draft';
+      return resource != null && resource.data.get('status', 'draft') != 'draft';
     }
 
     // ==================== CONCOURS ====================
@@ -161,18 +165,7 @@ service cloud.firestore {
   }
 }
 
-// ==================== FIREBASE STORAGE ====================
-
-service firebase.storage {
-  match /b/{bucket}/o {
-    /**
-     * Les visuels des concours et les portraits des candidats sont hébergés
-     * sur Cloudinary. Ce bucket ne sert qu'aux contenus historiques, en
-     * lecture seule.
-     */
-    match /{allPaths=**} {
-      allow read: if true;
-      allow write: if false;
-    }
-  }
-}
+// Note : les règles Cloud Storage vivent dans `storage.rules`.
+// Un fichier de règles Firestore ne peut déclarer que `service cloud.firestore` ;
+// y ajouter un bloc `service firebase.storage` fait échouer la compilation et
+// donc le déploiement de l'ensemble des règles.

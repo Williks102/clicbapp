@@ -19,6 +19,7 @@ import { Input } from '@/components/ui/input';
 import MainNav from '@/components/main-nav';
 import Footer from '@/components/footer';
 import CompetitionCard from '@/components/competition-card';
+import { DataError } from '@/components/data-error';
 import { useCollection, useFirebase } from '@/firebase';
 import { PUBLIC_COMPETITION_STATUSES } from '@/lib/live-utils';
 import { cn, formatVotes } from '@/lib/utils';
@@ -67,7 +68,11 @@ export default function Home() {
     [areServicesAvailable, firestore]
   );
 
-  const { data: competitions, isLoading } = useCollection<Competition>(competitionsQuery);
+  const {
+    data: competitions,
+    isLoading,
+    error,
+  } = useCollection<Competition>(competitionsQuery);
 
   const publicCompetitions = useMemo(() => competitions ?? [], [competitions]);
 
@@ -286,7 +291,9 @@ export default function Home() {
               ))}
             </div>
 
-            {!isLoading && filtered.length === 0 && (
+            <DataError error={error} subject="les concours" className="mt-4" />
+
+            {!isLoading && !error && filtered.length === 0 && (
               <div className="flex h-40 flex-col items-center justify-center rounded-lg border-2 border-dashed">
                 <p className="text-muted-foreground">
                   Aucun concours ne correspond à votre recherche.
