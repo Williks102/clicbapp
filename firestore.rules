@@ -1,333 +1,178 @@
-
 /**
- * Core Philosophy: This ruleset implements a security model with three primary access levels:
- * 1.  User-Owned Data: User profiles and their associated tickets are strictly private. Only the authenticated owner of the data can perform any action on it. This is enforced for all paths under `/users/{userId}`.
- * 2.  Public-Read, Owner-Write Data: Collections like `organizers` and `events` are publicly readable by anyone, allowing users to browse event details. However, only the authenticated organizer who created the content can modify or delete it.
- * 3.  Role-Based Access Control (RBAC): Global data like `categories`, `ticketTypes`, and `percentageConfigurations` is managed by administrators. The presence of a user's UID in the `/roles_admin` collection grants them administrative privileges for write operations on these collections.
+ * ClicVote — Règles de sécurité Firestore
  *
- * Data Structure:
- * - /users/{userId} -> tickets/{ticketId}: Private data owned by a specific user.
- * - /organizers/{organizerId}: Public data managed by a specific organizer (who is also a user).
- * - /events/{eventId}: Public data, writable only by the owning organizer.
- * - /categories, /ticketTypes: Publicly readable master data, writable only by admins.
- * - /percentageConfigurations: Private configuration data, readable and writable only by admins.
- * - /roles_admin: A locked-down collection that serves as the source of truth for identifying admin users.
- * - /sales: Sales data accessible to customers (by email), organizers (by organizerId), and admins.
- * - /transactions: Financial transactions accessible to organizers (their own) and admins (all).
+ * Modèle de sécurité
+ * ------------------
+ * L'authentification de l'application repose sur NextAuth (cookie de session
+ * signé), et non sur Firebase Auth : `request.auth` est donc toujours nul pour
+ * le SDK client. Par conséquent :
  *
- * Key Security Decisions:
- * - Admin Role Management: The `/roles_admin` collection is read-only via security rules. Admins must be added or removed manually through the Firebase Console to prevent any client-side escalation of privileges.
- * - No User/Organizer Listing: Top-level listing of `/users` and `/organizers` collections is disabled to protect user privacy and prevent data scraping (except for admins).
- * - Default Deny: Any path not explicitly matched is denied access. Permissions that are not explicitly granted are also denied.
+ *  1. Le SDK client est strictement EN LECTURE SEULE. Il ne sert qu'aux
+ *     affichages temps réel : classement des candidats, statut du direct et
+ *     chat des diffusions.
+ *  2. Toutes les écritures (votes, commandes, concours, candidats, messages,
+ *     modération) passent par des Server Actions Next.js qui utilisent le SDK
+ *     Admin et contournent ces règles après avoir vérifié la session et le rôle
+ *     de l'utilisateur.
+ *  3. Les collections contenant des données personnelles ou financières
+ *     (utilisateurs, votes, commandes, accès aux directs, configurations) sont
+ *     totalement inaccessibles depuis le client.
  *
- * Denormalization for Authorization:
- * To ensure fast and secure rules, authorization data is denormalized. For example, a document in the `/users/{userId}/tickets` subcollection must contain a `userId` field that matches the `{userId}` in the path. Similarly, an `event` document contains an `organizerId`. This avoids costly and slow `get()` calls in rules, making authorization checks efficient.
+ * Lecture publique
+ * ----------------
+ * Seules les données destinées à l'affichage public sont lisibles :
+ * concours publiés, candidats, catégories, profils d'organisateurs et messages
+ * de chat. Les concours en brouillon restent invisibles : les requêtes clientes
+ * doivent filtrer sur `status` (voir `where('status', 'in', [...])`), sans quoi
+ * la requête est rejetée par la règle `list`.
  */
 rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // ==================== HELPER FUNCTIONS ====================
-    
-    function isSignedIn() {
-      return request.auth != null;
+    // ==================== HELPERS ====================
+
+    /** Un concours est public dès lors qu'il n'est plus en brouillon. */
+    function isPublishedCompetition() {
+      return resource != null && resource.data.status != 'draft';
     }
 
-    function isOwner(userId) {
-      return isSignedIn() && request.auth.uid == userId;
-    }
-
-    function isExistingOwner(resourceId) {
-        return isSignedIn() && resource != null && request.auth.uid == resource.data[resourceId];
-    }
+    // ==================== CONCOURS ====================
 
     /**
-     * Checks if the requesting user has an admin role.
-     * The role is granted if a document with the user's UID exists in the /roles_admin collection.
+     * @path   /competitions/{competitionId}
+     * @read   Public, hors brouillons.
+     * @write  Server Actions uniquement (SDK Admin).
      */
-    function isAdmin() {
-      return isSignedIn() && exists(/databases/$(database)/documents/roles_admin/$(request.auth.uid));
+    match /competitions/{competitionId} {
+      allow get: if isPublishedCompetition();
+      allow list: if isPublishedCompetition();
+      allow create, update, delete: if false;
     }
 
-    function isAdminAndExists() {
-      return isAdmin() && resource != null;
-    }
-    
-    function isEventOrganizer(eventId) {
-      return isSignedIn() && get(/databases/$(database)/documents/events/$(eventId)).data.organizerId == request.auth.uid;
-    }
+    // ==================== CANDIDATS ====================
 
-    // ==================== USER DATA ====================
-    
     /**
-     * @description   Protects a user's private profile document.
-     * @path          /users/{userId}
-     * @allow         A user can read/write their own profile.
-     * @allow         Admins can list and read all users.
-     * @deny          Regular users cannot list all users.
+     * @path   /candidates/{candidateId}
+     * @read   Public : alimente le classement temps réel.
+     * @write  Server Actions uniquement — les compteurs de votes ne doivent
+     *         jamais être modifiables depuis le client.
      */
-    match /users/{userId} {
-      allow get: if isOwner(userId) || isAdmin();
-      allow list: if isAdmin();
-      allow create: if isOwner(userId) && request.resource.data.id == userId;
-      allow update: if isOwner(userId) && request.resource.data.id == resource.data.id;
-      allow delete: if isOwner(userId) || isAdmin();
-
-      /**
-       * @description   Manages tickets purchased by a specific user.
-       * @path          /users/{userId}/tickets/{ticketId}
-       */
-      match /tickets/{ticketId} {
-        allow get: if isOwner(userId) || isAdmin();
-        allow list: if isOwner(userId) || isAdmin();
-        allow create: if isOwner(userId) && request.resource.data.userId == userId;
-        allow update: if isOwner(userId) && request.resource.data.userId == resource.data.userId;
-        allow delete: if isOwner(userId) || isAdmin();
-      }
+    match /candidates/{candidateId} {
+      allow get, list: if true;
+      allow create, update, delete: if false;
     }
 
-    // ==================== ORGANIZER DATA ====================
-    
+    // ==================== CHAT DES DIFFUSIONS ====================
+
     /**
-     * @description   Manages organizer profiles.
-     * @path          /organizers/{organizerId}
-     * @allow         Public read, owner write, admins can list.
+     * @path   /chatMessages/{messageId}
+     * @read   Public : le fil du chat s'affiche pour tous les spectateurs.
+     * @write  Server Action `sendChatMessage`, qui vérifie la session,
+     *         le bannissement éventuel et applique l'anti-spam.
+     */
+    match /chatMessages/{messageId} {
+      allow get, list: if true;
+      allow create, update, delete: if false;
+    }
+
+    // ==================== ORGANISATEURS ====================
+
+    /**
+     * @path   /organizers/{organizerId}
+     * @read   Fiche publique consultée sur /organizers/[id].
+     * @deny   Le listing complet est interdit (protection contre l'aspiration).
      */
     match /organizers/{organizerId} {
       allow get: if true;
-      allow list: if isAdmin();
-      allow create: if isOwner(organizerId) && request.resource.data.id == organizerId;
-      allow update: if isOwner(organizerId) && request.resource.data.id == resource.data.id;
-      allow delete: if isOwner(organizerId) || isAdmin();
-    }
-    
-    // ==================== EVENT DATA ====================
-    
-    /**
-     * @description   Manages events.
-     * @path          /events/{eventId}
-     * @allow         Public read, owner write, admins can manage all.
-     */
-    match /events/{eventId} {
-      allow get, list: if true;
-      allow create: if isSignedIn() && isOwner(request.resource.data.organizerId);
-      allow update: if (isExistingOwner('organizerId') || isAdmin()) &&
-                     // Allow organizers to update their own events, but protect sensitive stream fields
-                     (request.resource.data.diff(resource.data).affectedKeys()
-                      .except(['livestream.streamUrl', 'livestream.streamKey']).size() > 0 ||
-                      request.resource.data.livestream.diff(resource.data.livestream)
-                      .affectedKeys().hasOnly(['streamUrl', 'streamKey']));
-      allow delete: if isExistingOwner('organizerId') || isAdmin();
-    }
-    
-    // ==================== LIVESTREAM DATA ====================
-
-    /**
-     * @description   Manages livestream access for users.
-     * @path          /livestream_access/{accessId}
-     * @allow         Only authenticated users can manage their own access records.
-     */
-    match /livestream_access/{accessId} {
-      allow get: if isSignedIn() && resource.data.userId == request.auth.uid;
-      allow list: if isSignedIn(); // Allow listing only if filtered by userId
-      allow create: if false; // Server-side creation
-      allow update, delete: if false; // No client-side updates/deletes
+      allow list: if false;
+      allow create, update, delete: if false;
     }
 
-     // ==================== scanner ====================
-
-  /**
- * @description   Manages ticket scans at events.
- * @path          /ticket_scans/{scanId}
- */
-match /ticket_scans/{scanId} {
-  // Créer : Organisateur de l'événement OU admin
-  allow create: if isSignedIn();  // Vérifié dans l'action serveur
-  
-  // Lire : Organisateur de l'événement OU admin
-  allow get, list: if isSignedIn();  // Vérifié dans l'action serveur
-  
-  // Supprimer : Celui qui a scanné OU admin
-  allow delete: if isSignedIn() && (
-    request.auth.uid == resource.data.scannedBy ||
-    isAdmin()
-  );
-  
-  // Pas de modification
-  allow update: if false;
-}
-
-    // ==================== QUEUE SYSTEM ====================
+    // ==================== CATÉGORIES ====================
 
     /**
-     * @description   Manages queue sessions for events.
-     * @path          /queues/{queueId}
-     * @allow         Public read, authenticated users can create/update/delete.
-     */
-    match /queues/{queueId} {
-      allow read: if true;
-      allow create: if isSignedIn();
-      allow update, delete: if isSignedIn();
-    }
-
-    /**
-     * @description   Manages queue configurations for events.
-     * @path          /queueConfigs/{eventId}
-     * @allow         Public read, only organizers/admins can write.
-     */
-    match /queueConfigs/{eventId} {
-      allow read: if true;
-      allow write: if isSignedIn() &&
-        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'organizer' ||
-         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
-    }
-
-    // ==================== SALES DATA ====================
-    
-    /**
-     * @description   Manages ticket sales/purchases.
-     * @path          /sales/{saleId}
-     * @allow         Authenticated users can create sales (buy tickets).
-     * @allow         Customers can read their own sales (by email).
-     * @allow         Organizers can read sales for their events (by organizerId).
-     * @allow         Admins can read all sales.
-     * @deny          Only admins can update or delete sales (for refunds/cancellations).
-     * @principle     Customer privacy with organizer access to their event sales.
-     */
-    match /sales/{saleId} {
-      // CREATE: Any authenticated user can create a sale (when purchasing)
-      allow create: if isSignedIn() 
-                    && request.resource.data.customerEmail != null
-                    && request.resource.data.eventId != null
-                    && request.resource.data.organizerId != null;
-      
-      // GET: Customer (by email) OR Organizer (by organizerId) OR Admin
-      allow get: if isSignedIn() && (
-                      request.auth.token.email == resource.data.customerEmail  // Customer
-                      || request.auth.uid == resource.data.organizerId         // Organizer
-                      || isAdmin()                                             // Admin
-                    );
-      
-      // LIST: Allow if the query is filtered by customerEmail or organizerId, or if admin
-      allow list: if isSignedIn() && (
-                    request.query.where[0][0] == 'customerEmail' && request.query.where[0][2] == request.auth.token.email ||
-                    request.query.where[0][0] == 'organizerId' && request.query.where[0][2] == request.auth.uid ||
-                    isAdmin()
-                  );
-      
-      // UPDATE/DELETE: Admin only (for refunds, cancellations)
-      allow update: if isAdmin();
-      allow delete: if isAdmin();
-    }
-
-    // ==================== TRANSACTION DATA ====================
-    
-    /**
-     * @description   Manages financial transactions (payouts, refunds, commissions).
-     * @path          /transactions/{transactionId}
-     * @allow         Organizers can read their own transactions.
-     * @allow         Admins can read all and create new transactions.
-     * @deny          Only admins can create/update/delete transactions.
-     */
-    match /transactions/{transactionId} {
-      // GET: Organizer can see their own transactions OR Admin
-      allow get: if isSignedIn() && (
-        request.auth.uid == resource.data.organizerId ||
-        isAdmin()
-      );
-      
-      // LIST: Organizer can list their transactions, Admin can list all
-      allow list: if isSignedIn() && (
-        request.auth.uid == resource.data.organizerId ||
-        isAdmin()
-      );
-      
-      // CREATE: Admin only
-      allow create: if isAdmin() && 
-        request.resource.data.organizerId != null &&
-        request.resource.data.type != null &&
-        request.resource.data.amount != null;
-      
-      // UPDATE: Admin only
-      allow update: if isAdmin();
-      
-      // DELETE: Admin only
-      allow delete: if isAdmin();
-    }
-
-    // ==================== MASTER DATA ====================
-    
-    /**
-     * @description   Stores event categories.
-     * @path          /categories/{categoryId}
+     * @path   /categories/{categoryId}
+     * @read   Données de référence publiques.
      */
     match /categories/{categoryId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if isAdmin();
-      allow update: if isAdminAndExists();
-      allow delete: if isAdminAndExists();
+      allow get, list: if true;
+      allow create, update, delete: if false;
     }
 
+    // ==================== DONNÉES PRIVÉES ====================
+
     /**
-     * @description   Stores ticket types.
-     * @path          /ticketTypes/{ticketTypeId}
+     * Collections inaccessibles depuis le client : elles contiennent des
+     * données personnelles, financières ou décisives pour l'intégrité du
+     * scrutin. Elles ne sont manipulées que par le SDK Admin côté serveur.
+     *
+     * - /users                    profils et rôles
+     * - /votes                    journal des votes
+     * - /freeVoteClaims           anti-fraude du vote gratuit
+     * - /orders                   commandes et détails de paiement
+     * - /liveAccess               droits d'accès aux diffusions payantes
+     * - /transactions             reversements et remboursements
+     * - /percentageConfigurations commissions de la plateforme
      */
-    match /ticketTypes/{ticketTypeId} {
-      allow get: if true;
-      allow list: if true;
-      allow create: if isAdmin();
-      allow update: if isAdminAndExists();
-      allow delete: if isAdminAndExists();
+    match /users/{userId} {
+      allow read, write: if false;
     }
 
-    // ==================== CONFIGURATION DATA ====================
-    
-    /**
-     * @description   Stores sensitive configurations.
-     * @path          /percentageConfigurations/{configId}
-     */
+    match /votes/{voteId} {
+      allow read, write: if false;
+    }
+
+    match /freeVoteClaims/{claimId} {
+      allow read, write: if false;
+    }
+
+    match /orders/{orderId} {
+      allow read, write: if false;
+    }
+
+    match /liveAccess/{accessId} {
+      allow read, write: if false;
+    }
+
+    match /transactions/{transactionId} {
+      allow read, write: if false;
+    }
+
     match /percentageConfigurations/{configId} {
-      allow get: if isAdmin();
-      allow list: if isAdmin();
-      allow create: if isAdmin();
-      allow update: if isAdminAndExists();
-      allow delete: if isAdminAndExists();
+      allow read, write: if false;
     }
 
-    // ==================== ADMIN ROLES ====================
-    
     /**
-     * @description   Source of truth for admin roles.
-     * @path          /roles_admin/{userId}
-     * @note          This collection should ONLY be modified via Firebase Console.
+     * @path  /roles_admin/{userId}
+     * @note  Source de vérité des rôles administrateurs.
+     *        Modifiable uniquement depuis la console Firebase.
      */
     match /roles_admin/{userId} {
-      allow get: if isAdmin();
-      allow list: if false;
-      allow create: if false;
-      allow update: if false;
-      allow delete: if false;
+      allow read, write: if false;
+    }
+
+    // ==================== REFUS PAR DÉFAUT ====================
+
+    match /{document=**} {
+      allow read, write: if false;
     }
   }
 }
 
-// ==================== FIREBASE STORAGE RULES ====================
+// ==================== FIREBASE STORAGE ====================
 
 service firebase.storage {
   match /b/{bucket}/o {
     /**
-     * @description   Rules for event images.
-     * @path          /events/{imageId}
-     * @allow         Public read access to all event images.
-     * @allow         Authenticated users can upload images (max 5MB, images only).
+     * Les visuels des concours et les portraits des candidats sont hébergés
+     * sur Cloudinary. Ce bucket ne sert qu'aux contenus historiques, en
+     * lecture seule.
      */
-    match /events/{imageId} {
+    match /{allPaths=**} {
       allow read: if true;
-      allow write: if request.auth != null 
-                   && request.resource.size < 5 * 1024 * 1024
-                   && request.resource.contentType.matches('image/.*');
+      allow write: if false;
     }
   }
 }

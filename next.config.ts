@@ -5,11 +5,12 @@ const cspHeader = `
     default-src 'self';
     script-src 'self' 'unsafe-eval' 'unsafe-inline' https://*.paiementpro.net https://paiementpro.net https://www.paiementpro.net https://apis.google.com https://vercel.live;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
-    img-src 'self' blob: data: https://res.cloudinary.com https://placehold.co https://images.unsplash.com https://picsum.photos https://firebasestorage.googleapis.com https://storage.googleapis.com;
+    img-src 'self' blob: data: https://res.cloudinary.com https://placehold.co https://images.unsplash.com https://picsum.photos https://firebasestorage.googleapis.com https://storage.googleapis.com https://i.ytimg.com;
     font-src 'self' https://fonts.gstatic.com;
+    media-src 'self' blob: https:;
     connect-src 'self' https://*.paiementpro.net https://paiementpro.net https://www.paiementpro.net vitals.vercel-insights.com *.googleapis.com https://*.cloudworkstations.dev wss: https://clicbillet.com https://www.clicbillet.com https://mpayment.orange-money.com https://monticket.online https://*.monticket.online https://vercel.live;
     worker-src 'self' blob:;
-    frame-src 'self' https://*.paiementpro.net https://paiementpro.net https://www.paiementpro.net https://clicbillet.com https://www.clicbillet.com https://mpayment.orange-money.com https://monticket.online https://*.monticket.online https://vercel.live;
+    frame-src 'self' https://*.paiementpro.net https://paiementpro.net https://www.paiementpro.net https://clicbillet.com https://www.clicbillet.com https://mpayment.orange-money.com https://monticket.online https://*.monticket.online https://vercel.live https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://www.facebook.com https://web.facebook.com https://player.vimeo.com;
     object-src 'none';
     base-uri 'self';
     form-action 'self' https://clicbillet.com https://www.clicbillet.com https://*.paiementpro.net https://paiementpro.net https://mpayment.orange-money.com https://monticket.online https://*.monticket.online;

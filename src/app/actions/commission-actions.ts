@@ -3,7 +3,7 @@
 import { auth } from '@/auth';
 import { firestore } from '@/lib/firebase-admin';
 import { revalidatePath } from 'next/cache';
-import type { Sale, User } from '@/lib/types';
+import type { Order, User } from '@/lib/types';
 
 // ==================== TYPES ====================
 
@@ -27,8 +27,8 @@ export type OrganizerPayout = {
   platformCommission: number;
   transactionFees: number;
   netPayout: number;
-  salesCount: number;
-  lastSaleDate?: string;
+  ordersCount: number;
+  lastOrderDate?: string;
 };
 
 export type CommissionSettings = {
@@ -142,16 +142,18 @@ export async function getOrganizerPayouts(): Promise<OrganizerPayout[]> {
     const settings = await getCommissionSettings();
     const totalFeePercentage = settings.platformFeePercentage + settings.transactionFeePercentage;
 
-    // Récupérer toutes les ventes
-    const salesSnapshot = await firestore
-      .collection('sales')
-      .orderBy('purchaseDate', 'desc')
+    // Récupérer toutes les commandes payées (votes + accès live)
+    const ordersSnapshot = await firestore
+      .collection('orders')
+      .where('status', '==', 'PAID')
       .get();
 
-    const sales = salesSnapshot.docs.map(doc => ({
+    const orders = (ordersSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
-    })) as Sale[];
+    })) as Order[]).sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
 
     // Récupérer tous les organisateurs
     const usersSnapshot = await firestore
@@ -166,15 +168,15 @@ export async function getOrganizerPayouts(): Promise<OrganizerPayout[]> {
 
     // Calculer les paiements par organisateur
     const payouts: OrganizerPayout[] = organizers.map(organizer => {
-      const organizerSales = sales.filter(s => s.organizerId === organizer.id);
-      const totalRevenue = organizerSales.reduce((sum, sale) => sum + sale.totalPrice, 0);
-      
+      const organizerOrders = orders.filter(o => o.organizerId === organizer.id);
+      const totalRevenue = organizerOrders.reduce((sum, order) => sum + order.amount, 0);
+
       const platformCommission = totalRevenue * (settings.platformFeePercentage / 100);
       const transactionFees = totalRevenue * (settings.transactionFeePercentage / 100);
       const netPayout = totalRevenue - platformCommission - transactionFees;
 
-      // Dernière vente
-      const lastSale = organizerSales.length > 0 ? organizerSales[0] : null;
+      // Dernière commande
+      const lastOrder = organizerOrders.length > 0 ? organizerOrders[0] : null;
 
       return {
         organizerId: organizer.id,
@@ -184,8 +186,8 @@ export async function getOrganizerPayouts(): Promise<OrganizerPayout[]> {
         platformCommission,
         transactionFees,
         netPayout,
-        salesCount: organizerSales.length,
-        lastSaleDate: lastSale?.purchaseDate,
+        ordersCount: organizerOrders.length,
+        lastOrderDate: lastOrder?.createdAt,
       };
     });
 
@@ -209,34 +211,37 @@ export async function getRecentTransactions(limit: number = 10): Promise<Transac
     await ensureAdmin();
     console.log('[RECENT TRANSACTIONS] 📋 Fetching transactions...');
     
-    // Pour l'instant, on génère des transactions basées sur les ventes récentes
-    // Plus tard, on créera une vraie collection 'transactions'
-    const salesSnapshot = await firestore
-      .collection('sales')
-      .orderBy('purchaseDate', 'desc')
-      .limit(limit)
+    // Les commissions sont dérivées des commandes payées les plus récentes.
+    const ordersSnapshot = await firestore
+      .collection('orders')
+      .where('status', '==', 'PAID')
       .get();
 
-    const sales = salesSnapshot.docs.map(doc => ({
+    const orders = (ordersSnapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data()
-    })) as Sale[];
+    })) as Order[])
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit);
 
     // Récupérer les paramètres de commission
     const settings = await getCommissionSettings();
 
-    // Convertir les ventes en transactions
-    const transactions: Transaction[] = sales.map(sale => {
-      const commission = sale.totalPrice * (settings.platformFeePercentage / 100);
-      
+    const transactions: Transaction[] = orders.map(order => {
+      const commission = order.amount * (settings.platformFeePercentage / 100);
+      const label =
+        order.type === 'VOTE_PACK'
+          ? `Commission sur ${order.votes ?? 0} votes - ${order.candidateName ?? ''}`
+          : `Commission sur accès live - ${order.competitionTitle}`;
+
       return {
-        id: sale.id,
-        organizerId: sale.organizerId,
+        id: order.id,
+        organizerId: order.organizerId,
         amount: commission,
         type: 'commission' as const,
         status: 'paid' as const,
-        date: sale.purchaseDate,
-        description: `Commission sur vente - ${sale.customerName}`,
+        date: order.createdAt,
+        description: label,
       };
     });
 
@@ -306,31 +311,30 @@ export async function fundOrganizer(
  * Effectue un remboursement
  */
 export async function refundTransaction(
-  saleId: string,
+  orderId: string,
   amount: number,
   reason: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const user = await ensureAdmin();
     console.log('[REFUND TRANSACTION] 💸 Processing refund...');
-    
-    // Récupérer la vente
-    const saleDoc = await firestore.collection('sales').doc(saleId).get();
-    if (!saleDoc.exists) {
-      return { success: false, error: 'Vente introuvable' };
+
+    const orderDoc = await firestore.collection('orders').doc(orderId).get();
+    if (!orderDoc.exists) {
+      return { success: false, error: 'Commande introuvable' };
     }
 
-    const sale = saleDoc.data() as Sale;
+    const order = orderDoc.data() as Order;
 
     // Validation
-    if (amount <= 0 || amount > sale.totalPrice) {
+    if (amount <= 0 || amount > order.amount) {
       return { success: false, error: 'Montant de remboursement invalide' };
     }
 
     // Créer la transaction de remboursement
     await firestore.collection('transactions').add({
-      organizerId: sale.organizerId,
-      saleId: saleId,
+      organizerId: order.organizerId,
+      orderId,
       amount: -amount, // Négatif pour un remboursement
       type: 'refund',
       status: 'paid',
@@ -340,10 +344,10 @@ export async function refundTransaction(
       createdAt: new Date().toISOString(),
     });
 
-    // Mettre à jour le statut de la vente si remboursement total
-    if (amount === sale.totalPrice) {
-      await firestore.collection('sales').doc(saleId).update({
-        status: 'refunded',
+    // Marquer la commande comme remboursée si le remboursement est total
+    if (amount === order.amount) {
+      await firestore.collection('orders').doc(orderId).update({
+        status: 'REFUNDED',
         refundedAt: new Date().toISOString(),
         refundedBy: user.id,
         refundReason: reason,
@@ -352,8 +356,8 @@ export async function refundTransaction(
 
     console.log('[REFUND TRANSACTION] ✅ Refund processed');
     revalidatePath('/admin/commissions');
-    revalidatePath('/admin/sales');
-    
+    revalidatePath('/admin/orders');
+
     return { success: true };
 
   } catch (error) {

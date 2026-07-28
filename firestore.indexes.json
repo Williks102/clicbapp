@@ -1,50 +1,86 @@
 {
   "indexes": [
     {
-      "collectionGroup": "sales",
+      "collectionGroup": "candidates",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "organizerId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "purchaseDate",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "competitionId", "order": "ASCENDING" },
+        { "fieldPath": "voteCount", "order": "DESCENDING" }
       ]
     },
     {
-      "collectionGroup": "sales",
+      "collectionGroup": "candidates",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "customerEmail",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "purchaseDate",
-          "order": "DESCENDING"
-        }
+        { "fieldPath": "competitionId", "order": "ASCENDING" },
+        { "fieldPath": "number", "order": "ASCENDING" }
       ]
     },
     {
-      "collectionGroup": "queues",
+      "collectionGroup": "competitions",
       "queryScope": "COLLECTION",
       "fields": [
-        {
-          "fieldPath": "eventId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "ticketId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "joinedAt",
-          "order": "ASCENDING"
-        }
+        { "fieldPath": "organizerId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "chatMessages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "competitionId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "chatMessages",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "competitionId", "order": "ASCENDING" },
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "liveAccess",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "competitionId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "organizerId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "orders",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "customerEmail", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "votes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "competitionId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "votes",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "userId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
       ]
     }
-  ]
+  ],
+  "fieldOverrides": []
 }

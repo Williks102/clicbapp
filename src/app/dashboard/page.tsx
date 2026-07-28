@@ -1,133 +1,186 @@
-'use client';
+import Link from 'next/link';
+import { Gift, PlayCircle, PlusCircle, Trophy, Users, Vote as VoteIcon, Wallet } from 'lucide-react';
 
-import { useEffect, useState } from 'react';
 import { PageHeader } from '@/components/page-header';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from '@/components/ui/card';
-import { Ticket, Wallet, Activity, TrendingUp } from 'lucide-react';
-import EventRecommendations from '@/components/event-recommendations';
-import { getOrganizerStats, type OrganizerStats } from '@/app/actions/stats-actions';
-import { Skeleton } from '@/components/ui/skeleton';
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { StatCard } from '@/components/dashboard/stat-card';
+import { VotesChart } from '@/components/dashboard/votes-chart';
+import { getOrganizerStats } from '@/app/actions/stats-actions';
+import { formatFCFA, formatVotes } from '@/lib/utils';
 
-function StatCard({
-  title,
-  value,
-  description,
-  icon: Icon,
-  isLoading,
-}: {
-  title: string;
-  value: string;
-  description?: string;
-  icon: React.ElementType;
-  isLoading: boolean;
-}) {
-  if (isLoading) {
-    return (
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle className="text-sm font-medium">{title}</CardTitle>
-          <Icon className="h-4 w-4 text-muted-foreground" />
-        </CardHeader>
-        <CardContent>
-          <Skeleton className="h-8 w-3/4" />
-          {description && <Skeleton className="mt-2 h-4 w-1/2" />}
-        </CardContent>
-      </Card>
-    );
-  }
+export const dynamic = 'force-dynamic';
+
+export default async function DashboardPage() {
+  const stats = await getOrganizerStats();
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
-      </CardHeader>
-      <CardContent>
-        <div className="text-2xl font-bold">{value}</div>
-        {description && (
-          <p className="text-xs text-muted-foreground">{description}</p>
-        )}
-      </CardContent>
-    </Card>
-  );
-}
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <PageHeader
+          title="Tableau de bord"
+          description="Vue d'ensemble de vos concours, de vos votes et de vos revenus."
+        />
+        <Button asChild>
+          <Link href="/dashboard/competitions/create">
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Créer un concours
+          </Link>
+        </Button>
+      </div>
 
-
-export default function DashboardPage() {
-  const [stats, setStats] = useState<OrganizerStats | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchStats() {
-      try {
-        const data = await getOrganizerStats();
-        setStats(data);
-      } catch (error) {
-        console.error("Failed to fetch organizer stats:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-
-    fetchStats();
-  }, []);
-
-  return (
-    <div className="space-y-8">
-      <PageHeader
-        title="Tableau de Bord"
-        description="Bienvenue, voici un aperçu de vos activités."
-      />
-
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Revenu Total"
-          value={stats ? `${stats.totalRevenue.toLocaleString('fr-FR')} FCFA` : '0 FCFA'}
-          description={stats ? `Sur ${stats.totalSales} ventes` : ''}
+          title="Revenus encaissés"
+          value={formatFCFA(stats.totalRevenue)}
+          description="Commandes payées"
           icon={Wallet}
-          isLoading={isLoading}
         />
         <StatCard
-          title="Billets Vendus"
-          value={stats ? `${stats.totalTicketsSold}` : '0'}
-          description="Total de billets distribués"
-          icon={Ticket}
-          isLoading={isLoading}
+          title="Votes totaux"
+          value={formatVotes(stats.totalVotes)}
+          description={`${formatVotes(stats.paidVotes)} payants · ${formatVotes(stats.freeVotes)} gratuits`}
+          icon={VoteIcon}
         />
         <StatCard
-          title="Total des Ventes"
-          value={stats ? `${stats.totalSales}` : '0'}
-          description="Nombre de commandes"
-          icon={TrendingUp}
-          isLoading={isLoading}
+          title="Concours"
+          value={String(stats.totalCompetitions)}
+          description={`${stats.totalCandidates} candidats`}
+          icon={Trophy}
         />
         <StatCard
-          title="Événements Créés"
-          value={stats ? `${stats.totalEvents}` : '0'}
-          description="Total de vos événements"
-          icon={Activity}
-          isLoading={isLoading}
+          title="Accès live vendus"
+          value={String(stats.liveAccessSold)}
+          description="Accès aux diffusions"
+          icon={PlayCircle}
         />
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="font-headline">
-            Recommandations d'Événements
-          </CardTitle>
-          <CardDescription>
-            Suggestions d'opportunités basées sur vos préférences et le marché
-            actuel, générées par l'IA.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <EventRecommendations />
+      <VotesChart data={stats.votesByMonth} />
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Trophy className="h-5 w-5 text-primary" />
+              Meilleurs concours
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {stats.topCompetitions.length === 0 ? (
+              <p className="py-10 text-center text-sm text-muted-foreground">
+                Créez votre premier concours pour voir vos statistiques.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Concours</TableHead>
+                    <TableHead className="text-right">Votes</TableHead>
+                    <TableHead className="text-right">Revenus</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stats.topCompetitions.map((item) => (
+                    <TableRow key={item.competitionId}>
+                      <TableCell className="font-medium">
+                        <Link
+                          href={`/dashboard/competitions/${item.competitionId}`}
+                          className="hover:text-primary"
+                        >
+                          {item.title}
+                        </Link>
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatVotes(item.votes)}
+                      </TableCell>
+                      <TableCell className="text-right font-semibold tabular-nums">
+                        {formatFCFA(item.revenue)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Users className="h-5 w-5 text-primary" />
+              Dernières commandes
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-0">
+            {stats.recentOrders.length === 0 ? (
+              <p className="py-10 text-center text-sm text-muted-foreground">
+                Aucune commande pour le moment.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Client</TableHead>
+                    <TableHead>Objet</TableHead>
+                    <TableHead className="text-right">Montant</TableHead>
+                    <TableHead>Statut</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {stats.recentOrders.slice(0, 6).map((order) => (
+                    <TableRow key={order.id}>
+                      <TableCell className="max-w-[140px] truncate font-medium">
+                        {order.customerName}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {order.type === 'VOTE_PACK'
+                          ? `${order.votes} votes`
+                          : 'Accès live'}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatFCFA(order.amount)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={order.status === 'PAID' ? 'default' : 'secondary'}
+                        >
+                          {order.status === 'PAID' ? 'Payé' : order.status}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card className="border-primary/30 bg-primary/5">
+        <CardContent className="flex flex-wrap items-center justify-between gap-4 p-6">
+          <div className="flex items-start gap-3">
+            <Gift className="mt-0.5 h-5 w-5 shrink-0 text-primary" />
+            <div>
+              <p className="font-semibold">Boostez votre audience</p>
+              <p className="text-sm text-muted-foreground">
+                Activez le vote gratuit pour attirer les votants, puis proposez des
+                packs pour monétiser leur engagement.
+              </p>
+            </div>
+          </div>
+          <Button variant="outline" asChild>
+            <Link href="/dashboard/competitions">Gérer mes concours</Link>
+          </Button>
         </CardContent>
       </Card>
     </div>

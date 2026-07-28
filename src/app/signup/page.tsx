@@ -148,7 +148,7 @@ export default function SignupPage() {
           <CardHeader>
             <CardTitle className="font-headline text-2xl">Créer un compte</CardTitle>
             <CardDescription>
-              Rejoignez ClicBillet pour découvrir et réserver des événements.
+              Rejoignez ClicVote pour voter et suivre les concours en direct.
             </CardDescription>
           </CardHeader>
           <form onSubmit={handleSubmit}>
@@ -239,17 +239,17 @@ export default function SignupPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="customer">
-                      Client - Acheter des billets
+                      Votant — Soutenir mes favoris
                     </SelectItem>
                     <SelectItem value="organizer">
-                      Organisateur - Créer des événements
+                      Organisateur — Créer des concours
                     </SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="text-xs text-muted-foreground">
                   {formData.role === 'customer'
-                    ? 'Parfait pour découvrir et réserver des événements'
-                    : 'Créez et gérez vos propres événements'}
+                    ? 'Votez gratuitement et achetez des packs de votes'
+                    : 'Créez vos concours, vos candidats et vos diffusions'}
                 </p>
               </div>
             </CardContent>

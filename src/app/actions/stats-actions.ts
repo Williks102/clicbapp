@@ -2,294 +2,202 @@
 
 import { auth } from '@/auth';
 import { firestore } from '@/lib/firebase-admin';
-import type { Sale, Event, Organizer } from '@/lib/types';
+import type { AdminStats, Competition, Order, OrganizerStats, User } from '@/lib/types';
 
-// ==================== TYPES ====================
-
-export type OrganizerStats = {
-  totalSales: number;
-  totalRevenue: number;
-  totalTicketsSold: number;
-  totalEvents: number;
-  salesByMonth: Array<{ month: string; sales: number; revenue: number }>;
-  topEvents: Array<{ eventId: string; eventName: string; sales: number; revenue: number }>;
-  recentSales: Sale[];
+const EMPTY_STATS: OrganizerStats = {
+  totalCompetitions: 0,
+  totalCandidates: 0,
+  totalVotes: 0,
+  paidVotes: 0,
+  freeVotes: 0,
+  totalRevenue: 0,
+  liveAccessSold: 0,
+  votesByMonth: [],
+  topCompetitions: [],
+  recentOrders: [],
 };
 
-export type AdminStats = {
-  totalSales: number;
-  totalRevenue: number;
-  totalTicketsSold: number;
-  totalEvents: number;
-  totalOrganizers: number;
-  totalCustomers: number;
-  salesByMonth: Array<{ month: string; sales: number; revenue: number }>;
-  topEvents: Array<{ eventId: string; eventName: string; sales: number; revenue: number }>;
-  topOrganizers: Array<{ organizerId: string; organizerName: string; sales: number; revenue: number }>;
-  recentSales: Sale[];
-};
-
-// ==================== HELPERS ====================
-
-function getMonthName(date: Date): string {
-  return date.toLocaleDateString('fr-FR', { year: 'numeric', month: 'short' });
+function monthKey(iso: string) {
+  return new Date(iso).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' });
 }
 
-function getLast6Months(): string[] {
-  const months: string[] = [];
-  const now = new Date();
-  
-  for (let i = 5; i >= 0; i--) {
-    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(getMonthName(date));
-  }
-  
-  return months;
-}
+/** Agrège les commandes payées en série mensuelle (12 derniers mois). */
+function buildMonthlySeries(orders: Order[]) {
+  const buckets = new Map<string, { votes: number; revenue: number; time: number }>();
 
-// ==================== ACTIONS ====================
+  const twelveMonthsAgo = new Date();
+  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
+  twelveMonthsAgo.setDate(1);
 
-/**
- * Récupère les statistiques pour un organisateur
- */
-export async function getOrganizerStats(): Promise<OrganizerStats | null> {
-  try {
-    console.log('[ORGANIZER STATS] 📊 Fetching stats...');
-    
-    // Vérifier la session
-    const session = await auth();
-    if (!session?.user?.id) {
-      console.log('[ORGANIZER STATS] ❌ Not authenticated');
-      return null;
-    }
+  for (const order of orders) {
+    const date = new Date(order.createdAt);
+    if (date < twelveMonthsAgo) continue;
 
-    const organizerId = session.user.id;
-
-    // Récupérer toutes les ventes de l'organisateur
-    const salesSnapshot = await firestore
-      .collection('sales')
-      .where('organizerId', '==', organizerId)
-      .get();
-
-    const sales: Sale[] = salesSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Sale[];
-
-    // Récupérer tous les événements de l'organisateur
-    const eventsSnapshot = await firestore
-      .collection('events')
-      .where('organizerId', '==', organizerId)
-      .get();
-
-    const events: Event[] = eventsSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Event[];
-
-    // Calculer les statistiques globales
-    const totalSales = sales.length;
-    const totalRevenue = sales.reduce((sum, sale) => sum + sale.totalPrice, 0);
-    const totalTicketsSold = sales.reduce((sum, sale) => sum + sale.quantity, 0);
-    const totalEvents = events.length;
-
-    // Ventes par mois (6 derniers mois)
-    const last6Months = getLast6Months();
-    const salesByMonth = last6Months.map(month => {
-      const monthSales = sales.filter(sale => {
-        const saleMonth = getMonthName(new Date(sale.purchaseDate));
-        return saleMonth === month;
-      });
-
-      return {
-        month,
-        sales: monthSales.length,
-        revenue: monthSales.reduce((sum, sale) => sum + sale.totalPrice, 0),
-      };
-    });
-
-    // Top 5 événements par ventes
-    const eventSalesMap = new Map<string, { sales: number; revenue: number }>();
-    
-    sales.forEach(sale => {
-      const current = eventSalesMap.get(sale.eventId) || { sales: 0, revenue: 0 };
-      eventSalesMap.set(sale.eventId, {
-        sales: current.sales + 1,
-        revenue: current.revenue + sale.totalPrice,
-      });
-    });
-
-    const topEvents = Array.from(eventSalesMap.entries())
-      .map(([eventId, data]) => {
-        const event = events.find(e => e.id === eventId);
-        return {
-          eventId,
-          eventName: event?.name || 'Événement inconnu',
-          sales: data.sales,
-          revenue: data.revenue,
-        };
-      })
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 5);
-
-    // 10 ventes les plus récentes
-    const recentSales = sales
-      .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())
-      .slice(0, 10);
-
-    console.log('[ORGANIZER STATS] ✅ Stats fetched successfully');
-
-    return {
-      totalSales,
-      totalRevenue,
-      totalTicketsSold,
-      totalEvents,
-      salesByMonth,
-      topEvents,
-      recentSales,
+    const key = monthKey(order.createdAt);
+    const bucket = buckets.get(key) || {
+      votes: 0,
+      revenue: 0,
+      time: new Date(date.getFullYear(), date.getMonth(), 1).getTime(),
     };
 
+    bucket.votes += order.votes ?? 0;
+    bucket.revenue += order.amount;
+    buckets.set(key, bucket);
+  }
+
+  return Array.from(buckets.entries())
+    .sort((a, b) => a[1].time - b[1].time)
+    .map(([month, bucket]) => ({
+      month,
+      votes: bucket.votes,
+      revenue: bucket.revenue,
+    }));
+}
+
+function computeStats(competitions: Competition[], orders: Order[]): OrganizerStats {
+  const paidOrders = orders.filter((o) => o.status === 'PAID');
+
+  const totals = competitions.reduce(
+    (acc, competition) => {
+      const stats = competition.stats;
+      acc.totalVotes += stats?.totalVotes ?? 0;
+      acc.paidVotes += stats?.paidVotes ?? 0;
+      acc.freeVotes += stats?.freeVotes ?? 0;
+      acc.totalCandidates += stats?.candidatesCount ?? 0;
+      return acc;
+    },
+    { totalVotes: 0, paidVotes: 0, freeVotes: 0, totalCandidates: 0 }
+  );
+
+  const revenueByCompetition = new Map<string, number>();
+  for (const order of paidOrders) {
+    revenueByCompetition.set(
+      order.competitionId,
+      (revenueByCompetition.get(order.competitionId) || 0) + order.amount
+    );
+  }
+
+  const topCompetitions = competitions
+    .map((competition) => ({
+      competitionId: competition.id,
+      title: competition.title,
+      votes: competition.stats?.totalVotes ?? 0,
+      revenue: revenueByCompetition.get(competition.id) || 0,
+    }))
+    .sort((a, b) => b.revenue - a.revenue || b.votes - a.votes)
+    .slice(0, 5);
+
+  return {
+    totalCompetitions: competitions.length,
+    totalCandidates: totals.totalCandidates,
+    totalVotes: totals.totalVotes,
+    paidVotes: totals.paidVotes,
+    freeVotes: totals.freeVotes,
+    totalRevenue: paidOrders.reduce((sum, order) => sum + order.amount, 0),
+    liveAccessSold: paidOrders.filter((o) => o.type === 'LIVE_ACCESS').length,
+    votesByMonth: buildMonthlySeries(paidOrders),
+    topCompetitions,
+    recentOrders: orders.slice(0, 10),
+  };
+}
+
+function sortOrders(orders: Order[]) {
+  return orders.sort(
+    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+  );
+}
+
+/** Statistiques du tableau de bord organisateur. */
+export async function getOrganizerStats(): Promise<OrganizerStats> {
+  try {
+    const session = await auth();
+    if (!session?.user?.id) return EMPTY_STATS;
+
+    const [competitionsSnap, ordersSnap] = await Promise.all([
+      firestore
+        .collection('competitions')
+        .where('organizerId', '==', session.user.id)
+        .get(),
+      firestore.collection('orders').where('organizerId', '==', session.user.id).get(),
+    ]);
+
+    const competitions = competitionsSnap.docs.map(
+      (doc) => ({ id: doc.id, ...doc.data() }) as Competition
+    );
+    const orders = sortOrders(
+      ordersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Order)
+    );
+
+    return computeStats(competitions, orders);
   } catch (error) {
-    console.error('[ORGANIZER STATS] ❌ Error:', error);
-    return null;
+    console.error('[ORGANIZER STATS] ❌', error);
+    return EMPTY_STATS;
   }
 }
 
-/**
- * Récupère les statistiques globales pour l'admin
- */
-export async function getAdminStats(): Promise<AdminStats | null> {
+/** Statistiques globales de la plateforme. */
+export async function getAdminStats(): Promise<AdminStats> {
+  const empty: AdminStats = {
+    ...EMPTY_STATS,
+    totalOrganizers: 0,
+    totalCustomers: 0,
+    topOrganizers: [],
+  };
+
   try {
-    console.log('[ADMIN STATS] 📊 Fetching global stats...');
-    
-    // Vérifier la session (TODO: vérifier que c'est un admin)
     const session = await auth();
-    if (!session?.user?.id) {
-      console.log('[ADMIN STATS] ❌ Not authenticated');
-      return null;
+    if (session?.user?.role !== 'admin') return empty;
+
+    const [competitionsSnap, ordersSnap, usersSnap] = await Promise.all([
+      firestore.collection('competitions').get(),
+      firestore.collection('orders').get(),
+      firestore.collection('users').get(),
+    ]);
+
+    const competitions = competitionsSnap.docs.map(
+      (doc) => ({ id: doc.id, ...doc.data() }) as Competition
+    );
+    const orders = sortOrders(
+      ordersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Order)
+    );
+    const users = usersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as User);
+
+    const base = computeStats(competitions, orders);
+
+    const organizerNames = new Map(
+      users.filter((u) => u.role === 'organizer').map((u) => [u.id, u.name])
+    );
+
+    const perOrganizer = new Map<string, { votes: number; revenue: number }>();
+    for (const competition of competitions) {
+      const entry = perOrganizer.get(competition.organizerId) || { votes: 0, revenue: 0 };
+      entry.votes += competition.stats?.totalVotes ?? 0;
+      perOrganizer.set(competition.organizerId, entry);
+    }
+    for (const order of orders.filter((o) => o.status === 'PAID')) {
+      const entry = perOrganizer.get(order.organizerId) || { votes: 0, revenue: 0 };
+      entry.revenue += order.amount;
+      perOrganizer.set(order.organizerId, entry);
     }
 
-    // Récupérer toutes les ventes
-    const salesSnapshot = await firestore.collection('sales').get();
-    const sales: Sale[] = salesSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Sale[];
-
-    // Récupérer tous les événements
-    const eventsSnapshot = await firestore.collection('events').get();
-    const events: Event[] = eventsSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Event[];
-
-    // Récupérer tous les organisateurs
-    const organizersSnapshot = await firestore.collection('organizers').get();
-    const totalOrganizers = organizersSnapshot.size;
-
-    // Récupérer tous les clients
-    const usersSnapshot = await firestore
-      .collection('users')
-      .where('role', '==', 'customer')
-      .get();
-    const totalCustomers = usersSnapshot.size;
-
-    // Statistiques globales
-    const totalSales = sales.length;
-    const totalRevenue = sales.reduce((sum, sale) => sum + sale.totalPrice, 0);
-    const totalTicketsSold = sales.reduce((sum, sale) => sum + sale.quantity, 0);
-    const totalEvents = events.length;
-
-    // Ventes par mois
-    const last6Months = getLast6Months();
-    const salesByMonth = last6Months.map(month => {
-      const monthSales = sales.filter(sale => {
-        const saleMonth = getMonthName(new Date(sale.purchaseDate));
-        return saleMonth === month;
-      });
-
-      return {
-        month,
-        sales: monthSales.length,
-        revenue: monthSales.reduce((sum, sale) => sum + sale.totalPrice, 0),
-      };
-    });
-
-    // Top événements
-    const eventSalesMap = new Map<string, { sales: number; revenue: number }>();
-    
-    sales.forEach(sale => {
-      const current = eventSalesMap.get(sale.eventId) || { sales: 0, revenue: 0 };
-      eventSalesMap.set(sale.eventId, {
-        sales: current.sales + 1,
-        revenue: current.revenue + sale.totalPrice,
-      });
-    });
-
-    const topEvents = Array.from(eventSalesMap.entries())
-      .map(([eventId, data]) => {
-        const event = events.find(e => e.id === eventId);
-        return {
-          eventId,
-          eventName: event?.name || 'Événement inconnu',
-          sales: data.sales,
-          revenue: data.revenue,
-        };
-      })
+    const topOrganizers = Array.from(perOrganizer.entries())
+      .map(([organizerId, entry]) => ({
+        organizerId,
+        organizerName: organizerNames.get(organizerId) || 'Organisateur',
+        votes: entry.votes,
+        revenue: entry.revenue,
+      }))
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 5);
-
-    // Top organisateurs
-    const organizerSalesMap = new Map<string, { sales: number; revenue: number }>();
-    
-    sales.forEach(sale => {
-      const current = organizerSalesMap.get(sale.organizerId) || { sales: 0, revenue: 0 };
-      organizerSalesMap.set(sale.organizerId, {
-        sales: current.sales + 1,
-        revenue: current.revenue + sale.totalPrice,
-      });
-    });
-
-    const organizersData: Organizer[] = organizersSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    } as Organizer));
-
-    const topOrganizers = Array.from(organizerSalesMap.entries())
-      .map(([organizerId, data]) => {
-        const organizer = organizersData.find((o) => o.id === organizerId);
-        return {
-          organizerId,
-          organizerName: organizer?.name || 'Organisateur inconnu',
-          sales: data.sales,
-          revenue: data.revenue,
-        };
-      })
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 5);
-
-    // Ventes récentes
-    const recentSales = sales
-      .sort((a, b) => new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime())
-      .slice(0, 10);
-
-    console.log('[ADMIN STATS] ✅ Stats fetched successfully');
 
     return {
-      totalSales,
-      totalRevenue,
-      totalTicketsSold,
-      totalEvents,
-      totalOrganizers,
-      totalCustomers,
-      salesByMonth,
-      topEvents,
+      ...base,
+      totalOrganizers: users.filter((u) => u.role === 'organizer' && !u.deleted).length,
+      totalCustomers: users.filter((u) => u.role === 'customer' && !u.deleted).length,
       topOrganizers,
-      recentSales,
     };
-
   } catch (error) {
-    console.error('[ADMIN STATS] ❌ Error:', error);
-    return null;
+    console.error('[ADMIN STATS] ❌', error);
+    return empty;
   }
 }

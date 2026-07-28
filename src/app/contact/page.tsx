@@ -141,7 +141,7 @@ export default function ContactPage() {
                     <div>
                       <h6 className="font-semibold">Email</h6>
                       <p className="text-sm text-muted-foreground">
-                        contact@clicbillet.com
+                        contact@clicvote.com
                       </p>
                     </div>
                   </div>

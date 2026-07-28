@@ -1,420 +1,313 @@
 {
   "entities": {
-    "Event": {
+    "Competition": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Event",
+      "title": "Competition",
       "type": "object",
-      "description": "Represents an event in Côte d'Ivoire.",
+      "description": "Concours ouvert au vote du public, éventuellement diffusé en direct.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the event."
-        },
+        "id": { "type": "string", "description": "Identifiant unique du concours." },
         "organizerId": {
           "type": "string",
-          "description": "Reference to the Organizer who created the event. (Relationship: Organizer 1:N Event)"
+          "description": "Organisateur propriétaire. (Relation : Organizer 1:N Competition)"
         },
-        "categoryId": {
+        "organizerName": { "type": "string", "description": "Nom affiché de l'organisateur." },
+        "title": { "type": "string", "description": "Titre public du concours." },
+        "category": { "type": "string", "description": "Catégorie du concours." },
+        "description": { "type": "string", "description": "Présentation détaillée." },
+        "coverImage": { "type": "string", "description": "URL Cloudinary de la bannière.", "format": "uri" },
+        "status": {
           "type": "string",
-          "description": "Reference to the Category of the event. (Relationship: Category 1:N Event)"
+          "enum": ["draft", "published", "voting", "closed", "finished"],
+          "description": "Cycle de vie du concours. Seul 'voting' autorise l'enregistrement de votes."
         },
-        "name": {
-          "type": "string",
-          "description": "Name of the event."
+        "votingStartsAt": { "type": "string", "format": "date-time" },
+        "votingEndsAt": { "type": "string", "format": "date-time" },
+        "hideResults": {
+          "type": "boolean",
+          "description": "Masque le classement public jusqu'à la proclamation."
         },
-        "description": {
-          "type": "string",
-          "description": "Detailed description of the event."
-        },
-        "location": {
-          "type": "string",
-          "description": "Location of the event."
-        },
-        "dateTime": {
-          "type": "string",
-          "description": "Date and time of the event.",
-          "format": "date-time"
-        },
-        "ticketPrice": {
-          "type": "number",
-          "description": "Price of a ticket for the event."
-        },
-        "availableTickets": {
-          "type": "number",
-          "description": "Number of tickets currently available."
-        },
-        "ticketTypeIds": {
+        "winnerCandidateId": { "type": "string", "description": "Candidat déclaré vainqueur." },
+        "votePacks": {
           "type": "array",
-          "description": "References to TicketTypes. (Relationship: TicketType N:N Event)",
+          "description": "Offres payantes de votes.",
           "items": {
-            "type": "string"
+            "type": "object",
+            "properties": {
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "votes": { "type": "number" },
+              "price": { "type": "number", "description": "Prix en F CFA." },
+              "highlighted": { "type": "boolean" }
+            },
+            "required": ["id", "name", "votes", "price"]
           }
         },
-        "livestream": {
+        "freeVote": {
           "type": "object",
-          "description": "Optional details for the livestream if enabled for the event.",
+          "description": "Configuration du vote gratuit (modèle hybride).",
           "properties": {
-            "enabled": {
-              "type": "boolean",
-              "description": "Whether livestream is enabled for this event."
-            },
-            "title": {
-              "type": "string",
-              "description": "Title of the livestream."
-            },
-            "ticketPrice": {
+            "enabled": { "type": "boolean" },
+            "cooldownHours": {
               "type": "number",
-              "description": "Price to access the livestream."
+              "description": "Délai avant de pouvoir revoter gratuitement."
             }
+          },
+          "required": ["enabled", "cooldownHours"]
+        },
+        "live": {
+          "type": "object",
+          "description": "Configuration de la diffusion en direct.",
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "title": { "type": "string" },
+            "provider": {
+              "type": "string",
+              "enum": ["youtube", "facebook", "vimeo", "hls", "iframe"]
+            },
+            "url": { "type": "string", "description": "URL du flux fournie par l'organisateur." },
+            "isLive": { "type": "boolean", "description": "Piloté depuis la régie." },
+            "scheduledAt": { "type": "string", "format": "date-time" },
+            "paid": { "type": "boolean" },
+            "price": { "type": "number", "description": "Prix d'accès en F CFA." },
+            "chatEnabled": { "type": "boolean" },
+            "replayUrl": { "type": "string" }
+          },
+          "required": ["enabled", "isLive", "paid", "price", "chatEnabled"]
+        },
+        "stats": {
+          "type": "object",
+          "description": "Compteurs dénormalisés, mis à jour de façon atomique.",
+          "properties": {
+            "totalVotes": { "type": "number" },
+            "freeVotes": { "type": "number" },
+            "paidVotes": { "type": "number" },
+            "totalRevenue": { "type": "number" },
+            "candidatesCount": { "type": "number" }
           }
-        }
+        },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
       },
       "required": [
         "id",
         "organizerId",
-        "categoryId",
-        "name",
-        "description",
-        "location",
-        "dateTime",
-        "ticketPrice",
-        "availableTickets"
+        "title",
+        "category",
+        "status",
+        "votingStartsAt",
+        "votingEndsAt",
+        "votePacks",
+        "freeVote",
+        "live",
+        "stats"
       ]
     },
-    "Organizer": {
+
+    "Candidate": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Organizer",
+      "title": "Candidate",
       "type": "object",
-      "description": "Represents an event organizer.",
+      "description": "Participant présenté au vote du public.",
       "properties": {
-        "id": {
+        "id": { "type": "string" },
+        "competitionId": {
           "type": "string",
-          "description": "Unique identifier for the organizer."
+          "description": "Concours de rattachement. (Relation : Competition 1:N Candidate)"
         },
-        "name": {
+        "name": { "type": "string" },
+        "number": { "type": "number", "description": "Numéro de dossard, unique par concours." },
+        "photo": { "type": "string", "format": "uri" },
+        "bio": { "type": "string" },
+        "city": { "type": "string" },
+        "voteCount": { "type": "number", "description": "Total des votes reçus." },
+        "freeVoteCount": { "type": "number" },
+        "paidVoteCount": { "type": "number" },
+        "eliminated": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "competitionId", "name", "number", "voteCount", "eliminated"]
+    },
+
+    "Vote": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Vote",
+      "type": "object",
+      "description": "Journal d'un vote. Pour les votes payants, l'identifiant du document est celui de la commande, ce qui rend le webhook idempotent.",
+      "properties": {
+        "id": { "type": "string" },
+        "competitionId": { "type": "string" },
+        "candidateId": { "type": "string" },
+        "candidateName": { "type": "string" },
+        "userId": { "type": "string" },
+        "voterEmail": { "type": "string", "format": "email" },
+        "voterName": { "type": "string" },
+        "quantity": { "type": "number" },
+        "type": { "type": "string", "enum": ["free", "paid"] },
+        "orderId": { "type": "string", "description": "Commande à l'origine du vote payant." },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["id", "competitionId", "candidateId", "quantity", "type", "createdAt"]
+    },
+
+    "FreeVoteClaim": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "FreeVoteClaim",
+      "type": "object",
+      "description": "Suivi anti-fraude du vote gratuit. Identifiant du document : `${userId}_${competitionId}`.",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "competitionId": { "type": "string" },
+        "lastVotedAt": { "type": "string", "format": "date-time" },
+        "totalFreeVotes": { "type": "number" }
+      },
+      "required": ["id", "userId", "competitionId", "lastVotedAt"]
+    },
+
+    "Order": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Order",
+      "type": "object",
+      "description": "Commande payante. L'identifiant du document sert de référence de paiement Paiement Pro.",
+      "properties": {
+        "id": { "type": "string", "description": "Référence de paiement." },
+        "type": { "type": "string", "enum": ["VOTE_PACK", "LIVE_ACCESS"] },
+        "competitionId": { "type": "string" },
+        "competitionTitle": { "type": "string" },
+        "organizerId": { "type": "string" },
+        "candidateId": { "type": "string" },
+        "candidateName": { "type": "string" },
+        "packId": { "type": "string" },
+        "packName": { "type": "string" },
+        "votes": { "type": "number" },
+        "amount": { "type": "number", "description": "Montant en F CFA, calculé côté serveur." },
+        "customerName": { "type": "string" },
+        "customerEmail": { "type": "string", "format": "email" },
+        "customerPhone": { "type": "string" },
+        "userId": { "type": "string" },
+        "status": {
           "type": "string",
-          "description": "Name of the organizer."
+          "enum": ["PENDING", "PAID", "FAILED", "FLAGGED", "REFUNDED"],
+          "description": "FLAGGED signale une incohérence entre montant payé et montant attendu."
         },
-        "description": {
-          "type": "string",
-          "description": "Description of the organizer."
-        },
-        "contactEmail": {
-          "type": "string",
-          "description": "Contact email address of the organizer.",
-          "format": "email"
-        },
-        "contactPhone": {
-          "type": "string",
-          "description": "Contact phone number of the organizer."
-        },
-        "profilePictureUrl": {
-          "type": "string",
-          "description": "URL of the organizer's profile picture.",
-          "format": "uri"
-        }
+        "paymentDetails": { "type": "object", "description": "Charge utile brute du webhook." },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "paidAt": { "type": "string", "format": "date-time" }
       },
       "required": [
         "id",
-        "name",
-        "description",
-        "contactEmail",
-        "contactPhone"
+        "type",
+        "competitionId",
+        "organizerId",
+        "amount",
+        "customerEmail",
+        "status",
+        "createdAt"
       ]
     },
-    "Category": {
+
+    "LiveAccess": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Category",
+      "title": "LiveAccess",
       "type": "object",
-      "description": "Represents a category of events.",
+      "description": "Droit d'accès individuel à une diffusion payante. Identifiant du document : celui de la commande.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the category."
-        },
-        "name": {
-          "type": "string",
-          "description": "Name of the category."
-        },
-        "description": {
-          "type": "string",
-          "description": "Description of the category."
-        }
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "competitionId": { "type": "string" },
+        "orderId": { "type": "string" },
+        "pricePaid": { "type": "number" },
+        "purchaseDate": { "type": "string", "format": "date-time" }
       },
-      "required": [
-        "id",
-        "name",
-        "description"
-      ]
+      "required": ["id", "userId", "competitionId", "pricePaid", "purchaseDate"]
     },
-    "Ticket": {
+
+    "ChatMessage": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "Ticket",
+      "title": "ChatMessage",
       "type": "object",
-      "description": "Represents a ticket purchased for an event.",
+      "description": "Message du chat associé à une diffusion en direct.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the ticket."
-        },
-        "userId": {
-          "type": "string",
-          "description": "Reference to the User who purchased the ticket. (Relationship: User 1:N Ticket)"
-        },
-        "eventId": {
-          "type": "string",
-          "description": "Reference to the Event the ticket is for. (Relationship: Event 1:N Ticket)"
-        },
-        "ticketTypeId": {
-          "type": "string",
-          "description": "Reference to the type of ticket. (Relationship: TicketType 1:N Ticket)"
-        },
-        "purchaseDate": {
-          "type": "string",
-          "description": "Date the ticket was purchased.",
-          "format": "date-time"
-        },
-        "price": {
-          "type": "number",
-          "description": "Price paid for the ticket."
-        },
-        "ticketNumber": {
-          "type": "string",
-          "description": "Unique ticket number or barcode."
-        }
+        "id": { "type": "string" },
+        "competitionId": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "userRole": { "type": "string", "enum": ["customer", "organizer", "admin"] },
+        "message": { "type": "string", "maxLength": 300 },
+        "hidden": { "type": "boolean", "description": "Masqué par la modération." },
+        "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": [
-        "id",
-        "userId",
-        "eventId",
-        "purchaseDate",
-        "price",
-        "ticketNumber"
-      ]
+      "required": ["id", "competitionId", "userId", "message", "hidden", "createdAt"]
     },
+
     "User": {
       "$schema": "http://json-schema.org/draft-07/schema#",
       "title": "User",
       "type": "object",
-      "description": "Represents a user of the application.",
+      "description": "Compte utilisateur de la plateforme.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the user."
-        },
-        "name": {
-          "type": "string",
-          "description": "Name of the user."
-        },
-        "email": {
-          "type": "string",
-          "description": "Email address of the user.",
-          "format": "email"
-        }
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["customer", "organizer", "admin"] },
+        "avatar": { "type": "string" },
+        "bio": { "type": "string" },
+        "chatBanned": { "type": "boolean" },
+        "disabled": { "type": "boolean" },
+        "deleted": { "type": "boolean" },
+        "deletedAt": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" }
       },
-      "required": [
-        "id",
-        "name",
-        "email"
-      ]
+      "required": ["id", "name", "email", "role", "createdAt"]
     },
-    "TicketType": {
+
+    "Organizer": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "TicketType",
+      "title": "Organizer",
       "type": "object",
-      "description": "Represents the type of ticket that can be used for an event.",
+      "description": "Profil public d'un organisateur de concours.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the ticket type."
-        },
-        "name": {
-          "type": "string",
-          "description": "The name of the ticket type."
-        },
-        "description": {
-          "type": "string",
-          "description": "Description of the type of ticket."
-        }
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "bio": { "type": "string" },
+        "avatar": { "type": "string" }
       },
-      "required": [
-        "id",
-        "name",
-        "description"
-      ]
+      "required": ["id", "name"]
     },
-    "PercentageConfiguration": {
+
+    "Category": {
       "$schema": "http://json-schema.org/draft-07/schema#",
-      "title": "PercentageConfiguration",
+      "title": "Category",
       "type": "object",
-      "description": "Configuration entity for percentages.",
+      "description": "Catégorie de concours.",
       "properties": {
-        "id": {
-          "type": "string",
-          "description": "Unique identifier for the configuration."
-        },
-        "name": {
-          "type": "string",
-          "description": "Name of the percentage configuration (e.g., VAT, service fee)."
-        },
-        "percentage": {
-          "type": "number",
-          "description": "The percentage value (e.g., 0.1 for 10%)."
-        },
-        "description": {
-          "type": "string",
-          "description": "Description of what the percentage is applied to."
-        }
+        "id": { "type": "string" },
+        "name": { "type": "string" }
       },
-      "required": [
-        "id",
-        "name",
-        "percentage",
-        "description"
-      ]
+      "required": ["id", "name"]
     }
   },
-  "auth": {
-    "providers": [
-      "password",
-      "anonymous"
-    ]
+
+  "collections": {
+    "competitions": "Competition",
+    "candidates": "Candidate",
+    "votes": "Vote",
+    "freeVoteClaims": "FreeVoteClaim",
+    "orders": "Order",
+    "liveAccess": "LiveAccess",
+    "chatMessages": "ChatMessage",
+    "users": "User",
+    "organizers": "Organizer",
+    "categories": "Category",
+    "transactions": "Reversements et remboursements (usage admin)",
+    "percentageConfigurations": "Commissions de la plateforme (usage admin)",
+    "roles_admin": "Source de vérité des rôles administrateurs"
   },
-  "firestore": {
-    "structure": [
-      {
-        "path": "/users/{userId}",
-        "definition": {
-          "entityName": "User",
-          "schema": {
-            "$ref": "#/backend/entities/User"
-          },
-          "description": "Stores user profile information. This path enforces ownership, allowing only the user to read and write their own data.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/users/{userId}/tickets/{ticketId}",
-        "definition": {
-          "entityName": "Ticket",
-          "schema": {
-            "$ref": "#/backend/entities/Ticket"
-          },
-          "description": "Stores tickets purchased by a user. This path enforces ownership, ensuring only the user can manage their tickets.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            },
-            {
-              "name": "ticketId",
-              "description": "The unique identifier for the ticket."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/organizers/{organizerId}",
-        "definition": {
-          "entityName": "Organizer",
-          "schema": {
-            "$ref": "#/backend/entities/Organizer"
-          },
-          "description": "Stores organizer profile information. Organizers can manage their own profile data.",
-          "params": [
-            {
-              "name": "organizerId",
-              "description": "The unique identifier for the organizer."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/events/{eventId}",
-        "definition": {
-          "entityName": "Event",
-          "schema": {
-            "$ref": "#/backend/entities/Event"
-          },
-          "description": "Stores events. Publicly readable, but only the organizer can create, update, or delete their own events.",
-          "params": [
-            {
-              "name": "eventId",
-              "description": "The unique identifier for the event."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/categories/{categoryId}",
-        "definition": {
-          "entityName": "Category",
-          "schema": {
-            "$ref": "#/backend/entities/Category"
-          },
-          "description": "Stores event categories. Accessible to all users for read operations. Write access should be restricted to admins.",
-          "params": [
-            {
-              "name": "categoryId",
-              "description": "The unique identifier for the category."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/ticketTypes/{ticketTypeId}",
-        "definition": {
-          "entityName": "TicketType",
-          "schema": {
-            "$ref": "#/backend/entities/TicketType"
-          },
-          "description": "Stores ticket types.  Accessible to all users for read operations. Write access should be restricted to admins.",
-          "params": [
-            {
-              "name": "ticketTypeId",
-              "description": "The unique identifier for the ticket type."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/percentageConfigurations/{configId}",
-        "definition": {
-          "entityName": "PercentageConfiguration",
-          "schema": {
-            "$ref": "#/backend/entities/PercentageConfiguration"
-          },
-          "description": "Stores percentage configurations (e.g., VAT, service fee). Read/write access restricted to admins.",
-          "params": [
-            {
-              "name": "configId",
-              "description": "The unique identifier for the percentage configuration."
-            }
-          ]
-        }
-      },
-      {
-        "path": "/roles_admin/{userId}",
-        "definition": {
-          "entityName": "RoleAdmin",
-          "schema": {
-            "$ref": "#/backend/entities/User"
-          },
-          "description": "Collection used for storing admin user IDs. Existence of a document indicates admin role.",
-          "params": [
-            {
-              "name": "userId",
-              "description": "The unique identifier for the user."
-            }
-          ]
-        }
-      }
-    ],
-    "reasoning": "The Firestore data structure is designed to support the \"Ivoire Events\" application, focusing on event listing, ticket purchasing, event creation, and recommendations. The design emphasizes authorization independence, clarity, and scalability. User-owned data is stored under the `/users/{userId}` path, collaborative data utilizes membership maps, and global roles are managed via dedicated collections. Authorization independence is achieved through denormalization of authorization-relevant data, particularly within subcollections of user-owned documents. This eliminates the need for `get()` calls in security rules, ensuring atomic operations. QAPs are supported via structural segregation (e.g. storing event drafts and published events in different collections with unique security requirements) and the consistent application of ownership and membership models."
-  }
+
+  "notes": [
+    "Toutes les écritures passent par des Server Actions Next.js utilisant le SDK Admin ; le SDK client est en lecture seule (voir firestore.rules).",
+    "Les compteurs de votes sont mis à jour par transaction Firestore avec FieldValue.increment, jamais recalculés côté client.",
+    "Le webhook de paiement est idempotent : le vote et l'accès live portent l'identifiant de la commande."
+  ]
 }

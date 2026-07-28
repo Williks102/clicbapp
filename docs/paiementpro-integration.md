@@ -1,46 +1,62 @@
-# Intégration Paiement Pro (proposition)
+# Intégration Paiement Pro
 
-## Diagnostic du repo
+## Principe
 
-Le checkout charge déjà le SDK Paiement Pro côté client et redirige correctement vers l'URL de paiement.
+Deux tunnels de paiement partagent la même mécanique :
 
-Point critique observé: le webhook utilisait `returnContext` provenant du navigateur comme source de vérité pour créer la vente. Ce champ est manipulable côté client.
+- **`VOTE_PACK`** : achat d'un pack de votes pour un candidat ;
+- **`LIVE_ACCESS`** : achat de l'accès à une diffusion en direct payante.
 
-## Solution d'intégration recommandée
+Chaque tunnel crée une commande `PENDING` côté serveur avant d'appeler le SDK
+Paiement Pro. La référence de paiement **est** l'identifiant du document
+`orders/{reference}`.
 
-1. **Préparer une session de paiement côté serveur** avant d'appeler Paiement Pro.
-   - Vérifier event + ticket + stock.
-   - Calculer le montant côté serveur.
-   - Générer une `referenceNumber` unique.
-   - Enregistrer `purchaseData` en base (`payment_sessions/{referenceNumber}`).
-2. **Envoyer au SDK uniquement des données sûres**.
-   - `referenceNumber` issue du serveur.
-   - `returnContext` minimal (`paymentSessionId`).
-3. **Traiter le webhook en mode idempotent**.
-   - Rechercher la session de paiement par `referenceNumber`.
-   - Ignorer les callbacks en double si déjà `completed`.
-   - Créer le ticket à partir des données stockées serveur (jamais depuis le payload client).
-   - Marquer la session `completed` et stocker `saleId`.
+## Flux
 
-## Mapping des champs Paiement Pro (doc fournie)
+1. **Initialisation côté serveur** (`initializeVotePackOrder` /
+   `initializeLiveAccessOrder`, dans `src/app/actions/order-actions.ts`) :
+   - vérification du concours, du candidat et de la fenêtre de vote ;
+   - lecture du **prix et du nombre de votes depuis Firestore** — jamais depuis
+     le client ;
+   - génération d'une `referenceNumber` unique ;
+   - création de la commande avec le statut `PENDING`.
+2. **Redirection** (`redirectToPayment`, dans `src/hooks/use-paiementpro.ts`) :
+   le client ne transmet à la passerelle que des données déjà validées par le
+   serveur. `returnContext` ne sert qu'au débogage.
+3. **Webhook** (`src/app/api/payment/webhook/route.ts`), idempotent :
+   - la commande est retrouvée par `referenceNumber` ;
+   - une commande qui n'est plus `PENDING` est ignorée ;
+   - un montant différent de celui calculé côté serveur marque la commande
+     `FLAGGED` et interrompt le traitement ;
+   - les votes sont crédités par transaction Firestore, avec un document de vote
+     portant l'identifiant de la commande — un rejeu ne double jamais le crédit ;
+   - l'accès au direct est créé sous le même identifiant de commande ;
+   - la commande passe `PAID`, puis l'e-mail de confirmation est envoyé (son
+     échec n'invalide jamais le paiement).
+4. **Retour utilisateur** (`/vote/success?reference=…`) : la page interroge le
+   statut de la commande et poursuit l'attente tant que le webhook n'a pas été
+   reçu.
 
-- `amount`: montant total (FCFA)
-- `description`: obligatoire
-- `channel`: `MOBILE_MONEY_CI` ou `CARD`
-- `countryCurrencyCode`: `952`
-- `referenceNumber`: obligatoire et unique
-- `customerEmail`, `customerFirstName`, `customerLastname`, `customerPhoneNumber`: obligatoires
-- `notificationURL`: endpoint webhook (`/api/payment/webhook`)
-- `returnURL`: URL de retour front (`/purchase/success?orderId=...`)
-- `returnContext`: métadonnées minimales (token/session id)
+## Mapping des champs Paiement Pro
+
+- `amount` : montant total (F CFA), calculé côté serveur
+- `description` : obligatoire
+- `channel` : `MOBILE_MONEY_CI` ou `CARD`
+- `countryCurrencyCode` : `952`
+- `referenceNumber` : obligatoire et unique — identifiant de la commande
+- `customerEmail`, `customerFirstName`, `customerLastname`, `customerPhoneNumber`
+- `notificationURL` : `/api/payment/webhook`
+- `returnURL` : `/vote/success?reference=…`
+- `returnContext` : métadonnées minimales
 
 ## Variables d'environnement
 
 - `NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID`
-- (à ajouter plus tard) secret/signature webhook Paiement Pro dès que la doc officielle du header de signature est disponible.
+- (à ajouter) secret de signature du webhook dès que Paiement Pro documente
+  l'en-tête correspondant.
 
 ## Étapes suivantes
 
-- Ajouter la vérification cryptographique de signature webhook (si Paiement Pro la fournit).
-- Ajouter un écran de statut de commande qui lit la session serveur au retour utilisateur.
-- Mettre en place une tâche de réconciliation pour les paiements `initiated` non finalisés.
+- Vérification cryptographique de la signature du webhook.
+- Tâche de réconciliation des commandes restées `PENDING` au-delà de 24 h.
+- Revue périodique des commandes `FLAGGED`.

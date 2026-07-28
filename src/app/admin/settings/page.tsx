@@ -46,14 +46,14 @@ export default function AdminSettingsPage() {
     <div className="space-y-8">
       <PageHeader
         title="Paramètres de la Plateforme"
-        description="Gérez les paramètres globaux de ClicBillet."
+        description="Gérez les paramètres globaux de ClicVote."
       />
 
       <Card>
         <CardHeader>
-          <CardTitle className="font-headline">Catégories d'événements</CardTitle>
+          <CardTitle className="font-headline">Catégories de concours</CardTitle>
           <CardDescription>
-            Initialisez les catégories par défaut pour les événements.
+            Initialisez les catégories par défaut pour les concours.
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -115,7 +115,7 @@ export default function AdminSettingsPage() {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="company-name">Nom de l'entreprise</Label>
-            <Input id="company-name" defaultValue="ClicBillet SAS" />
+            <Input id="company-name" defaultValue="ClicVote SAS" />
           </div>
            <div className="space-y-2">
             <Label htmlFor="company-address">Adresse</Label>

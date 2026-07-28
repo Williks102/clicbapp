@@ -1,92 +1,122 @@
-
 import { NextResponse } from 'next/server';
 import { firestore } from '@/lib/firebase-admin';
-import { finalizePurchaseAndSendTicket } from '@/app/actions/ticket-actions';
-import type { Event, Sale } from '@/lib/types';
+import { applyPaidVotes } from '@/app/actions/vote-actions';
+import { grantLiveAccess } from '@/app/actions/live-actions';
+import { sendLiveAccessEmail, sendVoteConfirmationEmail } from '@/lib/emails';
+import type { Order } from '@/lib/types';
 
-const SUCCESS_STATUSES = new Set(['SUCCESSFUL', 'SUCCESS', 'PAID', 'success']);
+const SUCCESS_STATUSES = new Set(['SUCCESSFUL', 'SUCCESS', 'PAID', 'success', 'paid']);
 
+/**
+ * Webhook Paiement Pro.
+ * Une même référence peut être notifiée plusieurs fois : chaque étape est idempotente.
+ */
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    console.log('[Webhook] 🔔 Received payload from Paiement Pro:', body);
+    console.log('[Webhook] 🔔 Notification Paiement Pro reçue:', body);
 
-    // 1. Extraire les informations essentielles
-    const paymentStatus = body.status;
-    const referenceNumber = body.referenceNumber;
-    const paidAmount = parseFloat(body.amount);
+    const referenceNumber: string | undefined = body.referenceNumber;
+    const paymentStatus: string | undefined = body.status;
+    const paidAmount = Number.parseFloat(body.amount);
 
     if (!referenceNumber) {
-      console.error('[Webhook] ❌ Missing referenceNumber in payload.');
       return NextResponse.json({ error: 'Missing referenceNumber' }, { status: 400 });
     }
 
-    // 2. Récupérer la commande en attente depuis Firestore
-    const saleRef = firestore.collection('sales').doc(referenceNumber);
-    const saleDoc = await saleRef.get();
+    const orderRef = firestore.collection('orders').doc(referenceNumber);
+    const orderDoc = await orderRef.get();
 
-    if (!saleDoc.exists) {
-      console.error(`[Webhook] ❌ Sale with reference ${referenceNumber} not found.`);
-      return NextResponse.json({ error: 'Sale not found' }, { status: 404 });
+    if (!orderDoc.exists) {
+      console.error(`[Webhook] ❌ Commande ${referenceNumber} introuvable.`);
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
     }
 
-    const sale = saleDoc.data() as Sale;
+    const order = { id: orderDoc.id, ...orderDoc.data() } as Order;
 
-    // 3. Vérifier que la commande est bien en attente
-    if (sale.status !== 'PENDING') {
-      console.warn(`[Webhook] ⚠️ Received webhook for an already processed sale: ${referenceNumber}, status: ${sale.status}`);
-      return NextResponse.json({ status: 'already_processed', message: 'Webhook was already handled.' });
+    if (order.status !== 'PENDING') {
+      console.warn(
+        `[Webhook] ⚠️ Commande ${referenceNumber} déjà traitée (statut: ${order.status}).`
+      );
+      return NextResponse.json({
+        status: 'already_processed',
+        message: 'Webhook already handled.',
+      });
     }
 
-    // Si le paiement n'est pas un succès
-    if (paymentStatus !== 'SUCCESSFUL' && paymentStatus !== 'success' && paymentStatus !== 'PAID') {
-        console.log(`[Webhook] 📉 Payment failed for ${referenceNumber}. Status: ${paymentStatus}`);
-        await saleRef.update({ status: 'FAILED', paymentDetails: body });
-        return NextResponse.json({ status: 'ignored', message: `Payment status was ${paymentStatus}` });
+    if (!paymentStatus || !SUCCESS_STATUSES.has(paymentStatus)) {
+      console.log(`[Webhook] 📉 Paiement échoué pour ${referenceNumber}: ${paymentStatus}`);
+      await orderRef.update({ status: 'FAILED', paymentDetails: body });
+      return NextResponse.json({
+        status: 'ignored',
+        message: `Payment status was ${paymentStatus}`,
+      });
     }
 
-    // 4. Validation cruciale : comparer les montants
-    if (paidAmount !== sale.totalPrice) {
-      console.error(`[Webhook] 🚨 SECURITY ALERT: Amount mismatch for sale ${referenceNumber}. Expected ${sale.totalPrice}, got ${paidAmount}.`);
-      await saleRef.update({ status: 'FLAGGED', paymentDetails: body });
+    // Le montant réellement payé doit correspondre au montant calculé côté serveur.
+    if (!Number.isFinite(paidAmount) || paidAmount !== order.amount) {
+      console.error(
+        `[Webhook] 🚨 Montant incohérent pour ${referenceNumber}: attendu ${order.amount}, reçu ${paidAmount}.`
+      );
+      await orderRef.update({ status: 'FLAGGED', paymentDetails: body });
       return NextResponse.json({ error: 'Amount mismatch' }, { status: 400 });
     }
-    
-    console.log(`[Webhook] ✅ Payment successful for ${referenceNumber}. Amount validated.`);
 
-    // 5. Exécuter la transaction finale
-    const eventRef = firestore.collection('events').doc(sale.eventId);
+    if (order.type === 'VOTE_PACK') {
+      if (!order.candidateId || !order.votes) {
+        await orderRef.update({ status: 'FLAGGED', paymentDetails: body });
+        return NextResponse.json({ error: 'Invalid vote order' }, { status: 400 });
+      }
 
-    await firestore.runTransaction(async (transaction) => {
-      const eventDoc = await transaction.get(eventRef);
-      if (!eventDoc.exists) throw new Error(`Event ${sale.eventId} not found`);
+      await applyPaidVotes({
+        competitionId: order.competitionId,
+        candidateId: order.candidateId,
+        candidateName: order.candidateName || '',
+        quantity: order.votes,
+        orderId: order.id,
+        amount: order.amount,
+        userId: order.userId,
+        voterEmail: order.customerEmail,
+        voterName: order.customerName,
+      });
+    } else if (order.type === 'LIVE_ACCESS') {
+      if (!order.userId) {
+        await orderRef.update({ status: 'FLAGGED', paymentDetails: body });
+        return NextResponse.json({ error: 'Invalid live access order' }, { status: 400 });
+      }
 
-      const event = eventDoc.data() as Event;
-      const ticketIndex = event.tickets.findIndex(t => t.id === sale.ticketId);
-      if (ticketIndex === -1) throw new Error(`Ticket ${sale.ticketId} not found`);
+      await grantLiveAccess({
+        userId: order.userId,
+        competitionId: order.competitionId,
+        orderId: order.id,
+        pricePaid: order.amount,
+      });
+    }
 
-      const ticket = event.tickets[ticketIndex];
-      if (ticket.quantity < sale.quantity) throw new Error(`Not enough tickets in stock for ${ticket.name}`);
-
-      // Décrémenter la quantité
-      const updatedTickets = [...event.tickets];
-      updatedTickets[ticketIndex] = { ...ticket, quantity: ticket.quantity - sale.quantity };
-      transaction.update(eventRef, { tickets: updatedTickets });
-
-      // Mettre à jour le statut de la vente
-      transaction.update(saleRef, { status: 'PAID', paymentDetails: body });
+    await orderRef.update({
+      status: 'PAID',
+      paidAt: new Date().toISOString(),
+      paymentDetails: body,
     });
 
-    console.log(`[Webhook] 📦 Stock updated and sale ${referenceNumber} marked as PAID.`);
+    console.log(`[Webhook] ✅ Commande ${referenceNumber} confirmée (${order.type}).`);
 
-    // 6. Envoyer les billets (après la transaction réussie)
-    await finalizePurchaseAndSendTicket(referenceNumber);
+    // L'e-mail ne doit jamais faire échouer la confirmation de paiement.
+    try {
+      const paidOrder: Order = { ...order, status: 'PAID' };
+      if (order.type === 'VOTE_PACK') {
+        await sendVoteConfirmationEmail(paidOrder);
+      } else {
+        await sendLiveAccessEmail(paidOrder);
+      }
+    } catch (emailError) {
+      console.error('[Webhook] ⚠️ Envoi de l\'e-mail échoué:', emailError);
+    }
 
-    return NextResponse.json({ status: 'success', message: 'Webhook processed successfully' });
-
+    return NextResponse.json({ status: 'success' });
   } catch (error) {
-    console.error('[Webhook] ❌ Unhandled error processing webhook:', error);
-    const errorMessage = error instanceof Error ? error.message : "Internal Server Error";
-    return NextResponse.json({ error: errorMessage }, { status: 500 });
+    console.error('[Webhook] ❌ Erreur non gérée:', error);
+    const message = error instanceof Error ? error.message : 'Internal Server Error';
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

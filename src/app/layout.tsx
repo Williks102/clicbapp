@@ -5,8 +5,9 @@ import { Toaster } from '@/components/ui/toaster';
 import { Providers } from './providers';
 
 export const metadata: Metadata = {
-  title: 'ClicBillet',
-  description: "Découvrez et réservez les meilleurs événements en Côte d'Ivoire",
+  title: 'ClicVote — Votez et suivez vos concours en direct',
+  description:
+    "Votez pour vos candidats favoris et suivez la diffusion en direct des plus grands concours de Côte d'Ivoire.",
 };
 
 export default function RootLayout({
@@ -15,7 +16,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="fr" suppressHydrationWarning>
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link

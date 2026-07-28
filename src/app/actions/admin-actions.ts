@@ -2,7 +2,7 @@
 
 import { auth } from '@/auth';
 import { firestore } from '@/lib/firebase-admin';
-import type { Event, User } from '@/lib/types';
+import type { Competition, User } from '@/lib/types';
 
 /**
  * Helper function to verify admin role
@@ -16,25 +16,27 @@ async function ensureAdmin() {
 }
 
 /**
- * Récupère tous les événements (admin seulement)
+ * Récupère tous les concours (admin seulement)
  */
-export async function getAllEvents(): Promise<Event[]> {
+export async function getAllCompetitions(): Promise<Competition[]> {
   try {
     await ensureAdmin();
-    console.log('[ADMIN EVENTS] 📋 Fetching all events...');
-    
-    const eventsSnapshot = await firestore.collection('events').get();
-    
-    const events: Event[] = eventsSnapshot.docs.map(doc => ({
+    console.log('[ADMIN COMPETITIONS] 📋 Fetching all competitions...');
+
+    const snapshot = await firestore.collection('competitions').get();
+
+    const competitions = snapshot.docs.map(doc => ({
       id: doc.id,
       ...doc.data(),
-    })) as Event[];
+    })) as Competition[];
 
-    console.log(`[ADMIN EVENTS] ✅ Fetched ${events.length} events`);
-    return events;
+    console.log(`[ADMIN COMPETITIONS] ✅ Fetched ${competitions.length} competitions`);
+    return competitions.sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
 
   } catch (error) {
-    console.error('[ADMIN EVENTS] ❌ Error:', error);
+    console.error('[ADMIN COMPETITIONS] ❌ Error:', error);
     if (error instanceof Error && error.message.includes('Accès non autorisé')) {
       throw error;
     }
@@ -70,20 +72,31 @@ export async function getAllUsers(): Promise<User[]> {
 }
 
 /**
- * Supprime un événement (admin seulement)
+ * Supprime un concours et ses candidats (admin seulement)
  */
-export async function deleteEvent(eventId: string): Promise<{ success: boolean; error?: string }> {
+export async function deleteCompetitionAsAdmin(
+  competitionId: string
+): Promise<{ success: boolean; error?: string }> {
   try {
     await ensureAdmin();
-    console.log('[ADMIN DELETE EVENT] 🗑️ Deleting event:', eventId);
-    
-    await firestore.collection('events').doc(eventId).delete();
+    console.log('[ADMIN DELETE COMPETITION] 🗑️ Deleting competition:', competitionId);
 
-    console.log('[ADMIN DELETE EVENT] ✅ Event deleted');
+    const batch = firestore.batch();
+
+    const candidates = await firestore
+      .collection('candidates')
+      .where('competitionId', '==', competitionId)
+      .get();
+    candidates.docs.forEach(doc => batch.delete(doc.ref));
+
+    batch.delete(firestore.collection('competitions').doc(competitionId));
+    await batch.commit();
+
+    console.log('[ADMIN DELETE COMPETITION] ✅ Competition deleted');
     return { success: true };
 
   } catch (error) {
-    console.error('[ADMIN DELETE EVENT] ❌ Error:', error);
+    console.error('[ADMIN DELETE COMPETITION] ❌ Error:', error);
     const errorMessage = error instanceof Error ? error.message : 'Erreur lors de la suppression';
     return { success: false, error: errorMessage };
   }

@@ -35,15 +35,16 @@ export async function initializeCategories(): Promise<{ success: boolean; messag
       };
     }
 
-    // Catégories par défaut
+    // Catégories de concours par défaut
     const defaultCategories = [
-      { name: 'Concert' },
-      { name: 'Festival' },
-      { name: 'Théâtre' },
-      { name: 'Conférence' },
+      { name: 'Beauté & Miss' },
+      { name: 'Musique & Télé-crochet' },
+      { name: 'Danse' },
+      { name: 'Awards' },
       { name: 'Sport' },
-      { name: 'Exposition' },
-      { name: 'Formation' },
+      { name: 'Mode' },
+      { name: 'Humour' },
+      { name: 'Talents & Innovation' },
       { name: 'Autre' }
     ];
 
