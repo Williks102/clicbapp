@@ -69,6 +69,11 @@ Le schéma active la réplication temps réel sur `competitions`, `candidates` e
 Pour contrôler l'installation, exécutez `supabase/check-install.sql` dans
 l'éditeur SQL : chaque ligne doit afficher `OK`.
 
+Les privilèges des rôles `anon` et `service_role` sont accordés par la
+migration. Sur une base créée avant leur ajout, exécutez `supabase/grants.sql` :
+sans ces privilèges, PostgreSQL refuse l'accès aux tables avant même
+d'évaluer les politiques RLS, et l'application ne peut rien lire ni écrire.
+
 ## Variables d'environnement
 
 | Variable | Rôle |
