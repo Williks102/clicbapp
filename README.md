@@ -106,5 +106,16 @@ pour le modèle de données.
 
 ## Déploiement
 
-L'hébergement reste sur Firebase App Hosting (`apphosting.yaml`). Pensez à
-déclarer les variables d'environnement Supabase côté hébergeur.
+L'application est un projet Next.js standard : elle se déploie sur Vercel comme
+sur Firebase App Hosting (`apphosting.yaml`).
+
+Déclarez toutes les variables du tableau ci-dessus chez l'hébergeur, puis
+**relancez un déploiement** : les variables `NEXT_PUBLIC_*` sont intégrées au
+build et ne sont pas prises en compte tant que le projet n'est pas reconstruit.
+
+`AUTH_SECRET` est indispensable — sans elle, aucune session ne peut être
+signée et la connexion échoue. Générez-la avec :
+
+```bash
+openssl rand -base64 32
+```
