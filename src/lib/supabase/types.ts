@@ -1,0 +1,175 @@
+/**
+ * Représentation des lignes PostgreSQL telles que renvoyées par Supabase.
+ *
+ * Ces types décrivent le schéma (snake_case) ; les types applicatifs de
+ * `src/lib/types.ts` restent en camelCase. La conversion est centralisée dans
+ * `src/lib/supabase/mappers.ts`, ce qui isole entièrement l'interface du
+ * schéma de la base.
+ */
+
+export type UserRow = {
+  id: string;
+  name: string;
+  email: string;
+  password_hash: string;
+  role: 'customer' | 'organizer' | 'admin';
+  avatar: string | null;
+  bio: string | null;
+  notification_preferences: {
+    emailNotifications: boolean;
+    platformUpdates: boolean;
+  } | null;
+  chat_banned: boolean;
+  disabled: boolean;
+  deleted: boolean;
+  deleted_at: string | null;
+  created_at: string;
+};
+
+export type OrganizerRow = {
+  id: string;
+  name: string;
+  bio: string;
+  avatar: string;
+};
+
+export type CategoryRow = {
+  id: string;
+  name: string;
+};
+
+export type VotePackRow = {
+  id: string;
+  competition_id: string;
+  name: string;
+  votes: number;
+  price: number;
+  highlighted: boolean;
+  position: number;
+};
+
+export type CompetitionRow = {
+  id: string;
+  organizer_id: string;
+  organizer_name: string | null;
+  title: string;
+  category: string;
+  description: string;
+  cover_image: string;
+  status: 'draft' | 'published' | 'voting' | 'closed' | 'finished';
+  voting_starts_at: string;
+  voting_ends_at: string;
+  hide_results: boolean;
+  winner_candidate_id: string | null;
+
+  free_vote_enabled: boolean;
+  free_vote_cooldown_hours: number;
+
+  live_enabled: boolean;
+  live_title: string;
+  live_provider: 'youtube' | 'facebook' | 'vimeo' | 'hls' | 'iframe';
+  live_url: string;
+  live_is_live: boolean;
+  live_scheduled_at: string | null;
+  live_paid: boolean;
+  live_price: number;
+  live_chat_enabled: boolean;
+  live_replay_url: string;
+
+  total_votes: number;
+  free_votes: number;
+  paid_votes: number;
+  total_revenue: number;
+  candidates_count: number;
+
+  created_at: string;
+  updated_at: string;
+
+  /** Présent lorsque la requête fait la jointure sur les packs. */
+  vote_packs?: VotePackRow[];
+};
+
+export type CandidateRow = {
+  id: string;
+  competition_id: string;
+  name: string;
+  number: number;
+  photo: string;
+  bio: string;
+  city: string;
+  vote_count: number;
+  free_vote_count: number;
+  paid_vote_count: number;
+  eliminated: boolean;
+  created_at: string;
+};
+
+export type OrderRow = {
+  id: string;
+  type: 'VOTE_PACK' | 'LIVE_ACCESS';
+  competition_id: string;
+  competition_title: string;
+  organizer_id: string;
+  candidate_id: string | null;
+  candidate_name: string | null;
+  pack_id: string | null;
+  pack_name: string | null;
+  votes: number | null;
+  amount: number;
+  customer_name: string;
+  customer_email: string;
+  customer_phone: string | null;
+  user_id: string | null;
+  status: 'PENDING' | 'PAID' | 'FAILED' | 'FLAGGED' | 'REFUNDED';
+  payment_details: unknown;
+  refund_reason: string | null;
+  refunded_at: string | null;
+  refunded_by: string | null;
+  created_at: string;
+  paid_at: string | null;
+};
+
+export type VoteRow = {
+  id: string;
+  competition_id: string;
+  candidate_id: string;
+  candidate_name: string;
+  user_id: string | null;
+  voter_email: string | null;
+  voter_name: string | null;
+  quantity: number;
+  type: 'free' | 'paid';
+  order_id: string | null;
+  created_at: string;
+};
+
+export type LiveAccessRow = {
+  id: string;
+  user_id: string;
+  competition_id: string;
+  order_id: string | null;
+  price_paid: number;
+  purchase_date: string;
+};
+
+export type ChatMessageRow = {
+  id: string;
+  competition_id: string;
+  user_id: string;
+  user_name: string;
+  user_role: 'customer' | 'organizer' | 'admin';
+  message: string;
+  hidden: boolean;
+  created_at: string;
+};
+
+export type PlatformSettingsRow = {
+  id: string;
+  platform_fee_percentage: number;
+  transaction_fee_percentage: number;
+  updated_at: string;
+  updated_by: string | null;
+};
+
+/** Colonnes du concours, packs joints inclus. */
+export const COMPETITION_COLUMNS = '*, vote_packs(*)';

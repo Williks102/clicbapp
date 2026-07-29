@@ -1,9 +1,15 @@
 'use server';
 
 import { auth } from '@/auth';
-import { firestore } from '@/lib/firebase-admin';
 import { revalidatePath } from 'next/cache';
-import { isLiveFree } from '@/lib/live-utils';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { toCompetition, toLiveAccess } from '@/lib/supabase/mappers';
+import {
+  COMPETITION_COLUMNS,
+  type CompetitionRow,
+  type LiveAccessRow,
+} from '@/lib/supabase/types';
+import { PUBLIC_COMPETITION_STATUSES } from '@/lib/live-utils';
 import type { ActionResult, Competition, LiveAccess } from '@/lib/types';
 
 async function requireLiveControl(competitionId: string) {
@@ -12,13 +18,21 @@ async function requireLiveControl(competitionId: string) {
     throw new Error('Vous devez être connecté.');
   }
 
-  const doc = await firestore.collection('competitions').doc(competitionId).get();
-  if (!doc.exists) {
-    throw new Error('Concours introuvable.');
-  }
+  const { data, error } = await getSupabaseAdmin()
+    .from('competitions')
+    .select('id, organizer_id, live_enabled, live_url')
+    .eq('id', competitionId)
+    .maybeSingle();
 
-  const competition = { id: doc.id, ...doc.data() } as Competition;
-  if (competition.organizerId !== session.user.id && session.user.role !== 'admin') {
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('Concours introuvable.');
+
+  const competition = data as Pick<
+    CompetitionRow,
+    'id' | 'organizer_id' | 'live_enabled' | 'live_url'
+  >;
+
+  if (competition.organizer_id !== session.user.id && session.user.role !== 'admin') {
     throw new Error("Vous n'êtes pas autorisé à piloter ce direct.");
   }
 
@@ -33,23 +47,25 @@ export async function setLiveStatus(
   try {
     const { competition } = await requireLiveControl(competitionId);
 
-    if (!competition.live?.enabled) {
+    if (!competition.live_enabled) {
       return {
         success: false,
         error: "La diffusion n'est pas activée pour ce concours.",
       };
     }
-    if (isLive && !competition.live.url) {
+    if (isLive && !competition.live_url) {
       return {
         success: false,
         error: "Renseignez l'URL du flux avant de lancer le direct.",
       };
     }
 
-    await firestore.collection('competitions').doc(competitionId).update({
-      'live.isLive': isLive,
-      updatedAt: new Date().toISOString(),
-    });
+    const { error } = await getSupabaseAdmin()
+      .from('competitions')
+      .update({ live_is_live: isLive })
+      .eq('id', competitionId);
+
+    if (error) throw new Error(error.message);
 
     revalidatePath(`/competitions/${competitionId}`);
     revalidatePath(`/competitions/${competitionId}/live`);
@@ -76,10 +92,12 @@ export async function updateLiveUrl(
   try {
     await requireLiveControl(competitionId);
 
-    await firestore.collection('competitions').doc(competitionId).update({
-      'live.url': url,
-      updatedAt: new Date().toISOString(),
-    });
+    const { error } = await getSupabaseAdmin()
+      .from('competitions')
+      .update({ live_url: url })
+      .eq('id', competitionId);
+
+    if (error) throw new Error(error.message);
 
     revalidatePath(`/competitions/${competitionId}/live`);
     return { success: true, message: 'URL du direct mise à jour.' };
@@ -94,74 +112,51 @@ export async function updateLiveUrl(
 
 /**
  * L'utilisateur courant peut-il regarder le direct ?
- * Le direct gratuit est ouvert à tous ; le direct payant exige un accès acheté.
+ * Un direct gratuit est ouvert à tous ; un direct payant exige un accès acheté.
  */
 export async function checkLiveAccess(competitionId: string): Promise<{
   hasAccess: boolean;
   requiresLogin: boolean;
   price: number;
 }> {
-  const doc = await firestore.collection('competitions').doc(competitionId).get();
-  if (!doc.exists) return { hasAccess: false, requiresLogin: false, price: 0 };
+  const supabase = getSupabaseAdmin();
 
-  const competition = { id: doc.id, ...doc.data() } as Competition;
+  const { data } = await supabase
+    .from('competitions')
+    .select('id, organizer_id, live_paid, live_price')
+    .eq('id', competitionId)
+    .maybeSingle();
 
-  if (isLiveFree(competition)) {
+  if (!data) return { hasAccess: false, requiresLogin: false, price: 0 };
+
+  const competition = data as Pick<
+    CompetitionRow,
+    'id' | 'organizer_id' | 'live_paid' | 'live_price'
+  >;
+  const price = Number(competition.live_price);
+
+  if (!competition.live_paid || price <= 0) {
     return { hasAccess: true, requiresLogin: false, price: 0 };
   }
 
   const session = await auth();
   if (!session?.user?.id) {
-    return { hasAccess: false, requiresLogin: true, price: competition.live.price };
+    return { hasAccess: false, requiresLogin: true, price };
   }
 
-  // L'organisateur et les admins accèdent toujours à leur propre diffusion.
-  if (competition.organizerId === session.user.id || session.user.role === 'admin') {
-    return { hasAccess: true, requiresLogin: false, price: competition.live.price };
+  // L'organisateur et les administrateurs accèdent toujours à la diffusion.
+  if (competition.organizer_id === session.user.id || session.user.role === 'admin') {
+    return { hasAccess: true, requiresLogin: false, price };
   }
 
-  const access = await firestore
-    .collection('liveAccess')
-    .where('userId', '==', session.user.id)
-    .where('competitionId', '==', competitionId)
-    .limit(1)
-    .get();
+  const { data: access } = await supabase
+    .from('live_access')
+    .select('id')
+    .eq('user_id', session.user.id)
+    .eq('competition_id', competitionId)
+    .maybeSingle();
 
-  return {
-    hasAccess: !access.empty,
-    requiresLogin: false,
-    price: competition.live.price,
-  };
-}
-
-/**
- * Accorde l'accès au direct après paiement confirmé.
- * Appelée par le webhook ; l'id du document dérive de la commande (idempotence).
- */
-export async function grantLiveAccess(params: {
-  userId: string;
-  competitionId: string;
-  orderId: string;
-  pricePaid: number;
-}): Promise<void> {
-  const accessRef = firestore.collection('liveAccess').doc(params.orderId);
-  const existing = await accessRef.get();
-
-  if (existing.exists) {
-    console.warn(`[GRANT LIVE ACCESS] ⚠️ Accès déjà accordé pour ${params.orderId}`);
-    return;
-  }
-
-  const access: Omit<LiveAccess, 'id'> = {
-    userId: params.userId,
-    competitionId: params.competitionId,
-    orderId: params.orderId,
-    pricePaid: params.pricePaid,
-    purchaseDate: new Date().toISOString(),
-  };
-
-  await accessRef.set(access);
-  revalidatePath(`/competitions/${params.competitionId}/live`);
+  return { hasAccess: !!access, requiresLogin: false, price };
 }
 
 /** Accès live achetés par l'utilisateur connecté. */
@@ -169,27 +164,32 @@ export async function getMyLiveAccess(): Promise<LiveAccess[]> {
   const session = await auth();
   if (!session?.user?.id) return [];
 
-  const snapshot = await firestore
-    .collection('liveAccess')
-    .where('userId', '==', session.user.id)
-    .get();
+  const { data, error } = await getSupabaseAdmin()
+    .from('live_access')
+    .select('*')
+    .eq('user_id', session.user.id)
+    .order('purchase_date', { ascending: false });
 
-  return snapshot.docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }) as LiveAccess)
-    .sort(
-      (a, b) =>
-        new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime()
-    );
+  if (error) {
+    console.error('[GET MY LIVE ACCESS] ❌', error.message);
+    return [];
+  }
+
+  return (data as LiveAccessRow[]).map(toLiveAccess);
 }
 
 /** Concours actuellement en direct, pour la mise en avant sur l'accueil. */
 export async function getLiveNowCompetitions(): Promise<Competition[]> {
-  const snapshot = await firestore
-    .collection('competitions')
-    .where('live.isLive', '==', true)
-    .get();
+  const { data, error } = await getSupabaseAdmin()
+    .from('competitions')
+    .select(COMPETITION_COLUMNS)
+    .eq('live_is_live', true)
+    .in('status', [...PUBLIC_COMPETITION_STATUSES]);
 
-  return snapshot.docs
-    .map((doc) => ({ id: doc.id, ...doc.data() }) as Competition)
-    .filter((competition) => competition.status !== 'draft');
+  if (error) {
+    console.error('[GET LIVE NOW] ❌', error.message);
+    return [];
+  }
+
+  return (data as unknown as CompetitionRow[]).map(toCompetition);
 }

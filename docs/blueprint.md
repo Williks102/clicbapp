@@ -44,22 +44,25 @@ finale en direct, avec classement temps réel et chat modéré.
 ## Architecture
 
 - **Next.js 15** (App Router, Server Actions) et **React 18**.
-- **Firestore** pour les données ; le SDK Admin côté serveur porte toutes les
-  écritures, le SDK client est en lecture seule pour le temps réel.
-- **NextAuth** (JWT) pour les sessions et les rôles.
+- **PostgreSQL / Supabase** pour les données ; la clé `service_role` porte
+  toutes les écritures côté serveur, la clé `anon` est en lecture seule et
+  alimente le temps réel (classement, chat).
+- **NextAuth** (JWT) pour les sessions et les rôles, mots de passe en bcrypt.
 - **Paiement Pro** pour l'encaissement, avec webhook idempotent et validation
   serveur du montant.
 - **Cloudinary** pour les visuels, **Resend** pour les e-mails transactionnels.
 
 ## Intégrité du scrutin
 
-- Prix et nombre de votes lus exclusivement depuis Firestore : le client ne peut
+- Prix et nombre de votes lus exclusivement depuis la base : le client ne peut
   pas les manipuler.
-- Vote gratuit protégé par un document de suivi et une transaction atomique.
-- Compteurs mis à jour par `FieldValue.increment` à l'intérieur de transactions.
-- Webhook rejouable sans double crédit : vote et accès live portent
-  l'identifiant de la commande.
-- Écart entre montant payé et montant attendu → commande marquée `FLAGGED`.
+- Dossards uniques et accès aux directs non dupliqués : contraintes SQL.
+- Compteurs de votes maintenus par triggers depuis la table `votes`.
+- Vote gratuit : délai d'attente et enregistrement dans une seule transaction
+  (`cast_free_vote`).
+- Webhook idempotent et revalidation du montant (`confirm_order_payment`).
+- Écart entre montant payé et montant attendu → commande marquée `FLAGGED`,
+  aucun vote crédité.
 
 ## Style
 

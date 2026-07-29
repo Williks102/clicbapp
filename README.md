@@ -19,14 +19,36 @@ npm run typecheck  # vérification TypeScript
 npm run genkit:dev # flows Genkit (assistant de rédaction)
 ```
 
+## Mise en place de la base (Supabase)
+
+1. Créez un projet sur [supabase.com](https://supabase.com).
+2. Appliquez le schéma — via la CLI :
+
+   ```bash
+   supabase link --project-ref <votre-ref>
+   supabase db push          # applique supabase/migrations/
+   ```
+
+   …ou en collant le contenu de `supabase/migrations/20260728120000_init.sql`
+   puis de `supabase/seed.sql` dans l'éditeur SQL du tableau de bord.
+
+3. Créez un compte administrateur :
+
+   ```bash
+   node scripts/create-admin.mjs admin@exemple.ci "motdepasse-solide" "Nom Admin"
+   ```
+
+Le schéma active la réplication temps réel sur `competitions`, `candidates` et
+`chat_messages` : rien d'autre à configurer pour le classement et le chat.
+
 ## Variables d'environnement
 
 | Variable | Rôle |
 | --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | URL du projet Supabase |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clé publique, utilisée par le navigateur (lecture seule) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Clé serveur, contourne RLS — **ne jamais exposer au client** |
 | `AUTH_SECRET` | Secret de signature des sessions NextAuth |
-| `FIREBASE_SERVICE_ACCOUNT_BASE64` | Compte de service Firebase encodé en base64 (recommandé) |
-| `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` | Alternative au compte de service encodé |
-| `FIREBASE_STORAGE_BUCKET` | Bucket de stockage Firebase |
 | `NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID` | Identifiant marchand Paiement Pro |
 | `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` | Preset d'upload Cloudinary |
 | `RESEND_API_KEY` | Envoi des e-mails de confirmation |
@@ -44,24 +66,45 @@ src/
 │   ├── admin/            Back-office plateforme
 │   └── api/payment/      Webhook Paiement Pro
 ├── components/           Composants d'interface (player, chat, classement, formulaires)
-├── firebase/             SDK client Firestore et hooks temps réel
-└── lib/                  Types, utilitaires, e-mails
+├── hooks/
+│   └── use-realtime-query.ts   Lecture + abonnement temps réel Supabase
+└── lib/
+    ├── supabase/         Clients, types de lignes SQL et convertisseurs
+    └── types.ts          Types applicatifs (camelCase) utilisés par l'interface
+
+supabase/
+├── migrations/           Schéma, triggers, fonctions et politiques RLS
+└── seed.sql              Catégories de référence
 ```
 
 ## Modèle de sécurité
 
-L'authentification repose sur NextAuth, pas sur Firebase Auth. Le SDK Firestore
-client est donc **strictement en lecture seule** (`firestore.rules`) et sert
-uniquement aux affichages temps réel. Toutes les écritures passent par des
-Server Actions qui vérifient la session et le rôle via le SDK Admin.
+L'authentification repose sur NextAuth (mots de passe hachés en bcrypt dans la
+table `users`), pas sur Supabase Auth. Le navigateur n'utilise que la clé
+`anon`, dont les politiques RLS n'autorisent que la **lecture** des données
+publiques : concours publiés, candidats, chat, catégories, profils
+d'organisateurs. Toutes les écritures passent par des Server Actions qui
+vérifient session et rôle avec la clé `service_role`.
+
+## Intégrité du scrutin
+
+Garanties portées par la base, et non par le code applicatif :
+
+- **Dossards uniques** — contrainte `unique (competition_id, number)`.
+- **Compteurs de votes** — maintenus par triggers depuis la table `votes` ;
+  aucune dérive possible entre les votes et les totaux affichés.
+- **Vote gratuit** — la fonction `cast_free_vote` contrôle le délai d'attente
+  et enregistre le vote dans une seule transaction : deux requêtes simultanées
+  ne peuvent pas produire deux votes.
+- **Paiements** — `confirm_order_payment` est idempotente et revalide le
+  montant ; un webhook rejoué ne crédite jamais deux fois, et un montant
+  incohérent bascule la commande en `FLAGGED` sans créditer de votes.
+- **Accès aux directs** — `unique (user_id, competition_id)`.
 
 Voir `docs/blueprint.md` pour la spécification produit et `docs/backend.json`
 pour le modèle de données.
 
 ## Déploiement
 
-Déploiement des règles et index Firestore :
-
-```bash
-firebase deploy --only firestore:rules,firestore:indexes
-```
+L'hébergement reste sur Firebase App Hosting (`apphosting.yaml`). Pensez à
+déclarer les variables d'environnement Supabase côté hébergeur.

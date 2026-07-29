@@ -1,102 +1,107 @@
 'use server';
 
-import { firestore } from '@/lib/firebase-admin';
-import { Category } from '@/lib/types';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
+import type { CategoryRow } from '@/lib/supabase/types';
+import type { Category } from '@/lib/types';
 
-/**
- * Récupère toutes les catégories
- */
+/** Catégories de concours proposées aux organisateurs. */
 export async function getCategories(): Promise<Category[]> {
   try {
-    const categoriesSnapshot = await firestore.collection('categories').get();
+    const { data, error } = await getSupabaseAdmin()
+      .from('categories')
+      .select('*')
+      .order('name');
 
-    return categoriesSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Category[];
+    if (error) throw new Error(error.message);
+
+    return data as CategoryRow[];
   } catch (error) {
-    console.error('Error getting categories:', error);
+    console.error('[GET CATEGORIES] ❌', error);
     return [];
   }
 }
 
-/**
- * Initialise les catégories par défaut si elles n'existent pas
- */
-export async function initializeCategories(): Promise<{ success: boolean; message: string }> {
-  try {
-    const categoriesSnapshot = await firestore.collection('categories').get();
+const DEFAULT_CATEGORIES = [
+  'Beauté & Miss',
+  'Musique & Télé-crochet',
+  'Danse',
+  'Awards',
+  'Sport',
+  'Mode',
+  'Humour',
+  'Talents & Innovation',
+  'Autre',
+];
 
-    // Si des catégories existent déjà, ne rien faire
-    if (!categoriesSnapshot.empty) {
-      return {
-        success: true,
-        message: `${categoriesSnapshot.size} catégories existent déjà.`
-      };
+/** Crée les catégories par défaut si la table est vide. */
+export async function initializeCategories(): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  try {
+    const supabase = getSupabaseAdmin();
+
+    const { count, error: countError } = await supabase
+      .from('categories')
+      .select('id', { count: 'exact', head: true });
+
+    if (countError) throw new Error(countError.message);
+
+    if ((count ?? 0) > 0) {
+      return { success: true, message: `${count} catégories existent déjà.` };
     }
 
-    // Catégories de concours par défaut
-    const defaultCategories = [
-      { name: 'Beauté & Miss' },
-      { name: 'Musique & Télé-crochet' },
-      { name: 'Danse' },
-      { name: 'Awards' },
-      { name: 'Sport' },
-      { name: 'Mode' },
-      { name: 'Humour' },
-      { name: 'Talents & Innovation' },
-      { name: 'Autre' }
-    ];
+    const { error } = await supabase
+      .from('categories')
+      .insert(DEFAULT_CATEGORIES.map((name) => ({ name })));
 
-    // Créer les catégories en batch
-    const batch = firestore.batch();
-
-    defaultCategories.forEach(category => {
-      const docRef = firestore.collection('categories').doc();
-      batch.set(docRef, category);
-    });
-
-    await batch.commit();
+    if (error) throw new Error(error.message);
 
     return {
       success: true,
-      message: `${defaultCategories.length} catégories créées avec succès!`
+      message: `${DEFAULT_CATEGORIES.length} catégories créées avec succès !`,
     };
   } catch (error) {
-    console.error('Error initializing categories:', error);
+    console.error('[INIT CATEGORIES] ❌', error);
     return {
       success: false,
-      message: 'Erreur lors de l\'initialisation des catégories.'
+      message: "Erreur lors de l'initialisation des catégories.",
     };
   }
 }
 
-/**
- * Ajoute une nouvelle catégorie
- */
-export async function addCategory(name: string): Promise<{ success: boolean; message: string; categoryId?: string }> {
+export async function addCategory(name: string): Promise<{
+  success: boolean;
+  message: string;
+  categoryId?: string;
+}> {
   try {
-    if (!name || name.trim().length === 0) {
-      return {
-        success: false,
-        message: 'Le nom de la catégorie est requis.'
-      };
+    const trimmed = name.trim();
+    if (!trimmed) {
+      return { success: false, message: 'Le nom de la catégorie est requis.' };
     }
 
-    const docRef = await firestore.collection('categories').add({
-      name: name.trim()
-    });
+    const { data, error } = await getSupabaseAdmin()
+      .from('categories')
+      .insert({ name: trimmed })
+      .select('id')
+      .single();
+
+    if (error) {
+      // 23505 : la catégorie existe déjà.
+      if (error.code === '23505') {
+        return { success: false, message: 'Cette catégorie existe déjà.' };
+      }
+      throw new Error(error.message);
+    }
 
     return {
       success: true,
-      message: 'Catégorie créée avec succès!',
-      categoryId: docRef.id
+      message: 'Catégorie créée avec succès !',
+      categoryId: (data as { id: string }).id,
     };
   } catch (error) {
-    console.error('Error adding category:', error);
-    return {
-      success: false,
-      message: 'Erreur lors de la création de la catégorie.'
-    };
+    console.error('[ADD CATEGORY] ❌', error);
+    return { success: false, message: 'Erreur lors de la création de la catégorie.' };
   }
 }

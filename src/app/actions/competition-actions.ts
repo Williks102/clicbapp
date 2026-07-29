@@ -2,15 +2,16 @@
 
 import { z } from 'zod';
 import { auth } from '@/auth';
-import { firestore } from '@/lib/firebase-admin';
 import { revalidatePath } from 'next/cache';
-import type {
-  ActionResult,
-  Candidate,
-  Competition,
-  CompetitionStatus,
-  VotePack,
-} from '@/lib/types';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { toCandidate, toCompetition } from '@/lib/supabase/mappers';
+import {
+  COMPETITION_COLUMNS,
+  type CandidateRow,
+  type CompetitionRow,
+} from '@/lib/supabase/types';
+import { PUBLIC_COMPETITION_STATUSES } from '@/lib/live-utils';
+import type { ActionResult, Candidate, Competition, CompetitionStatus } from '@/lib/types';
 
 // ==================== SCHEMAS ====================
 
@@ -75,36 +76,60 @@ async function requireOrganizer() {
     throw new Error('Vous devez être connecté.');
   }
   if (session.user.role !== 'organizer' && session.user.role !== 'admin') {
-    throw new Error("Seuls les organisateurs peuvent gérer des concours.");
+    throw new Error('Seuls les organisateurs peuvent gérer des concours.');
   }
   return session.user;
 }
 
-/** Vérifie que l'utilisateur peut modifier ce concours (propriétaire ou admin). */
 async function requireCompetitionAccess(competitionId: string) {
   const user = await requireOrganizer();
-  const doc = await firestore.collection('competitions').doc(competitionId).get();
+  const supabase = getSupabaseAdmin();
 
-  if (!doc.exists) {
-    throw new Error('Concours introuvable.');
-  }
+  const { data, error } = await supabase
+    .from('competitions')
+    .select('id, organizer_id, live_is_live, cover_image')
+    .eq('id', competitionId)
+    .maybeSingle();
 
-  const competition = { id: doc.id, ...doc.data() } as Competition;
-  if (competition.organizerId !== user.id && user.role !== 'admin') {
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('Concours introuvable.');
+
+  const competition = data as Pick<
+    CompetitionRow,
+    'id' | 'organizer_id' | 'live_is_live' | 'cover_image'
+  >;
+
+  if (competition.organizer_id !== user.id && user.role !== 'admin') {
     throw new Error("Vous n'êtes pas autorisé à modifier ce concours.");
   }
 
   return { user, competition };
 }
 
-function buildVotePacks(packs: z.infer<typeof votePackSchema>[]): VotePack[] {
-  return packs.map((pack, index) => ({
-    id: pack.id || `pack-${Date.now()}-${index}`,
-    name: pack.name,
-    votes: pack.votes,
-    price: pack.price,
-    highlighted: pack.highlighted ?? false,
-  }));
+/** Colonnes du concours dérivées du formulaire, hors packs. */
+function toCompetitionColumns(values: z.infer<typeof competitionSchema>) {
+  return {
+    title: values.title,
+    category: values.category,
+    description: values.description,
+    status: values.status,
+    voting_starts_at: new Date(values.votingStartsAt).toISOString(),
+    voting_ends_at: new Date(values.votingEndsAt).toISOString(),
+    hide_results: values.hideResults,
+    free_vote_enabled: values.freeVoteEnabled,
+    free_vote_cooldown_hours: values.freeVoteCooldownHours,
+    live_enabled: values.liveEnabled,
+    live_title: values.liveTitle || '',
+    live_provider: values.liveProvider,
+    live_url: values.liveUrl || '',
+    live_scheduled_at: values.liveScheduledAt
+      ? new Date(values.liveScheduledAt).toISOString()
+      : null,
+    live_paid: values.livePaid,
+    live_price: values.livePaid ? values.livePrice : 0,
+    live_chat_enabled: values.liveChatEnabled,
+    live_replay_url: values.liveReplayUrl || '',
+  };
 }
 
 function revalidateCompetition(competitionId: string) {
@@ -133,53 +158,38 @@ export async function createCompetition(
     }
 
     const values = parsed.data;
-    const now = new Date().toISOString();
+    const supabase = getSupabaseAdmin();
 
-    const competition: Omit<Competition, 'id'> = {
-      title: values.title,
-      category: values.category,
-      description: values.description,
-      coverImage: values.coverImage || '',
-      organizerId: user.id,
-      organizerName: user.name || '',
-      status: values.status,
-      votingStartsAt: new Date(values.votingStartsAt).toISOString(),
-      votingEndsAt: new Date(values.votingEndsAt).toISOString(),
-      votePacks: buildVotePacks(values.votePacks),
-      freeVote: {
-        enabled: values.freeVoteEnabled,
-        cooldownHours: values.freeVoteCooldownHours,
-      },
-      live: {
-        enabled: values.liveEnabled,
-        title: values.liveTitle || '',
-        provider: values.liveProvider,
-        url: values.liveUrl || '',
-        isLive: false,
-        scheduledAt: values.liveScheduledAt
-          ? new Date(values.liveScheduledAt).toISOString()
-          : '',
-        paid: values.livePaid,
-        price: values.livePaid ? values.livePrice : 0,
-        chatEnabled: values.liveChatEnabled,
-        replayUrl: values.liveReplayUrl || '',
-      },
-      stats: {
-        totalVotes: 0,
-        freeVotes: 0,
-        paidVotes: 0,
-        totalRevenue: 0,
-        candidatesCount: 0,
-      },
-      hideResults: values.hideResults,
-      createdAt: now,
-      updatedAt: now,
-    };
+    const { data: created, error } = await supabase
+      .from('competitions')
+      .insert({
+        ...toCompetitionColumns(values),
+        organizer_id: user.id,
+        organizer_name: user.name || '',
+        cover_image: values.coverImage || '',
+      })
+      .select('id')
+      .single();
 
-    const docRef = await firestore.collection('competitions').add(competition);
-    revalidateCompetition(docRef.id);
+    if (error) throw new Error(error.message);
 
-    return { success: true, id: docRef.id };
+    const competitionId = (created as { id: string }).id;
+
+    const { error: packError } = await supabase.rpc('replace_vote_packs', {
+      p_competition_id: competitionId,
+      p_packs: values.votePacks.map((pack) => ({
+        id: pack.id ?? '',
+        name: pack.name,
+        votes: pack.votes,
+        price: pack.price,
+        highlighted: pack.highlighted ?? false,
+      })),
+    });
+
+    if (packError) throw new Error(packError.message);
+
+    revalidateCompetition(competitionId);
+    return { success: true, id: competitionId };
   } catch (error) {
     console.error('[CREATE COMPETITION] ❌', error);
     return {
@@ -207,41 +217,30 @@ export async function updateCompetition(
     }
 
     const values = parsed.data;
+    const supabase = getSupabaseAdmin();
 
-    await firestore
-      .collection('competitions')
-      .doc(competitionId)
+    const { error } = await supabase
+      .from('competitions')
       .update({
-        title: values.title,
-        category: values.category,
-        description: values.description,
-        coverImage: values.coverImage || competition.coverImage || '',
-        status: values.status,
-        votingStartsAt: new Date(values.votingStartsAt).toISOString(),
-        votingEndsAt: new Date(values.votingEndsAt).toISOString(),
-        votePacks: buildVotePacks(values.votePacks),
-        freeVote: {
-          enabled: values.freeVoteEnabled,
-          cooldownHours: values.freeVoteCooldownHours,
-        },
-        live: {
-          enabled: values.liveEnabled,
-          title: values.liveTitle || '',
-          provider: values.liveProvider,
-          url: values.liveUrl || '',
-          // Le statut "en direct" se pilote uniquement depuis la régie.
-          isLive: competition.live?.isLive ?? false,
-          scheduledAt: values.liveScheduledAt
-            ? new Date(values.liveScheduledAt).toISOString()
-            : '',
-          paid: values.livePaid,
-          price: values.livePaid ? values.livePrice : 0,
-          chatEnabled: values.liveChatEnabled,
-          replayUrl: values.liveReplayUrl || '',
-        },
-        hideResults: values.hideResults,
-        updatedAt: new Date().toISOString(),
-      });
+        ...toCompetitionColumns(values),
+        cover_image: values.coverImage || competition.cover_image || '',
+      })
+      .eq('id', competitionId);
+
+    if (error) throw new Error(error.message);
+
+    const { error: packError } = await supabase.rpc('replace_vote_packs', {
+      p_competition_id: competitionId,
+      p_packs: values.votePacks.map((pack) => ({
+        id: pack.id ?? '',
+        name: pack.name,
+        votes: pack.votes,
+        price: pack.price,
+        highlighted: pack.highlighted ?? false,
+      })),
+    });
+
+    if (packError) throw new Error(packError.message);
 
     revalidateCompetition(competitionId);
     return { success: true, message: 'Concours mis à jour.' };
@@ -263,10 +262,12 @@ export async function setCompetitionStatus(
   try {
     await requireCompetitionAccess(competitionId);
 
-    await firestore.collection('competitions').doc(competitionId).update({
-      status,
-      updatedAt: new Date().toISOString(),
-    });
+    const { error } = await getSupabaseAdmin()
+      .from('competitions')
+      .update({ status })
+      .eq('id', competitionId);
+
+    if (error) throw new Error(error.message);
 
     revalidateCompetition(competitionId);
     return { success: true, message: 'Statut du concours mis à jour.' };
@@ -279,26 +280,35 @@ export async function setCompetitionStatus(
   }
 }
 
-/** Publie le vainqueur et clôture définitivement le concours. */
 export async function declareWinner(
   competitionId: string,
   candidateId: string
 ): Promise<ActionResult> {
   try {
     await requireCompetitionAccess(competitionId);
+    const supabase = getSupabaseAdmin();
 
-    const candidateDoc = await firestore.collection('candidates').doc(candidateId).get();
-    if (!candidateDoc.exists || candidateDoc.data()?.competitionId !== competitionId) {
+    const { data: candidate } = await supabase
+      .from('candidates')
+      .select('id, competition_id')
+      .eq('id', candidateId)
+      .maybeSingle();
+
+    if (!candidate || (candidate as CandidateRow).competition_id !== competitionId) {
       return { success: false, error: 'Candidat introuvable pour ce concours.' };
     }
 
-    await firestore.collection('competitions').doc(competitionId).update({
-      winnerCandidateId: candidateId,
-      status: 'finished',
-      hideResults: false,
-      'live.isLive': false,
-      updatedAt: new Date().toISOString(),
-    });
+    const { error } = await supabase
+      .from('competitions')
+      .update({
+        winner_candidate_id: candidateId,
+        status: 'finished',
+        hide_results: false,
+        live_is_live: false,
+      })
+      .eq('id', competitionId);
+
+    if (error) throw new Error(error.message);
 
     revalidateCompetition(competitionId);
     return { success: true, message: 'Vainqueur publié.' };
@@ -317,29 +327,17 @@ export async function deleteCompetition(competitionId: string): Promise<ActionRe
   try {
     await requireCompetitionAccess(competitionId);
 
-    const batch = firestore.batch();
+    // Les candidats, packs et messages sont supprimés en cascade par la base ;
+    // les commandes et votes conservent leur historique comptable.
+    const { error } = await getSupabaseAdmin()
+      .from('competitions')
+      .delete()
+      .eq('id', competitionId);
 
-    // Les candidats du concours n'ont plus de raison d'exister.
-    const candidates = await firestore
-      .collection('candidates')
-      .where('competitionId', '==', competitionId)
-      .get();
-    candidates.docs.forEach((doc) => batch.delete(doc.ref));
+    if (error) throw new Error(error.message);
 
-    // Le chat live également.
-    const messages = await firestore
-      .collection('chatMessages')
-      .where('competitionId', '==', competitionId)
-      .get();
-    messages.docs.forEach((doc) => batch.delete(doc.ref));
-
-    batch.delete(firestore.collection('competitions').doc(competitionId));
-    await batch.commit();
-
-    // Les votes et commandes sont conservés pour la traçabilité comptable.
     revalidateCompetition(competitionId);
     revalidatePath('/admin/competitions');
-
     return { success: true, message: 'Concours supprimé.' };
   } catch (error) {
     console.error('[DELETE COMPETITION] ❌', error);
@@ -353,25 +351,30 @@ export async function deleteCompetition(competitionId: string): Promise<ActionRe
 // ==================== LECTURE ====================
 
 export async function getCompetition(competitionId: string): Promise<Competition | null> {
-  const doc = await firestore.collection('competitions').doc(competitionId).get();
-  if (!doc.exists) return null;
-  return { id: doc.id, ...doc.data() } as Competition;
+  const { data, error } = await getSupabaseAdmin()
+    .from('competitions')
+    .select(COMPETITION_COLUMNS)
+    .eq('id', competitionId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[GET COMPETITION] ❌', error.message);
+    return null;
+  }
+
+  return data ? toCompetition(data as unknown as CompetitionRow) : null;
 }
 
-/**
- * Concours accessible en écriture par l'utilisateur courant.
- * Retourne `null` si le concours n'existe pas ou ne lui appartient pas.
- */
+/** Concours accessible en écriture par l'utilisateur courant. */
 export async function getOwnedCompetition(
   competitionId: string
 ): Promise<Competition | null> {
   const session = await auth();
   if (!session?.user?.id) return null;
 
-  const doc = await firestore.collection('competitions').doc(competitionId).get();
-  if (!doc.exists) return null;
+  const competition = await getCompetition(competitionId);
+  if (!competition) return null;
 
-  const competition = { id: doc.id, ...doc.data() } as Competition;
   if (competition.organizerId !== session.user.id && session.user.role !== 'admin') {
     return null;
   }
@@ -382,20 +385,21 @@ export async function getOwnedCompetition(
 export async function getCandidatesForCompetition(
   competitionId: string
 ): Promise<Candidate[]> {
-  const snapshot = await firestore
-    .collection('candidates')
-    .where('competitionId', '==', competitionId)
-    .get();
+  const { data, error } = await getSupabaseAdmin()
+    .from('candidates')
+    .select('*')
+    .eq('competition_id', competitionId)
+    .order('vote_count', { ascending: false })
+    .order('number', { ascending: true });
 
-  const candidates = snapshot.docs.map(
-    (doc) => ({ id: doc.id, ...doc.data() }) as Candidate
-  );
+  if (error) {
+    console.error('[GET CANDIDATES] ❌', error.message);
+    return [];
+  }
 
-  // Tri applicatif : évite d'imposer un index composite supplémentaire.
-  return candidates.sort((a, b) => b.voteCount - a.voteCount || a.number - b.number);
+  return (data as CandidateRow[]).map(toCandidate);
 }
 
-/** Concours d'un organisateur (ou tous, pour l'admin). */
 export async function getCompetitionsForOrganizer(
   organizerId?: string
 ): Promise<Competition[]> {
@@ -405,33 +409,37 @@ export async function getCompetitionsForOrganizer(
   const targetId = organizerId || session.user.id;
   if (session.user.role !== 'admin' && targetId !== session.user.id) return [];
 
-  const query =
-    session.user.role === 'admin' && !organizerId
-      ? firestore.collection('competitions')
-      : firestore.collection('competitions').where('organizerId', '==', targetId);
+  let request = getSupabaseAdmin()
+    .from('competitions')
+    .select(COMPETITION_COLUMNS)
+    .order('created_at', { ascending: false });
 
-  const snapshot = await query.get();
-  const competitions = snapshot.docs.map(
-    (doc) => ({ id: doc.id, ...doc.data() }) as Competition
-  );
+  // L'admin sans filtre explicite voit l'ensemble des concours.
+  if (session.user.role !== 'admin' || organizerId) {
+    request = request.eq('organizer_id', targetId);
+  }
 
-  return competitions.sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  const { data, error } = await request;
+
+  if (error) {
+    console.error('[GET ORGANIZER COMPETITIONS] ❌', error.message);
+    return [];
+  }
+
+  return (data as unknown as CompetitionRow[]).map(toCompetition);
 }
 
-/** Concours visibles publiquement. */
 export async function getPublicCompetitions(): Promise<Competition[]> {
-  const snapshot = await firestore
-    .collection('competitions')
-    .where('status', 'in', ['published', 'voting', 'closed', 'finished'])
-    .get();
+  const { data, error } = await getSupabaseAdmin()
+    .from('competitions')
+    .select(COMPETITION_COLUMNS)
+    .in('status', [...PUBLIC_COMPETITION_STATUSES])
+    .order('created_at', { ascending: false });
 
-  const competitions = snapshot.docs.map(
-    (doc) => ({ id: doc.id, ...doc.data() }) as Competition
-  );
+  if (error) {
+    console.error('[GET PUBLIC COMPETITIONS] ❌', error.message);
+    return [];
+  }
 
-  return competitions.sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  return (data as unknown as CompetitionRow[]).map(toCompetition);
 }

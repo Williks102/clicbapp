@@ -2,15 +2,11 @@
 
 import { z } from 'zod';
 import { auth } from '@/auth';
-import { firestore } from '@/lib/firebase-admin';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { toOrder } from '@/lib/supabase/mappers';
+import type { CandidateRow, CompetitionRow, OrderRow, VotePackRow } from '@/lib/supabase/types';
 import { generateId } from '@/lib/utils';
-import { isVotingOpen } from '@/lib/live-utils';
-import type {
-  Candidate,
-  Competition,
-  Order,
-  PaymentInitResult,
-} from '@/lib/types';
+import type { Order, PaymentInitResult } from '@/lib/types';
 
 const votePackOrderSchema = z.object({
   competitionId: z.string().min(1),
@@ -23,10 +19,22 @@ const votePackOrderSchema = z.object({
 
 export type VotePackOrderInput = z.infer<typeof votePackOrderSchema>;
 
+/** Le vote est-il ouvert à cet instant, d'après la base ? */
+function isVotingOpenRow(
+  competition: Pick<CompetitionRow, 'status' | 'voting_starts_at' | 'voting_ends_at'>
+) {
+  const now = Date.now();
+  return (
+    competition.status === 'voting' &&
+    now >= new Date(competition.voting_starts_at).getTime() &&
+    now <= new Date(competition.voting_ends_at).getTime()
+  );
+}
+
 /**
  * Crée une commande PENDING pour un pack de votes.
- * Le prix et le nombre de votes proviennent exclusivement de Firestore :
- * le client ne peut pas les manipuler.
+ * Le prix et le nombre de votes proviennent exclusivement de la base : le
+ * client ne peut pas les manipuler.
  */
 export async function initializeVotePackOrder(
   data: VotePackOrderInput
@@ -42,68 +50,82 @@ export async function initializeVotePackOrder(
 
     const values = parsed.data;
     const session = await auth();
+    const supabase = getSupabaseAdmin();
 
-    const [competitionDoc, candidateDoc] = await Promise.all([
-      firestore.collection('competitions').doc(values.competitionId).get(),
-      firestore.collection('candidates').doc(values.candidateId).get(),
+    const [competitionResult, candidateResult, packResult] = await Promise.all([
+      supabase
+        .from('competitions')
+        .select('id, title, organizer_id, status, voting_starts_at, voting_ends_at')
+        .eq('id', values.competitionId)
+        .maybeSingle(),
+      supabase
+        .from('candidates')
+        .select('id, competition_id, name, eliminated')
+        .eq('id', values.candidateId)
+        .maybeSingle(),
+      supabase
+        .from('vote_packs')
+        .select('id, competition_id, name, votes, price')
+        .eq('id', values.packId)
+        .maybeSingle(),
     ]);
 
-    if (!competitionDoc.exists) {
-      return { success: false, error: 'Concours introuvable.' };
-    }
-    if (!candidateDoc.exists) {
-      return { success: false, error: 'Candidat introuvable.' };
-    }
+    const competition = competitionResult.data as Pick<
+      CompetitionRow,
+      'id' | 'title' | 'organizer_id' | 'status' | 'voting_starts_at' | 'voting_ends_at'
+    > | null;
+    const candidate = candidateResult.data as Pick<
+      CandidateRow,
+      'id' | 'competition_id' | 'name' | 'eliminated'
+    > | null;
+    const pack = packResult.data as Pick<
+      VotePackRow,
+      'id' | 'competition_id' | 'name' | 'votes' | 'price'
+    > | null;
 
-    const competition = {
-      id: competitionDoc.id,
-      ...competitionDoc.data(),
-    } as Competition;
-    const candidate = { id: candidateDoc.id, ...candidateDoc.data() } as Candidate;
-
-    if (candidate.competitionId !== competition.id) {
+    if (!competition) return { success: false, error: 'Concours introuvable.' };
+    if (!candidate) return { success: false, error: 'Candidat introuvable.' };
+    if (!pack || pack.competition_id !== competition.id) {
+      return { success: false, error: 'Pack de votes introuvable.' };
+    }
+    if (candidate.competition_id !== competition.id) {
       return { success: false, error: "Ce candidat ne participe pas à ce concours." };
     }
     if (candidate.eliminated) {
       return { success: false, error: 'Ce candidat est éliminé.' };
     }
-    if (!isVotingOpen(competition)) {
+    if (!isVotingOpenRow(competition)) {
       return { success: false, error: 'Les votes ne sont pas ouverts pour ce concours.' };
     }
 
-    const pack = competition.votePacks?.find((p) => p.id === values.packId);
-    if (!pack) {
-      return { success: false, error: 'Pack de votes introuvable.' };
-    }
-
     const reference = generateId(`VOTE-${competition.id.slice(0, 4)}`);
+    const amount = Number(pack.price);
 
-    const order: Order = {
+    const { error } = await supabase.from('orders').insert({
       id: reference,
       type: 'VOTE_PACK',
-      competitionId: competition.id,
-      competitionTitle: competition.title,
-      organizerId: competition.organizerId,
-      candidateId: candidate.id,
-      candidateName: candidate.name,
-      packId: pack.id,
-      packName: pack.name,
+      competition_id: competition.id,
+      competition_title: competition.title,
+      organizer_id: competition.organizer_id,
+      candidate_id: candidate.id,
+      candidate_name: candidate.name,
+      pack_id: pack.id,
+      pack_name: pack.name,
       votes: pack.votes,
-      amount: pack.price,
-      customerName: values.fullName,
-      customerEmail: values.email,
-      customerPhone: values.phone,
-      userId: session?.user?.id || '',
+      amount,
+      customer_name: values.fullName,
+      customer_email: values.email,
+      customer_phone: values.phone,
+      user_id: session?.user?.id ?? null,
       status: 'PENDING',
-      createdAt: new Date().toISOString(),
-    };
+    });
 
-    await firestore.collection('orders').doc(reference).set(order);
+    if (error) throw new Error(error.message);
 
     return {
       success: true,
       reference,
-      amount: pack.price,
+      amount,
       merchantId: process.env.NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID,
       description: `${pack.votes} votes pour ${candidate.name} — ${competition.title}`,
     };
@@ -141,69 +163,66 @@ export async function initializeLiveAccessOrder(
     const values = parsed.data;
     const session = await auth();
     if (!session?.user?.id) {
-      return {
-        success: false,
-        error: 'Connectez-vous pour acheter un accès au direct.',
-      };
+      return { success: false, error: 'Connectez-vous pour acheter un accès au direct.' };
     }
 
-    const competitionDoc = await firestore
-      .collection('competitions')
-      .doc(values.competitionId)
-      .get();
+    const supabase = getSupabaseAdmin();
 
-    if (!competitionDoc.exists) {
-      return { success: false, error: 'Concours introuvable.' };
-    }
+    const { data: competitionData } = await supabase
+      .from('competitions')
+      .select('id, title, organizer_id, live_enabled, live_paid, live_price, live_title')
+      .eq('id', values.competitionId)
+      .maybeSingle();
 
-    const competition = {
-      id: competitionDoc.id,
-      ...competitionDoc.data(),
-    } as Competition;
+    const competition = competitionData as Pick<
+      CompetitionRow,
+      'id' | 'title' | 'organizer_id' | 'live_enabled' | 'live_paid' | 'live_price' | 'live_title'
+    > | null;
 
-    if (!competition.live?.enabled) {
+    if (!competition) return { success: false, error: 'Concours introuvable.' };
+    if (!competition.live_enabled) {
       return { success: false, error: "Ce concours n'a pas de diffusion en direct." };
     }
-    if (!competition.live.paid || competition.live.price <= 0) {
+    if (!competition.live_paid || Number(competition.live_price) <= 0) {
       return { success: false, error: 'Le direct est en accès libre.' };
     }
 
-    const existingAccess = await firestore
-      .collection('liveAccess')
-      .where('userId', '==', session.user.id)
-      .where('competitionId', '==', competition.id)
-      .limit(1)
-      .get();
+    const { data: existing } = await supabase
+      .from('live_access')
+      .select('id')
+      .eq('user_id', session.user.id)
+      .eq('competition_id', competition.id)
+      .maybeSingle();
 
-    if (!existingAccess.empty) {
+    if (existing) {
       return { success: false, error: 'Vous avez déjà accès à ce direct.' };
     }
 
     const reference = generateId(`LIVE-${competition.id.slice(0, 4)}`);
+    const amount = Number(competition.live_price);
 
-    const order: Order = {
+    const { error } = await supabase.from('orders').insert({
       id: reference,
       type: 'LIVE_ACCESS',
-      competitionId: competition.id,
-      competitionTitle: competition.title,
-      organizerId: competition.organizerId,
-      amount: competition.live.price,
-      customerName: values.fullName,
-      customerEmail: values.email,
-      customerPhone: values.phone,
-      userId: session.user.id,
+      competition_id: competition.id,
+      competition_title: competition.title,
+      organizer_id: competition.organizer_id,
+      amount,
+      customer_name: values.fullName,
+      customer_email: values.email,
+      customer_phone: values.phone,
+      user_id: session.user.id,
       status: 'PENDING',
-      createdAt: new Date().toISOString(),
-    };
+    });
 
-    await firestore.collection('orders').doc(reference).set(order);
+    if (error) throw new Error(error.message);
 
     return {
       success: true,
       reference,
-      amount: competition.live.price,
+      amount,
       merchantId: process.env.NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID,
-      description: `Accès au direct — ${competition.live.title || competition.title}`,
+      description: `Accès au direct — ${competition.live_title || competition.title}`,
     };
   } catch (error) {
     console.error('[INIT LIVE ORDER] ❌', error);
@@ -220,10 +239,15 @@ export async function getOrder(reference: string): Promise<Order | null> {
   const session = await auth();
   if (!session?.user?.id) return null;
 
-  const doc = await firestore.collection('orders').doc(reference).get();
-  if (!doc.exists) return null;
+  const { data } = await getSupabaseAdmin()
+    .from('orders')
+    .select('*')
+    .eq('id', reference)
+    .maybeSingle();
 
-  const order = { id: doc.id, ...doc.data() } as Order;
+  if (!data) return null;
+
+  const order = toOrder(data as OrderRow);
 
   const isOwner =
     order.userId === session.user.id || order.customerEmail === session.user.email;
@@ -235,7 +259,7 @@ export async function getOrder(reference: string): Promise<Order | null> {
 }
 
 /**
- * Statut d'une commande consultable depuis la page de retour de paiement.
+ * Statut d'une commande, consultable depuis la page de retour de paiement.
  * La référence est un identifiant aléatoire non devinable : aucune donnée
  * personnelle n'est exposée ici.
  */
@@ -250,21 +274,38 @@ export async function getOrderStatus(reference: string): Promise<{
   competitionId?: string;
   competitionTitle?: string;
 }> {
-  const doc = await firestore.collection('orders').doc(reference).get();
-  if (!doc.exists) return { found: false };
+  const { data } = await getSupabaseAdmin()
+    .from('orders')
+    .select(
+      'status, type, amount, votes, candidate_id, candidate_name, competition_id, competition_title'
+    )
+    .eq('id', reference)
+    .maybeSingle();
 
-  const order = doc.data() as Order;
+  if (!data) return { found: false };
+
+  const order = data as Pick<
+    OrderRow,
+    | 'status'
+    | 'type'
+    | 'amount'
+    | 'votes'
+    | 'candidate_id'
+    | 'candidate_name'
+    | 'competition_id'
+    | 'competition_title'
+  >;
 
   return {
     found: true,
     status: order.status,
     type: order.type,
-    amount: order.amount,
-    votes: order.votes,
-    candidateId: order.candidateId,
-    candidateName: order.candidateName,
-    competitionId: order.competitionId,
-    competitionTitle: order.competitionTitle,
+    amount: Number(order.amount),
+    votes: order.votes ?? undefined,
+    candidateId: order.candidate_id ?? undefined,
+    candidateName: order.candidate_name ?? undefined,
+    competitionId: order.competition_id,
+    competitionTitle: order.competition_title,
   };
 }
 
@@ -273,14 +314,18 @@ export async function getMyOrders(): Promise<Order[]> {
   const session = await auth();
   if (!session?.user?.email) return [];
 
-  const snapshot = await firestore
-    .collection('orders')
-    .where('customerEmail', '==', session.user.email)
-    .get();
+  const { data, error } = await getSupabaseAdmin()
+    .from('orders')
+    .select('*')
+    .eq('customer_email', session.user.email)
+    .order('created_at', { ascending: false });
 
-  return sortByCreatedAt(
-    snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Order)
-  );
+  if (error) {
+    console.error('[GET MY ORDERS] ❌', error.message);
+    return [];
+  }
+
+  return (data as OrderRow[]).map(toOrder);
 }
 
 /** Commandes reçues par un organisateur (toutes les commandes pour un admin). */
@@ -288,20 +333,21 @@ export async function getOrganizerOrders(): Promise<Order[]> {
   const session = await auth();
   if (!session?.user?.id) return [];
 
-  const query =
-    session.user.role === 'admin'
-      ? firestore.collection('orders')
-      : firestore.collection('orders').where('organizerId', '==', session.user.id);
+  let request = getSupabaseAdmin()
+    .from('orders')
+    .select('*')
+    .order('created_at', { ascending: false });
 
-  const snapshot = await query.get();
+  if (session.user.role !== 'admin') {
+    request = request.eq('organizer_id', session.user.id);
+  }
 
-  return sortByCreatedAt(
-    snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Order)
-  );
-}
+  const { data, error } = await request;
 
-function sortByCreatedAt(orders: Order[]) {
-  return orders.sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+  if (error) {
+    console.error('[GET ORGANIZER ORDERS] ❌', error.message);
+    return [];
+  }
+
+  return (data as OrderRow[]).map(toOrder);
 }

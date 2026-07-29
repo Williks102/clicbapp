@@ -3,9 +3,10 @@
 import { useMemo } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { collection, orderBy, query, where } from 'firebase/firestore';
 import { Crown, Loader2, TrendingUp } from 'lucide-react';
-import { useCollection, useFirebase } from '@/firebase';
+import { useRealtimeQuery } from '@/hooks/use-realtime-query';
+import { toCandidate } from '@/lib/supabase/mappers';
+import type { CandidateRow } from '@/lib/supabase/types';
 import { Progress } from '@/components/ui/progress';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DataError } from '@/components/data-error';
@@ -31,25 +32,17 @@ export function LiveLeaderboard({
   hideResults = false,
   className,
 }: LiveLeaderboardProps) {
-  const { areServicesAvailable, firestore } = useFirebase();
-
-  const candidatesQuery = useMemo(
-    () =>
-      areServicesAvailable && firestore
-        ? query(
-            collection(firestore, 'candidates'),
-            where('competitionId', '==', competitionId),
-            orderBy('voteCount', 'desc')
-          )
-        : null,
-    [areServicesAvailable, firestore, competitionId]
-  );
-
-  const {
-    data: candidates,
-    isLoading,
-    error,
-  } = useCollection<Candidate>(candidatesQuery);
+  const { data: candidates, isLoading, error } = useRealtimeQuery<
+    CandidateRow,
+    Candidate
+  >({
+    table: 'candidates',
+    match: { competition_id: competitionId },
+    orderBy: { column: 'vote_count', ascending: false },
+    map: toCandidate,
+    // Le classement est reconstitué à chaque vote reçu en temps réel.
+    compare: (a, b) => b.voteCount - a.voteCount || a.number - b.number,
+  });
 
   const entries = useMemo(() => {
     if (!candidates) return [];

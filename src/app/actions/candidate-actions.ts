@@ -2,10 +2,11 @@
 
 import { z } from 'zod';
 import { auth } from '@/auth';
-import { firestore } from '@/lib/firebase-admin';
 import { revalidatePath } from 'next/cache';
-import { FieldValue } from 'firebase-admin/firestore';
-import type { ActionResult, Candidate, Competition } from '@/lib/types';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { toCandidate } from '@/lib/supabase/mappers';
+import type { CandidateRow, CompetitionRow } from '@/lib/supabase/types';
+import type { ActionResult, Candidate } from '@/lib/types';
 
 const candidateSchema = z.object({
   name: z.string().min(2, 'Le nom du candidat est requis.'),
@@ -23,13 +24,17 @@ async function requireCompetitionAccess(competitionId: string) {
     throw new Error('Vous devez être connecté.');
   }
 
-  const doc = await firestore.collection('competitions').doc(competitionId).get();
-  if (!doc.exists) {
-    throw new Error('Concours introuvable.');
-  }
+  const { data, error } = await getSupabaseAdmin()
+    .from('competitions')
+    .select('id, organizer_id')
+    .eq('id', competitionId)
+    .maybeSingle();
 
-  const competition = { id: doc.id, ...doc.data() } as Competition;
-  if (competition.organizerId !== session.user.id && session.user.role !== 'admin') {
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('Concours introuvable.');
+
+  const competition = data as Pick<CompetitionRow, 'id' | 'organizer_id'>;
+  if (competition.organizer_id !== session.user.id && session.user.role !== 'admin') {
     throw new Error("Vous n'êtes pas autorisé à gérer ce concours.");
   }
 
@@ -43,6 +48,11 @@ function revalidateCandidatePages(competitionId: string, candidateId?: string) {
   if (candidateId) {
     revalidatePath(`/competitions/${competitionId}/candidates/${candidateId}`);
   }
+}
+
+/** 23505 : violation d'unicité — ici, le dossard déjà attribué. */
+function isDuplicateNumber(code?: string) {
+  return code === '23505';
 }
 
 // ==================== CREATE ====================
@@ -64,44 +74,32 @@ export async function createCandidate(
 
     const values = parsed.data;
 
-    // Un dossard ne peut pas être attribué deux fois dans le même concours.
-    const duplicate = await firestore
-      .collection('candidates')
-      .where('competitionId', '==', competitionId)
-      .where('number', '==', values.number)
-      .limit(1)
-      .get();
+    // L'unicité du dossard est garantie par une contrainte : plus besoin de
+    // vérifier avant d'écrire, et deux créations simultanées ne peuvent plus
+    // aboutir au même numéro.
+    const { data: created, error } = await getSupabaseAdmin()
+      .from('candidates')
+      .insert({
+        competition_id: competitionId,
+        name: values.name,
+        number: values.number,
+        photo: values.photo || '',
+        bio: values.bio || '',
+        city: values.city || '',
+      })
+      .select('id')
+      .single();
 
-    if (!duplicate.empty) {
-      return {
-        success: false,
-        error: `Le dossard n°${values.number} est déjà attribué.`,
-      };
+    if (error) {
+      if (isDuplicateNumber(error.code)) {
+        return { success: false, error: `Le dossard n°${values.number} est déjà attribué.` };
+      }
+      throw new Error(error.message);
     }
 
-    const candidate: Omit<Candidate, 'id'> = {
-      competitionId,
-      name: values.name,
-      number: values.number,
-      photo: values.photo || '',
-      bio: values.bio || '',
-      city: values.city || '',
-      voteCount: 0,
-      freeVoteCount: 0,
-      paidVoteCount: 0,
-      eliminated: false,
-      createdAt: new Date().toISOString(),
-    };
-
-    const docRef = await firestore.collection('candidates').add(candidate);
-
-    await firestore
-      .collection('competitions')
-      .doc(competitionId)
-      .update({ 'stats.candidatesCount': FieldValue.increment(1) });
-
-    revalidateCandidatePages(competitionId, docRef.id);
-    return { success: true, id: docRef.id };
+    const candidateId = (created as { id: string }).id;
+    revalidateCandidatePages(competitionId, candidateId);
+    return { success: true, id: candidateId };
   } catch (error) {
     console.error('[CREATE CANDIDATE] ❌', error);
     return {
@@ -118,13 +116,19 @@ export async function updateCandidate(
   data: CandidateFormValues
 ): Promise<ActionResult> {
   try {
-    const candidateDoc = await firestore.collection('candidates').doc(candidateId).get();
-    if (!candidateDoc.exists) {
-      return { success: false, error: 'Candidat introuvable.' };
-    }
+    const supabase = getSupabaseAdmin();
 
-    const candidate = candidateDoc.data() as Candidate;
-    await requireCompetitionAccess(candidate.competitionId);
+    const { data: existing, error: readError } = await supabase
+      .from('candidates')
+      .select('id, competition_id, photo')
+      .eq('id', candidateId)
+      .maybeSingle();
+
+    if (readError) throw new Error(readError.message);
+    if (!existing) return { success: false, error: 'Candidat introuvable.' };
+
+    const candidate = existing as Pick<CandidateRow, 'id' | 'competition_id' | 'photo'>;
+    await requireCompetitionAccess(candidate.competition_id);
 
     const parsed = candidateSchema.safeParse(data);
     if (!parsed.success) {
@@ -136,31 +140,25 @@ export async function updateCandidate(
 
     const values = parsed.data;
 
-    if (values.number !== candidate.number) {
-      const duplicate = await firestore
-        .collection('candidates')
-        .where('competitionId', '==', candidate.competitionId)
-        .where('number', '==', values.number)
-        .limit(1)
-        .get();
+    const { error } = await supabase
+      .from('candidates')
+      .update({
+        name: values.name,
+        number: values.number,
+        photo: values.photo || candidate.photo || '',
+        bio: values.bio || '',
+        city: values.city || '',
+      })
+      .eq('id', candidateId);
 
-      if (!duplicate.empty) {
-        return {
-          success: false,
-          error: `Le dossard n°${values.number} est déjà attribué.`,
-        };
+    if (error) {
+      if (isDuplicateNumber(error.code)) {
+        return { success: false, error: `Le dossard n°${values.number} est déjà attribué.` };
       }
+      throw new Error(error.message);
     }
 
-    await firestore.collection('candidates').doc(candidateId).update({
-      name: values.name,
-      number: values.number,
-      photo: values.photo || candidate.photo || '',
-      bio: values.bio || '',
-      city: values.city || '',
-    });
-
-    revalidateCandidatePages(candidate.competitionId, candidateId);
+    revalidateCandidatePages(candidate.competition_id, candidateId);
     return { success: true, message: 'Candidat mis à jour.' };
   } catch (error) {
     console.error('[UPDATE CANDIDATE] ❌', error);
@@ -178,17 +176,27 @@ export async function setCandidateEliminated(
   eliminated: boolean
 ): Promise<ActionResult> {
   try {
-    const candidateDoc = await firestore.collection('candidates').doc(candidateId).get();
-    if (!candidateDoc.exists) {
-      return { success: false, error: 'Candidat introuvable.' };
-    }
+    const supabase = getSupabaseAdmin();
 
-    const candidate = candidateDoc.data() as Candidate;
-    await requireCompetitionAccess(candidate.competitionId);
+    const { data: existing } = await supabase
+      .from('candidates')
+      .select('id, competition_id')
+      .eq('id', candidateId)
+      .maybeSingle();
 
-    await firestore.collection('candidates').doc(candidateId).update({ eliminated });
+    if (!existing) return { success: false, error: 'Candidat introuvable.' };
 
-    revalidateCandidatePages(candidate.competitionId, candidateId);
+    const candidate = existing as Pick<CandidateRow, 'id' | 'competition_id'>;
+    await requireCompetitionAccess(candidate.competition_id);
+
+    const { error } = await supabase
+      .from('candidates')
+      .update({ eliminated })
+      .eq('id', candidateId);
+
+    if (error) throw new Error(error.message);
+
+    revalidateCandidatePages(candidate.competition_id, candidateId);
     return {
       success: true,
       message: eliminated ? 'Candidat éliminé.' : 'Candidat réintégré.',
@@ -206,15 +214,23 @@ export async function setCandidateEliminated(
 
 export async function deleteCandidate(candidateId: string): Promise<ActionResult> {
   try {
-    const candidateDoc = await firestore.collection('candidates').doc(candidateId).get();
-    if (!candidateDoc.exists) {
-      return { success: false, error: 'Candidat introuvable.' };
-    }
+    const supabase = getSupabaseAdmin();
 
-    const candidate = candidateDoc.data() as Candidate;
-    const { competition } = await requireCompetitionAccess(candidate.competitionId);
+    const { data: existing } = await supabase
+      .from('candidates')
+      .select('id, competition_id, paid_vote_count')
+      .eq('id', candidateId)
+      .maybeSingle();
 
-    if (candidate.paidVoteCount > 0) {
+    if (!existing) return { success: false, error: 'Candidat introuvable.' };
+
+    const candidate = existing as Pick<
+      CandidateRow,
+      'id' | 'competition_id' | 'paid_vote_count'
+    >;
+    await requireCompetitionAccess(candidate.competition_id);
+
+    if (candidate.paid_vote_count > 0) {
       return {
         success: false,
         error:
@@ -222,13 +238,10 @@ export async function deleteCandidate(candidateId: string): Promise<ActionResult
       };
     }
 
-    await firestore.collection('candidates').doc(candidateId).delete();
-    await firestore
-      .collection('competitions')
-      .doc(competition.id)
-      .update({ 'stats.candidatesCount': FieldValue.increment(-1) });
+    const { error } = await supabase.from('candidates').delete().eq('id', candidateId);
+    if (error) throw new Error(error.message);
 
-    revalidateCandidatePages(candidate.competitionId);
+    revalidateCandidatePages(candidate.competition_id);
     return { success: true, message: 'Candidat supprimé.' };
   } catch (error) {
     console.error('[DELETE CANDIDATE] ❌', error);
@@ -242,7 +255,16 @@ export async function deleteCandidate(candidateId: string): Promise<ActionResult
 // ==================== LECTURE ====================
 
 export async function getCandidate(candidateId: string): Promise<Candidate | null> {
-  const doc = await firestore.collection('candidates').doc(candidateId).get();
-  if (!doc.exists) return null;
-  return { id: doc.id, ...doc.data() } as Candidate;
+  const { data, error } = await getSupabaseAdmin()
+    .from('candidates')
+    .select('*')
+    .eq('id', candidateId)
+    .maybeSingle();
+
+  if (error) {
+    console.error('[GET CANDIDATE] ❌', error.message);
+    return null;
+  }
+
+  return data ? toCandidate(data as CandidateRow) : null;
 }

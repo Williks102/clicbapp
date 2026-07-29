@@ -1,15 +1,19 @@
 import { NextResponse } from 'next/server';
-import { firestore } from '@/lib/firebase-admin';
-import { applyPaidVotes } from '@/app/actions/vote-actions';
-import { grantLiveAccess } from '@/app/actions/live-actions';
+import { revalidatePath } from 'next/cache';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { toOrder } from '@/lib/supabase/mappers';
+import type { OrderRow } from '@/lib/supabase/types';
 import { sendLiveAccessEmail, sendVoteConfirmationEmail } from '@/lib/emails';
-import type { Order } from '@/lib/types';
 
 const SUCCESS_STATUSES = new Set(['SUCCESSFUL', 'SUCCESS', 'PAID', 'success', 'paid']);
 
 /**
  * Webhook Paiement Pro.
- * Une même référence peut être notifiée plusieurs fois : chaque étape est idempotente.
+ *
+ * L'application ne fait que relayer la notification : la confirmation, le
+ * contrôle du montant et le crédit des votes sont exécutés par la fonction
+ * PostgreSQL `confirm_order_payment`, dans une transaction unique et
+ * idempotente. Un webhook rejoué ne peut donc pas créditer deux fois.
  */
 export async function POST(request: Request) {
   try {
@@ -24,93 +28,86 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Missing referenceNumber' }, { status: 400 });
     }
 
-    const orderRef = firestore.collection('orders').doc(referenceNumber);
-    const orderDoc = await orderRef.get();
+    const supabase = getSupabaseAdmin();
 
-    if (!orderDoc.exists) {
-      console.error(`[Webhook] ❌ Commande ${referenceNumber} introuvable.`);
-      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
-    }
-
-    const order = { id: orderDoc.id, ...orderDoc.data() } as Order;
-
-    if (order.status !== 'PENDING') {
-      console.warn(
-        `[Webhook] ⚠️ Commande ${referenceNumber} déjà traitée (statut: ${order.status}).`
-      );
-      return NextResponse.json({
-        status: 'already_processed',
-        message: 'Webhook already handled.',
-      });
-    }
-
+    // Paiement en échec : la commande est close sans effet métier.
     if (!paymentStatus || !SUCCESS_STATUSES.has(paymentStatus)) {
       console.log(`[Webhook] 📉 Paiement échoué pour ${referenceNumber}: ${paymentStatus}`);
-      await orderRef.update({ status: 'FAILED', paymentDetails: body });
+
+      await supabase
+        .from('orders')
+        .update({ status: 'FAILED', payment_details: body })
+        .eq('id', referenceNumber)
+        .eq('status', 'PENDING');
+
       return NextResponse.json({
         status: 'ignored',
         message: `Payment status was ${paymentStatus}`,
       });
     }
 
-    // Le montant réellement payé doit correspondre au montant calculé côté serveur.
-    if (!Number.isFinite(paidAmount) || paidAmount !== order.amount) {
+    if (!Number.isFinite(paidAmount)) {
+      return NextResponse.json({ error: 'Invalid amount' }, { status: 400 });
+    }
+
+    const { data: outcome, error } = await supabase.rpc('confirm_order_payment', {
+      p_order_id: referenceNumber,
+      p_paid_amount: paidAmount,
+      p_payment_details: body,
+    });
+
+    if (error) {
+      console.error('[Webhook] ❌ Confirmation impossible:', error.message);
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+
+    if (outcome === 'not_found') {
+      console.error(`[Webhook] ❌ Commande ${referenceNumber} introuvable.`);
+      return NextResponse.json({ error: 'Order not found' }, { status: 404 });
+    }
+
+    if (outcome === 'amount_mismatch') {
       console.error(
-        `[Webhook] 🚨 Montant incohérent pour ${referenceNumber}: attendu ${order.amount}, reçu ${paidAmount}.`
+        `[Webhook] 🚨 Montant incohérent pour ${referenceNumber} : ${paidAmount} reçu. Commande signalée.`
       );
-      await orderRef.update({ status: 'FLAGGED', paymentDetails: body });
       return NextResponse.json({ error: 'Amount mismatch' }, { status: 400 });
     }
 
-    if (order.type === 'VOTE_PACK') {
-      if (!order.candidateId || !order.votes) {
-        await orderRef.update({ status: 'FLAGGED', paymentDetails: body });
-        return NextResponse.json({ error: 'Invalid vote order' }, { status: 400 });
-      }
-
-      await applyPaidVotes({
-        competitionId: order.competitionId,
-        candidateId: order.candidateId,
-        candidateName: order.candidateName || '',
-        quantity: order.votes,
-        orderId: order.id,
-        amount: order.amount,
-        userId: order.userId,
-        voterEmail: order.customerEmail,
-        voterName: order.customerName,
-      });
-    } else if (order.type === 'LIVE_ACCESS') {
-      if (!order.userId) {
-        await orderRef.update({ status: 'FLAGGED', paymentDetails: body });
-        return NextResponse.json({ error: 'Invalid live access order' }, { status: 400 });
-      }
-
-      await grantLiveAccess({
-        userId: order.userId,
-        competitionId: order.competitionId,
-        orderId: order.id,
-        pricePaid: order.amount,
+    if (outcome === 'already_processed') {
+      console.warn(`[Webhook] ⚠️ Commande ${referenceNumber} déjà traitée.`);
+      return NextResponse.json({
+        status: 'already_processed',
+        message: 'Webhook already handled.',
       });
     }
 
-    await orderRef.update({
-      status: 'PAID',
-      paidAt: new Date().toISOString(),
-      paymentDetails: body,
-    });
+    console.log(`[Webhook] ✅ Commande ${referenceNumber} confirmée.`);
 
-    console.log(`[Webhook] ✅ Commande ${referenceNumber} confirmée (${order.type}).`);
+    const { data: orderRow } = await supabase
+      .from('orders')
+      .select('*')
+      .eq('id', referenceNumber)
+      .maybeSingle();
 
-    // L'e-mail ne doit jamais faire échouer la confirmation de paiement.
-    try {
-      const paidOrder: Order = { ...order, status: 'PAID' };
-      if (order.type === 'VOTE_PACK') {
-        await sendVoteConfirmationEmail(paidOrder);
-      } else {
-        await sendLiveAccessEmail(paidOrder);
+    if (orderRow) {
+      const order = toOrder(orderRow as OrderRow);
+
+      revalidatePath(`/competitions/${order.competitionId}`);
+      if (order.candidateId) {
+        revalidatePath(`/competitions/${order.competitionId}/candidates/${order.candidateId}`);
       }
-    } catch (emailError) {
-      console.error('[Webhook] ⚠️ Envoi de l\'e-mail échoué:', emailError);
+      revalidatePath(`/competitions/${order.competitionId}/live`);
+
+      // L'e-mail ne doit jamais faire échouer la confirmation de paiement.
+      try {
+        if (order.type === 'VOTE_PACK') {
+          await sendVoteConfirmationEmail(order);
+        } else {
+          await sendLiveAccessEmail(order);
+        }
+      } catch (emailError) {
+        console.error("[Webhook] ⚠️ Envoi de l'e-mail échoué:", emailError);
+      }
     }
 
     return NextResponse.json({ status: 'success' });

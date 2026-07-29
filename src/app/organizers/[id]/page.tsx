@@ -3,7 +3,6 @@
 import { useMemo } from 'react';
 import { notFound, useParams } from 'next/navigation';
 import { Globe, Mail } from 'lucide-react';
-import { collection, doc, query, where } from 'firebase/firestore';
 
 import { PlaceHolderImages } from '@/lib/placeholder-images';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -11,7 +10,13 @@ import { Card } from '@/components/ui/card';
 import MainNav from '@/components/main-nav';
 import Footer from '@/components/footer';
 import CompetitionCard from '@/components/competition-card';
-import { useCollection, useDoc, useFirebase } from '@/firebase';
+import { useRealtimeQuery, useRealtimeRow } from '@/hooks/use-realtime-query';
+import { toCompetition, toOrganizer } from '@/lib/supabase/mappers';
+import {
+  COMPETITION_COLUMNS,
+  type CompetitionRow,
+  type OrganizerRow,
+} from '@/lib/supabase/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DataError } from '@/components/data-error';
 import { PUBLIC_COMPETITION_STATUSES } from '@/lib/live-utils';
@@ -20,33 +25,24 @@ import type { Competition, Organizer } from '@/lib/types';
 export default function OrganizerPage() {
   const params = useParams();
   const organizerId = params.id as string;
-  const { areServicesAvailable, firestore } = useFirebase();
+  const { data: organizer, isLoading } = useRealtimeRow<OrganizerRow, Organizer>({
+    table: 'organizers',
+    id: organizerId,
+    map: toOrganizer,
+  });
 
-  const organizerRef = useMemo(
-    () =>
-      areServicesAvailable && firestore
-        ? doc(firestore, 'organizers', organizerId)
-        : null,
-    [areServicesAvailable, firestore, organizerId]
-  );
-  const { data: organizer, isLoading } = useDoc<Organizer>(organizerRef);
-
-  const competitionsQuery = useMemo(
-    () =>
-      areServicesAvailable && firestore
-        ? query(
-            collection(firestore, 'competitions'),
-            where('organizerId', '==', organizerId),
-            where('status', 'in', [...PUBLIC_COMPETITION_STATUSES])
-          )
-        : null,
-    [areServicesAvailable, firestore, organizerId]
-  );
   const {
     data: competitions,
     isLoading: areCompetitionsLoading,
     error: competitionsError,
-  } = useCollection<Competition>(competitionsQuery);
+  } = useRealtimeQuery<CompetitionRow, Competition>({
+    table: 'competitions',
+    select: COMPETITION_COLUMNS,
+    match: { organizer_id: organizerId },
+    inFilter: { column: 'status', values: PUBLIC_COMPETITION_STATUSES },
+    orderBy: { column: 'created_at', ascending: false },
+    map: toCompetition,
+  });
 
   if (!isLoading && !organizer) {
     notFound();

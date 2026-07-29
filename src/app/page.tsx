@@ -2,7 +2,6 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { collection, query, where } from 'firebase/firestore';
 import {
   Gift,
   Radio,
@@ -20,7 +19,9 @@ import MainNav from '@/components/main-nav';
 import Footer from '@/components/footer';
 import CompetitionCard from '@/components/competition-card';
 import { DataError } from '@/components/data-error';
-import { useCollection, useFirebase } from '@/firebase';
+import { useRealtimeQuery } from '@/hooks/use-realtime-query';
+import { toCompetition } from '@/lib/supabase/mappers';
+import { COMPETITION_COLUMNS, type CompetitionRow } from '@/lib/supabase/types';
 import { PUBLIC_COMPETITION_STATUSES } from '@/lib/live-utils';
 import { cn, formatVotes } from '@/lib/utils';
 import type { Competition } from '@/lib/types';
@@ -53,26 +54,19 @@ const HOW_IT_WORKS = [
 ];
 
 export default function Home() {
-  const { areServicesAvailable, firestore } = useFirebase();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeCategory, setActiveCategory] = useState('Tous');
 
-  const competitionsQuery = useMemo(
-    () =>
-      areServicesAvailable && firestore
-        ? query(
-            collection(firestore, 'competitions'),
-            where('status', 'in', [...PUBLIC_COMPETITION_STATUSES])
-          )
-        : null,
-    [areServicesAvailable, firestore]
-  );
-
-  const {
-    data: competitions,
-    isLoading,
-    error,
-  } = useCollection<Competition>(competitionsQuery);
+  const { data: competitions, isLoading, error } = useRealtimeQuery<
+    CompetitionRow,
+    Competition
+  >({
+    table: 'competitions',
+    select: COMPETITION_COLUMNS,
+    inFilter: { column: 'status', values: PUBLIC_COMPETITION_STATUSES },
+    orderBy: { column: 'created_at', ascending: false },
+    map: toCompetition,
+  });
 
   const publicCompetitions = useMemo(() => competitions ?? [], [competitions]);
 

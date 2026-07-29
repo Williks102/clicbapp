@@ -3,7 +3,6 @@
 import { useMemo } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { collection, query, where } from 'firebase/firestore';
 import { CalendarClock, PlayCircle, Radio } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
@@ -12,7 +11,9 @@ import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PageHeader } from '@/components/page-header';
 import { DataError } from '@/components/data-error';
-import { useCollection, useFirebase } from '@/firebase';
+import { useRealtimeQuery } from '@/hooks/use-realtime-query';
+import { toCompetition } from '@/lib/supabase/mappers';
+import { COMPETITION_COLUMNS, type CompetitionRow } from '@/lib/supabase/types';
 import { PUBLIC_COMPETITION_STATUSES } from '@/lib/live-utils';
 import { formatFCFA } from '@/lib/utils';
 import type { Competition } from '@/lib/types';
@@ -20,24 +21,16 @@ import type { Competition } from '@/lib/types';
 const FALLBACK_IMAGE = 'https://placehold.co/800x450/0f172a/ffffff?text=Direct';
 
 export default function LivePage() {
-  const { areServicesAvailable, firestore } = useFirebase();
-
-  const competitionsQuery = useMemo(
-    () =>
-      areServicesAvailable && firestore
-        ? query(
-            collection(firestore, 'competitions'),
-            where('status', 'in', [...PUBLIC_COMPETITION_STATUSES])
-          )
-        : null,
-    [areServicesAvailable, firestore]
-  );
-
-  const {
-    data: competitions,
-    isLoading,
-    error,
-  } = useCollection<Competition>(competitionsQuery);
+  const { data: competitions, isLoading, error } = useRealtimeQuery<
+    CompetitionRow,
+    Competition
+  >({
+    table: 'competitions',
+    select: COMPETITION_COLUMNS,
+    inFilter: { column: 'status', values: PUBLIC_COMPETITION_STATUSES },
+    orderBy: { column: 'created_at', ascending: false },
+    map: toCompetition,
+  });
 
   const broadcasts = useMemo(() => {
     const withLive = (competitions ?? []).filter((c) => c.live?.enabled);

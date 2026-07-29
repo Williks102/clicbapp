@@ -2,8 +2,9 @@
 
 import { z } from 'zod';
 import { auth } from '@/auth';
-import { firestore } from '@/lib/firebase-admin';
-import type { ActionResult, ChatMessage, Competition, User } from '@/lib/types';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
+import type { ChatMessageRow, CompetitionRow, UserRow } from '@/lib/supabase/types';
+import type { ActionResult } from '@/lib/types';
 
 const messageSchema = z
   .string()
@@ -29,40 +30,47 @@ export async function sendChatMessage(
       return { success: false, error: parsed.error.errors[0].message };
     }
 
-    const [competitionDoc, userDoc] = await Promise.all([
-      firestore.collection('competitions').doc(competitionId).get(),
-      firestore.collection('users').doc(session.user.id).get(),
+    const supabase = getSupabaseAdmin();
+
+    const [competitionResult, userResult, recentResult] = await Promise.all([
+      supabase
+        .from('competitions')
+        .select('id, live_enabled, live_chat_enabled')
+        .eq('id', competitionId)
+        .maybeSingle(),
+      supabase
+        .from('users')
+        .select('chat_banned')
+        .eq('id', session.user.id)
+        .maybeSingle(),
+      supabase
+        .from('chat_messages')
+        .select('created_at')
+        .eq('competition_id', competitionId)
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
     ]);
 
-    if (!competitionDoc.exists) {
-      return { success: false, error: 'Concours introuvable.' };
-    }
+    const competition = competitionResult.data as Pick<
+      CompetitionRow,
+      'id' | 'live_enabled' | 'live_chat_enabled'
+    > | null;
 
-    const competition = {
-      id: competitionDoc.id,
-      ...competitionDoc.data(),
-    } as Competition;
-
-    if (!competition.live?.enabled || !competition.live.chatEnabled) {
+    if (!competition) return { success: false, error: 'Concours introuvable.' };
+    if (!competition.live_enabled || !competition.live_chat_enabled) {
       return { success: false, error: "Le chat n'est pas ouvert sur ce direct." };
     }
 
-    const user = userDoc.data() as User | undefined;
-    if (user?.chatBanned) {
+    const user = userResult.data as Pick<UserRow, 'chat_banned'> | null;
+    if (user?.chat_banned) {
       return { success: false, error: 'Vous ne pouvez plus écrire dans ce chat.' };
     }
 
-    const recent = await firestore
-      .collection('chatMessages')
-      .where('competitionId', '==', competitionId)
-      .where('userId', '==', session.user.id)
-      .orderBy('createdAt', 'desc')
-      .limit(1)
-      .get();
-
-    if (!recent.empty) {
-      const last = recent.docs[0].data() as ChatMessage;
-      const elapsed = Date.now() - new Date(last.createdAt).getTime();
+    const last = recentResult.data as Pick<ChatMessageRow, 'created_at'> | null;
+    if (last) {
+      const elapsed = Date.now() - new Date(last.created_at).getTime();
       if (elapsed < MESSAGE_COOLDOWN_MS) {
         return {
           success: false,
@@ -71,17 +79,16 @@ export async function sendChatMessage(
       }
     }
 
-    const chatMessage: Omit<ChatMessage, 'id'> = {
-      competitionId,
-      userId: session.user.id,
-      userName: session.user.name || 'Spectateur',
-      userRole: (session.user.role as ChatMessage['userRole']) || 'customer',
+    const { error } = await supabase.from('chat_messages').insert({
+      competition_id: competitionId,
+      user_id: session.user.id,
+      user_name: session.user.name || 'Spectateur',
+      user_role: session.user.role || 'customer',
       message: parsed.data,
-      hidden: false,
-      createdAt: new Date().toISOString(),
-    };
+    });
 
-    await firestore.collection('chatMessages').add(chatMessage);
+    if (error) throw new Error(error.message);
+
     return { success: true };
   } catch (error) {
     console.error('[SEND CHAT MESSAGE] ❌', error);
@@ -98,13 +105,17 @@ async function requireModerator(competitionId: string) {
     throw new Error('Vous devez être connecté.');
   }
 
-  const doc = await firestore.collection('competitions').doc(competitionId).get();
-  if (!doc.exists) {
-    throw new Error('Concours introuvable.');
-  }
+  const { data, error } = await getSupabaseAdmin()
+    .from('competitions')
+    .select('id, organizer_id')
+    .eq('id', competitionId)
+    .maybeSingle();
 
-  const competition = { id: doc.id, ...doc.data() } as Competition;
-  if (competition.organizerId !== session.user.id && session.user.role !== 'admin') {
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('Concours introuvable.');
+
+  const competition = data as Pick<CompetitionRow, 'id' | 'organizer_id'>;
+  if (competition.organizer_id !== session.user.id && session.user.role !== 'admin') {
     throw new Error("Vous n'êtes pas modérateur de ce direct.");
   }
 
@@ -118,7 +129,15 @@ export async function hideChatMessage(
 ): Promise<ActionResult> {
   try {
     await requireModerator(competitionId);
-    await firestore.collection('chatMessages').doc(messageId).update({ hidden: true });
+
+    const { error } = await getSupabaseAdmin()
+      .from('chat_messages')
+      .update({ hidden: true })
+      .eq('id', messageId)
+      .eq('competition_id', competitionId);
+
+    if (error) throw new Error(error.message);
+
     return { success: true, message: 'Message masqué.' };
   } catch (error) {
     console.error('[HIDE CHAT MESSAGE] ❌', error);
@@ -136,7 +155,14 @@ export async function banUserFromChat(
 ): Promise<ActionResult> {
   try {
     await requireModerator(competitionId);
-    await firestore.collection('users').doc(userId).update({ chatBanned: true });
+
+    const { error } = await getSupabaseAdmin()
+      .from('users')
+      .update({ chat_banned: true })
+      .eq('id', userId);
+
+    if (error) throw new Error(error.message);
+
     return { success: true, message: 'Spectateur banni du chat.' };
   } catch (error) {
     console.error('[BAN USER FROM CHAT] ❌', error);
@@ -154,7 +180,13 @@ export async function unbanUserFromChat(userId: string): Promise<ActionResult> {
       return { success: false, error: 'Action réservée aux administrateurs.' };
     }
 
-    await firestore.collection('users').doc(userId).update({ chatBanned: false });
+    const { error } = await getSupabaseAdmin()
+      .from('users')
+      .update({ chat_banned: false })
+      .eq('id', userId);
+
+    if (error) throw new Error(error.message);
+
     return { success: true, message: 'Spectateur réintégré.' };
   } catch (error) {
     console.error('[UNBAN USER FROM CHAT] ❌', error);
@@ -170,19 +202,12 @@ export async function clearChat(competitionId: string): Promise<ActionResult> {
   try {
     await requireModerator(competitionId);
 
-    const snapshot = await firestore
-      .collection('chatMessages')
-      .where('competitionId', '==', competitionId)
-      .get();
+    const { error } = await getSupabaseAdmin()
+      .from('chat_messages')
+      .delete()
+      .eq('competition_id', competitionId);
 
-    if (snapshot.empty) return { success: true, message: 'Le chat est déjà vide.' };
-
-    // Firestore limite un batch à 500 opérations.
-    for (let i = 0; i < snapshot.docs.length; i += 450) {
-      const batch = firestore.batch();
-      snapshot.docs.slice(i, i + 450).forEach((doc) => batch.delete(doc.ref));
-      await batch.commit();
-    }
+    if (error) throw new Error(error.message);
 
     return { success: true, message: 'Chat vidé.' };
   } catch (error) {

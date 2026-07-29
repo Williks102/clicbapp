@@ -3,10 +3,11 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import Link from 'next/link';
 import { useSession } from 'next-auth/react';
-import { collection, limit, orderBy, query, where } from 'firebase/firestore';
 import { EyeOff, Loader2, MessageCircle, Send, ShieldBan } from 'lucide-react';
 
-import { useCollection, useFirebase } from '@/firebase';
+import { useRealtimeQuery } from '@/hooks/use-realtime-query';
+import { toChatMessage } from '@/lib/supabase/mappers';
+import type { ChatMessageRow } from '@/lib/supabase/types';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -29,32 +30,26 @@ type LiveChatProps = {
 
 export function LiveChat({ competitionId, canModerate = false, className }: LiveChatProps) {
   const { data: session } = useSession();
-  const { areServicesAvailable, firestore } = useFirebase();
   const { toast } = useToast();
   const [draft, setDraft] = useState('');
   const [isPending, startTransition] = useTransition();
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const messagesQuery = useMemo(
-    () =>
-      areServicesAvailable && firestore
-        ? query(
-            collection(firestore, 'chatMessages'),
-            where('competitionId', '==', competitionId),
-            orderBy('createdAt', 'desc'),
-            limit(MESSAGE_LIMIT)
-          )
-        : null,
-    [areServicesAvailable, firestore, competitionId]
-  );
+  const { data: messages, isLoading, error } = useRealtimeQuery<
+    ChatMessageRow,
+    ChatMessage
+  >({
+    table: 'chat_messages',
+    match: { competition_id: competitionId },
+    orderBy: { column: 'created_at', ascending: false },
+    limit: MESSAGE_LIMIT,
+    map: toChatMessage,
+    // Du plus récent au plus ancien : la limite conserve les derniers messages.
+    compare: (a, b) =>
+      new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+  });
 
-  const {
-    data: messages,
-    isLoading,
-    error,
-  } = useCollection<ChatMessage>(messagesQuery);
-
-  // La requête descend du plus récent : on ré-inverse pour un fil chronologique.
+  // Le fil s'affiche dans l'ordre chronologique.
   const orderedMessages = useMemo(() => {
     if (!messages) return [];
     const visible = canModerate ? messages : messages.filter((m) => !m.hidden);

@@ -1,7 +1,6 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { collection, query, where } from 'firebase/firestore';
 import { Search } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -9,7 +8,9 @@ import { Input } from '@/components/ui/input';
 import { PageHeader } from '@/components/page-header';
 import CompetitionCard from '@/components/competition-card';
 import { DataError } from '@/components/data-error';
-import { useCollection, useFirebase } from '@/firebase';
+import { useRealtimeQuery } from '@/hooks/use-realtime-query';
+import { toCompetition } from '@/lib/supabase/mappers';
+import { COMPETITION_COLUMNS, type CompetitionRow } from '@/lib/supabase/types';
 import {
   COMPETITION_STATUS_LABELS,
   PUBLIC_COMPETITION_STATUSES,
@@ -25,27 +26,20 @@ const STATUS_FILTERS: Array<{ value: 'all' | CompetitionStatus; label: string }>
 ];
 
 export default function CompetitionsPage() {
-  const { areServicesAvailable, firestore } = useFirebase();
   const [searchTerm, setSearchTerm] = useState('');
   const [status, setStatus] = useState<'all' | CompetitionStatus>('all');
   const [category, setCategory] = useState('Tous');
 
-  const competitionsQuery = useMemo(
-    () =>
-      areServicesAvailable && firestore
-        ? query(
-            collection(firestore, 'competitions'),
-            where('status', 'in', [...PUBLIC_COMPETITION_STATUSES])
-          )
-        : null,
-    [areServicesAvailable, firestore]
-  );
-
-  const {
-    data: competitions,
-    isLoading,
-    error,
-  } = useCollection<Competition>(competitionsQuery);
+  const { data: competitions, isLoading, error } = useRealtimeQuery<
+    CompetitionRow,
+    Competition
+  >({
+    table: 'competitions',
+    select: COMPETITION_COLUMNS,
+    inFilter: { column: 'status', values: PUBLIC_COMPETITION_STATUSES },
+    orderBy: { column: 'created_at', ascending: false },
+    map: toCompetition,
+  });
 
   const publicCompetitions = useMemo(() => competitions ?? [], [competitions]);
 

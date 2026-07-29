@@ -5,10 +5,11 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession } from 'next-auth/react';
-import { collection, orderBy, query, where } from 'firebase/firestore';
 import { Gift, Loader2, Zap } from 'lucide-react';
 
-import { useCollection, useFirebase } from '@/firebase';
+import { useRealtimeQuery } from '@/hooks/use-realtime-query';
+import { toCandidate } from '@/lib/supabase/mappers';
+import type { CandidateRow } from '@/lib/supabase/types';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -27,7 +28,6 @@ type LiveVotePanelProps = {
 
 /** Panneau de vote compact affiché à côté du player pendant la diffusion. */
 export function LiveVotePanel({ competition, votingOpen }: LiveVotePanelProps) {
-  const { areServicesAvailable, firestore } = useFirebase();
   const { data: session } = useSession();
   const { toast } = useToast();
   const router = useRouter();
@@ -35,23 +35,16 @@ export function LiveVotePanel({ competition, votingOpen }: LiveVotePanelProps) {
   const [votingFor, setVotingFor] = useState<string | null>(null);
   const [freeVoteAvailable, setFreeVoteAvailable] = useState(false);
 
-  const candidatesQuery = useMemo(
-    () =>
-      areServicesAvailable && firestore
-        ? query(
-            collection(firestore, 'candidates'),
-            where('competitionId', '==', competition.id),
-            orderBy('voteCount', 'desc')
-          )
-        : null,
-    [areServicesAvailable, firestore, competition.id]
-  );
-
-  const {
-    data: candidates,
-    isLoading,
-    error,
-  } = useCollection<Candidate>(candidatesQuery);
+  const { data: candidates, isLoading, error } = useRealtimeQuery<
+    CandidateRow,
+    Candidate
+  >({
+    table: 'candidates',
+    match: { competition_id: competition.id },
+    orderBy: { column: 'vote_count', ascending: false },
+    map: toCandidate,
+    compare: (a, b) => b.voteCount - a.voteCount || a.number - b.number,
+  });
 
   useEffect(() => {
     let cancelled = false;

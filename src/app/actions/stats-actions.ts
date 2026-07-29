@@ -1,10 +1,12 @@
 'use server';
 
 import { auth } from '@/auth';
-import { firestore } from '@/lib/firebase-admin';
-import type { AdminStats, Competition, Order, OrganizerStats, User } from '@/lib/types';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { toOrder } from '@/lib/supabase/mappers';
+import type { OrderRow } from '@/lib/supabase/types';
+import type { AdminStats, OrganizerStats } from '@/lib/types';
 
-const EMPTY_STATS: OrganizerStats = {
+const EMPTY_STATS: AdminStats = {
   totalCompetitions: 0,
   totalCandidates: 0,
   totalVotes: 0,
@@ -15,189 +17,92 @@ const EMPTY_STATS: OrganizerStats = {
   votesByMonth: [],
   topCompetitions: [],
   recentOrders: [],
+  totalOrganizers: 0,
+  totalCustomers: 0,
+  topOrganizers: [],
 };
 
-function monthKey(iso: string) {
-  return new Date(iso).toLocaleDateString('fr-FR', { month: 'short', year: '2-digit' });
+/** Forme brute renvoyée par la fonction PostgreSQL `dashboard_stats`. */
+type StatsPayload = Omit<AdminStats, 'votesByMonth' | 'recentOrders'> & {
+  votesByMonth: Array<{ month: string; votes: number | string; revenue: number | string }>;
+  recentOrders: OrderRow[];
+};
+
+function num(value: number | string | null | undefined): number {
+  if (value === null || value === undefined) return 0;
+  return typeof value === 'number' ? value : Number.parseFloat(value) || 0;
 }
 
-/** Agrège les commandes payées en série mensuelle (12 derniers mois). */
-function buildMonthlySeries(orders: Order[]) {
-  const buckets = new Map<string, { votes: number; revenue: number; time: number }>();
+/** « 2026-07 » → « juil. 26 ». */
+function formatMonth(isoMonth: string): string {
+  const [year, month] = isoMonth.split('-').map(Number);
+  if (!year || !month) return isoMonth;
 
-  const twelveMonthsAgo = new Date();
-  twelveMonthsAgo.setMonth(twelveMonthsAgo.getMonth() - 11);
-  twelveMonthsAgo.setDate(1);
-
-  for (const order of orders) {
-    const date = new Date(order.createdAt);
-    if (date < twelveMonthsAgo) continue;
-
-    const key = monthKey(order.createdAt);
-    const bucket = buckets.get(key) || {
-      votes: 0,
-      revenue: 0,
-      time: new Date(date.getFullYear(), date.getMonth(), 1).getTime(),
-    };
-
-    bucket.votes += order.votes ?? 0;
-    bucket.revenue += order.amount;
-    buckets.set(key, bucket);
-  }
-
-  return Array.from(buckets.entries())
-    .sort((a, b) => a[1].time - b[1].time)
-    .map(([month, bucket]) => ({
-      month,
-      votes: bucket.votes,
-      revenue: bucket.revenue,
-    }));
+  return new Date(year, month - 1, 1).toLocaleDateString('fr-FR', {
+    month: 'short',
+    year: '2-digit',
+  });
 }
 
-function computeStats(competitions: Competition[], orders: Order[]): OrganizerStats {
-  const paidOrders = orders.filter((o) => o.status === 'PAID');
-
-  const totals = competitions.reduce(
-    (acc, competition) => {
-      const stats = competition.stats;
-      acc.totalVotes += stats?.totalVotes ?? 0;
-      acc.paidVotes += stats?.paidVotes ?? 0;
-      acc.freeVotes += stats?.freeVotes ?? 0;
-      acc.totalCandidates += stats?.candidatesCount ?? 0;
-      return acc;
-    },
-    { totalVotes: 0, paidVotes: 0, freeVotes: 0, totalCandidates: 0 }
-  );
-
-  const revenueByCompetition = new Map<string, number>();
-  for (const order of paidOrders) {
-    revenueByCompetition.set(
-      order.competitionId,
-      (revenueByCompetition.get(order.competitionId) || 0) + order.amount
-    );
-  }
-
-  const topCompetitions = competitions
-    .map((competition) => ({
-      competitionId: competition.id,
-      title: competition.title,
-      votes: competition.stats?.totalVotes ?? 0,
-      revenue: revenueByCompetition.get(competition.id) || 0,
-    }))
-    .sort((a, b) => b.revenue - a.revenue || b.votes - a.votes)
-    .slice(0, 5);
-
+function normalize(payload: StatsPayload): AdminStats {
   return {
-    totalCompetitions: competitions.length,
-    totalCandidates: totals.totalCandidates,
-    totalVotes: totals.totalVotes,
-    paidVotes: totals.paidVotes,
-    freeVotes: totals.freeVotes,
-    totalRevenue: paidOrders.reduce((sum, order) => sum + order.amount, 0),
-    liveAccessSold: paidOrders.filter((o) => o.type === 'LIVE_ACCESS').length,
-    votesByMonth: buildMonthlySeries(paidOrders),
-    topCompetitions,
-    recentOrders: orders.slice(0, 10),
+    totalCompetitions: num(payload.totalCompetitions),
+    totalCandidates: num(payload.totalCandidates),
+    totalVotes: num(payload.totalVotes),
+    paidVotes: num(payload.paidVotes),
+    freeVotes: num(payload.freeVotes),
+    totalRevenue: num(payload.totalRevenue),
+    liveAccessSold: num(payload.liveAccessSold),
+    totalOrganizers: num(payload.totalOrganizers),
+    totalCustomers: num(payload.totalCustomers),
+    votesByMonth: (payload.votesByMonth ?? []).map((entry) => ({
+      month: formatMonth(entry.month),
+      votes: num(entry.votes),
+      revenue: num(entry.revenue),
+    })),
+    topCompetitions: (payload.topCompetitions ?? []).map((entry) => ({
+      ...entry,
+      votes: num(entry.votes),
+      revenue: num(entry.revenue),
+    })),
+    topOrganizers: (payload.topOrganizers ?? []).map((entry) => ({
+      ...entry,
+      votes: num(entry.votes),
+      revenue: num(entry.revenue),
+    })),
+    recentOrders: (payload.recentOrders ?? []).map(toOrder),
   };
 }
 
-function sortOrders(orders: Order[]) {
-  return orders.sort(
-    (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-  );
+/**
+ * Les agrégats sont calculés par la base : le coût ne dépend plus du volume
+ * de commandes, contrairement à un chargement intégral côté application.
+ */
+async function loadStats(organizerId: string | null): Promise<AdminStats> {
+  const { data, error } = await getSupabaseAdmin().rpc('dashboard_stats', {
+    p_organizer_id: organizerId,
+  });
+
+  if (error) {
+    console.error('[STATS] ❌', error.message);
+    return EMPTY_STATS;
+  }
+
+  return normalize(data as StatsPayload);
 }
 
 /** Statistiques du tableau de bord organisateur. */
 export async function getOrganizerStats(): Promise<OrganizerStats> {
-  try {
-    const session = await auth();
-    if (!session?.user?.id) return EMPTY_STATS;
+  const session = await auth();
+  if (!session?.user?.id) return EMPTY_STATS;
 
-    const [competitionsSnap, ordersSnap] = await Promise.all([
-      firestore
-        .collection('competitions')
-        .where('organizerId', '==', session.user.id)
-        .get(),
-      firestore.collection('orders').where('organizerId', '==', session.user.id).get(),
-    ]);
-
-    const competitions = competitionsSnap.docs.map(
-      (doc) => ({ id: doc.id, ...doc.data() }) as Competition
-    );
-    const orders = sortOrders(
-      ordersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Order)
-    );
-
-    return computeStats(competitions, orders);
-  } catch (error) {
-    console.error('[ORGANIZER STATS] ❌', error);
-    return EMPTY_STATS;
-  }
+  return loadStats(session.user.id);
 }
 
 /** Statistiques globales de la plateforme. */
 export async function getAdminStats(): Promise<AdminStats> {
-  const empty: AdminStats = {
-    ...EMPTY_STATS,
-    totalOrganizers: 0,
-    totalCustomers: 0,
-    topOrganizers: [],
-  };
+  const session = await auth();
+  if (session?.user?.role !== 'admin') return EMPTY_STATS;
 
-  try {
-    const session = await auth();
-    if (session?.user?.role !== 'admin') return empty;
-
-    const [competitionsSnap, ordersSnap, usersSnap] = await Promise.all([
-      firestore.collection('competitions').get(),
-      firestore.collection('orders').get(),
-      firestore.collection('users').get(),
-    ]);
-
-    const competitions = competitionsSnap.docs.map(
-      (doc) => ({ id: doc.id, ...doc.data() }) as Competition
-    );
-    const orders = sortOrders(
-      ordersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as Order)
-    );
-    const users = usersSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }) as User);
-
-    const base = computeStats(competitions, orders);
-
-    const organizerNames = new Map(
-      users.filter((u) => u.role === 'organizer').map((u) => [u.id, u.name])
-    );
-
-    const perOrganizer = new Map<string, { votes: number; revenue: number }>();
-    for (const competition of competitions) {
-      const entry = perOrganizer.get(competition.organizerId) || { votes: 0, revenue: 0 };
-      entry.votes += competition.stats?.totalVotes ?? 0;
-      perOrganizer.set(competition.organizerId, entry);
-    }
-    for (const order of orders.filter((o) => o.status === 'PAID')) {
-      const entry = perOrganizer.get(order.organizerId) || { votes: 0, revenue: 0 };
-      entry.revenue += order.amount;
-      perOrganizer.set(order.organizerId, entry);
-    }
-
-    const topOrganizers = Array.from(perOrganizer.entries())
-      .map(([organizerId, entry]) => ({
-        organizerId,
-        organizerName: organizerNames.get(organizerId) || 'Organisateur',
-        votes: entry.votes,
-        revenue: entry.revenue,
-      }))
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 5);
-
-    return {
-      ...base,
-      totalOrganizers: users.filter((u) => u.role === 'organizer' && !u.deleted).length,
-      totalCustomers: users.filter((u) => u.role === 'customer' && !u.deleted).length,
-      topOrganizers,
-    };
-  } catch (error) {
-    console.error('[ADMIN STATS] ❌', error);
-    return empty;
-  }
+  return loadStats(null);
 }
