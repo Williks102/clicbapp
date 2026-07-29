@@ -41,6 +41,9 @@ npm run genkit:dev # flows Genkit (assistant de rédaction)
 Le schéma active la réplication temps réel sur `competitions`, `candidates` et
 `chat_messages` : rien d'autre à configurer pour le classement et le chat.
 
+Pour contrôler l'installation, exécutez `supabase/check-install.sql` dans
+l'éditeur SQL : chaque ligne doit afficher `OK`.
+
 ## Variables d'environnement
 
 | Variable | Rôle |
