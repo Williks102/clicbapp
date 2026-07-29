@@ -16,6 +16,7 @@ Autres scripts utiles :
 ```bash
 npm run build      # build de production
 npm run typecheck  # vérification TypeScript
+npm run test:paystack  # signature du webhook et conversion des montants
 npm run genkit:dev # flows Genkit (assistant de rédaction)
 ```
 
@@ -82,7 +83,7 @@ d'évaluer les politiques RLS, et l'application ne peut rien lire ni écrire.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clé publique, utilisée par le navigateur (lecture seule) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Clé serveur, contourne RLS — **ne jamais exposer au client** |
 | `AUTH_SECRET` | Secret de signature des sessions NextAuth |
-| `NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID` | Identifiant marchand Paiement Pro |
+| `PAYSTACK_SECRET_KEY` | Clé secrète Paystack (`sk_test_…` / `sk_live_…`) — **jamais préfixée `NEXT_PUBLIC_`** |
 | `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` | Preset d'upload Cloudinary |
 | `RESEND_API_KEY` | Envoi des e-mails de confirmation |
 | `NEXT_PUBLIC_BASE_URL` | URL publique, utilisée dans les e-mails |
@@ -97,7 +98,7 @@ src/
 │   ├── live/             Liste des diffusions
 │   ├── dashboard/        Espace organisateur
 │   ├── admin/            Back-office plateforme
-│   └── api/payment/      Webhook Paiement Pro
+│   └── api/payment/      Webhook Paystack
 ├── components/           Composants d'interface (player, chat, classement, formulaires)
 ├── hooks/
 │   └── use-realtime-query.ts   Lecture + abonnement temps réel Supabase

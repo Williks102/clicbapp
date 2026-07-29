@@ -6,7 +6,13 @@ import { getSupabaseAdmin } from '@/lib/supabase/server';
 import { toOrder } from '@/lib/supabase/mappers';
 import type { CandidateRow, CompetitionRow, OrderRow, VotePackRow } from '@/lib/supabase/types';
 import { generateId } from '@/lib/utils';
+import { initializeTransaction } from '@/lib/paystack';
 import type { Order, PaymentInitResult } from '@/lib/types';
+
+/** URL publique du site, utilisée comme page de retour après paiement. */
+function baseUrl(): string {
+  return process.env.NEXT_PUBLIC_BASE_URL?.replace(/\/$/, '') || 'https://clicvote.com';
+}
 
 const votePackOrderSchema = z.object({
   competitionId: z.string().min(1),
@@ -14,7 +20,7 @@ const votePackOrderSchema = z.object({
   packId: z.string().min(1),
   fullName: z.string().min(2, 'Le nom complet est requis.'),
   email: z.string().email('Adresse e-mail invalide.'),
-  phone: z.string().min(8, 'Numéro de téléphone invalide.'),
+  phone: z.string().optional(),
 });
 
 export type VotePackOrderInput = z.infer<typeof votePackOrderSchema>;
@@ -115,19 +121,38 @@ export async function initializeVotePackOrder(
       amount,
       customer_name: values.fullName,
       customer_email: values.email,
-      customer_phone: values.phone,
+      customer_phone: values.phone ?? null,
       user_id: session?.user?.id ?? null,
       status: 'PENDING',
     });
 
     if (error) throw new Error(error.message);
 
+    // La transaction est créée de serveur à serveur : le montant ne transite
+    // jamais par le navigateur.
+    const payment = await initializeTransaction({
+      email: values.email,
+      amount,
+      reference,
+      callbackUrl: `${baseUrl()}/vote/success?reference=${reference}`,
+      metadata: {
+        competition: competition.title,
+        candidate: candidate.name,
+        pack: pack.name,
+        votes: pack.votes,
+      },
+    });
+
+    if (!payment.success) {
+      await supabase.from('orders').update({ status: 'FAILED' }).eq('id', reference);
+      return { success: false, error: payment.error };
+    }
+
     return {
       success: true,
       reference,
       amount,
-      merchantId: process.env.NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID,
-      description: `${pack.votes} votes pour ${candidate.name} — ${competition.title}`,
+      authorizationUrl: payment.authorizationUrl,
     };
   } catch (error) {
     console.error('[INIT VOTE ORDER] ❌', error);
@@ -142,7 +167,7 @@ const liveAccessOrderSchema = z.object({
   competitionId: z.string().min(1),
   fullName: z.string().min(2, 'Le nom complet est requis.'),
   email: z.string().email('Adresse e-mail invalide.'),
-  phone: z.string().min(8, 'Numéro de téléphone invalide.'),
+  phone: z.string().optional(),
 });
 
 export type LiveAccessOrderInput = z.infer<typeof liveAccessOrderSchema>;
@@ -210,19 +235,34 @@ export async function initializeLiveAccessOrder(
       amount,
       customer_name: values.fullName,
       customer_email: values.email,
-      customer_phone: values.phone,
+      customer_phone: values.phone ?? null,
       user_id: session.user.id,
       status: 'PENDING',
     });
 
     if (error) throw new Error(error.message);
 
+    const payment = await initializeTransaction({
+      email: values.email,
+      amount,
+      reference,
+      callbackUrl: `${baseUrl()}/vote/success?reference=${reference}`,
+      metadata: {
+        competition: competition.title,
+        type: 'Accès au direct',
+      },
+    });
+
+    if (!payment.success) {
+      await supabase.from('orders').update({ status: 'FAILED' }).eq('id', reference);
+      return { success: false, error: payment.error };
+    }
+
     return {
       success: true,
       reference,
       amount,
-      merchantId: process.env.NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID,
-      description: `Accès au direct — ${competition.live_title || competition.title}`,
+      authorizationUrl: payment.authorizationUrl,
     };
   } catch (error) {
     console.error('[INIT LIVE ORDER] ❌', error);

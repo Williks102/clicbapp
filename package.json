@@ -10,7 +10,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "create-admin": "node scripts/create-admin.mjs"
+    "create-admin": "node scripts/create-admin.mjs",
+    "test:paystack": "node --experimental-strip-types --conditions=react-server tests/paystack.test.mjs"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.20.0",
@@ -58,6 +59,7 @@
     "react-hook-form": "^7.54.2",
     "recharts": "^2.15.1",
     "resend": "^6.5.2",
+    "server-only": "^0.0.1",
     "tailwind-merge": "^3.0.1",
     "tailwindcss-animate": "^1.0.7",
     "uuid": "^10.0.0",

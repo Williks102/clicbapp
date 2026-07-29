@@ -110,3 +110,35 @@ export async function updateUserStatus(
     };
   }
 }
+
+/**
+ * État de configuration de la passerelle de paiement.
+ *
+ * La clé Paystack est secrète : cette action ne renvoie qu'un booléen et le
+ * mode (test ou production), déduit du préfixe de la clé. Elle ne divulgue
+ * jamais la clé elle-même, contrairement à l'identifiant marchand public de
+ * l'ancienne passerelle.
+ */
+export async function getPaymentGatewayStatus(): Promise<{
+  configured: boolean;
+  mode: 'test' | 'live' | 'inconnu';
+}> {
+  try {
+    await ensureAdmin();
+
+    const key = process.env.PAYSTACK_SECRET_KEY ?? '';
+    if (!key) return { configured: false, mode: 'inconnu' };
+
+    return {
+      configured: true,
+      mode: key.startsWith('sk_test_')
+        ? 'test'
+        : key.startsWith('sk_live_')
+          ? 'live'
+          : 'inconnu',
+    };
+  } catch (error) {
+    console.error('[PAYMENT GATEWAY STATUS] ❌', error);
+    return { configured: false, mode: 'inconnu' };
+  }
+}

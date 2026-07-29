@@ -48,8 +48,8 @@ finale en direct, avec classement temps réel et chat modéré.
   toutes les écritures côté serveur, la clé `anon` est en lecture seule et
   alimente le temps réel (classement, chat).
 - **NextAuth** (JWT) pour les sessions et les rôles, mots de passe en bcrypt.
-- **Paiement Pro** pour l'encaissement, avec webhook idempotent et validation
-  serveur du montant.
+- **Paystack** pour l'encaissement (Orange, MTN, Moov, carte), avec
+  initialisation de serveur à serveur, webhook signé et idempotent.
 - **Cloudinary** pour les visuels, **Resend** pour les e-mails transactionnels.
 
 ## Intégrité du scrutin

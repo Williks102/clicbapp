@@ -235,8 +235,8 @@ export type PaymentInitResult = {
   error?: string;
   reference?: string;
   amount?: number;
-  merchantId?: string;
-  description?: string;
+  /** URL de paiement hébergée par Paystack, vers laquelle rediriger le client. */
+  authorizationUrl?: string;
 };
 
 // ==================== STATISTIQUES ====================

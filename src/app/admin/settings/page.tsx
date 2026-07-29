@@ -14,14 +14,22 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { initializeCategories } from '@/app/actions/category-actions';
+import { getPaymentGatewayStatus } from '@/app/actions/admin-actions';
 import { toast } from '@/hooks/use-toast';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Terminal, AlertTriangle } from 'lucide-react';
 
 export default function AdminSettingsPage() {
   const [isInitializingCategories, setIsInitializingCategories] = useState(false);
-  const merchantId = process.env.NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID;
+  const [gateway, setGateway] = useState<{
+    configured: boolean;
+    mode: 'test' | 'live' | 'inconnu';
+  } | null>(null);
+
+  useEffect(() => {
+    getPaymentGatewayStatus().then(setGateway);
+  }, []);
 
   const handleInitializeCategories = async () => {
     setIsInitializingCategories(true);
@@ -76,26 +84,40 @@ export default function AdminSettingsPage() {
         <CardHeader>
           <CardTitle className="font-headline">Passerelle de Paiement</CardTitle>
           <CardDescription>
-            Vérification de la configuration pour la passerelle "Paiement Pro".
+            Vérification de la configuration Paystack (mobile money et carte).
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {merchantId ? (
+          {gateway?.configured ? (
             <Alert variant="default" className="border-green-500 bg-green-50 text-green-800">
               <Terminal className="h-4 w-4" />
-              <AlertTitle>Configuration Détectée</AlertTitle>
+              <AlertTitle>Paystack configuré</AlertTitle>
               <AlertDescription>
-                <p>L'ID Marchand suivant est configuré pour l'application :</p>
-                <code className="mt-2 block rounded bg-green-100 p-2 font-mono text-sm">{merchantId}</code>
+                <p>
+                  La clé secrète est en place, en mode{' '}
+                  <strong>{gateway.mode === 'live' ? 'production' : gateway.mode}</strong>.
+                </p>
+                {gateway.mode === 'test' && (
+                  <p className="mt-2">
+                    Les paiements sont simulés : aucun montant n'est réellement
+                    débité tant que la clé <code className="font-mono text-xs">sk_live_</code> n'est pas utilisée.
+                  </p>
+                )}
               </AlertDescription>
             </Alert>
           ) : (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Action requise : ID Marchand manquant</AlertTitle>
+              <AlertTitle>Action requise : clé Paystack manquante</AlertTitle>
               <AlertDescription>
-                <p>La variable d'environnement <code className="font-mono text-xs">NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID</code> n'est pas définie.</p>
-                <p className="mt-2">Le paiement ne fonctionnera pas sans cette configuration. Veuillez l'ajouter dans les paramètres de votre plateforme d'hébergement.</p>
+                <p>
+                  La variable <code className="font-mono text-xs">PAYSTACK_SECRET_KEY</code> n'est pas définie.
+                </p>
+                <p className="mt-2">
+                  Aucun paiement ne peut aboutir sans elle. Ajoutez-la dans les
+                  variables d'environnement de votre hébergeur — sans le préfixe
+                  <code className="font-mono text-xs"> NEXT_PUBLIC_</code>, qui l'exposerait au navigateur.
+                </p>
               </AlertDescription>
             </Alert>
           )}
