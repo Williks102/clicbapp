@@ -32,11 +32,36 @@ npm run genkit:dev # flows Genkit (assistant de rédaction)
    …ou en collant le contenu de `supabase/migrations/20260728120000_init.sql`
    puis de `supabase/seed.sql` dans l'éditeur SQL du tableau de bord.
 
-3. Créez un compte administrateur :
+3. Créez un compte administrateur, au choix.
+
+   **Depuis l'éditeur SQL** — `pgcrypto` produit un hachage bcrypt que
+   l'application sait relire, aucune installation locale n'est nécessaire :
+
+   ```sql
+   insert into users (name, email, password_hash, role)
+   values (
+     'Nom Admin',
+     'admin@exemple.ci',
+     crypt('motdepasse-solide', gen_salt('bf', 12)),
+     'admin'
+   );
+   ```
+
+   Pour promouvoir un compte déjà inscrit via `/signup` :
+
+   ```sql
+   update users set role = 'admin' where email = 'admin@exemple.ci';
+   ```
+
+   **Ou en local**, avec `NEXT_PUBLIC_SUPABASE_URL` et
+   `SUPABASE_SERVICE_ROLE_KEY` dans un `.env` :
 
    ```bash
-   node scripts/create-admin.mjs admin@exemple.ci "motdepasse-solide" "Nom Admin"
+   npm run create-admin admin@exemple.ci "motdepasse-solide" "Nom Admin"
    ```
+
+   Le rôle est inscrit dans la session à la connexion : après une promotion,
+   déconnectez-vous puis reconnectez-vous.
 
 Le schéma active la réplication temps réel sur `competitions`, `candidates` et
 `chat_messages` : rien d'autre à configurer pour le classement et le chat.
