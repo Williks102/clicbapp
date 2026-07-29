@@ -1,119 +1,113 @@
-
 'use server';
 
 import { auth } from '@/auth';
-import { firestore } from '@/lib/firebase-admin';
-import type { Sale, Event, TicketTier } from '@/lib/types';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { toCompetition, toLiveAccess, toOrder, toVote } from '@/lib/supabase/mappers';
+import type {
+  CompetitionRow,
+  LiveAccessRow,
+  OrderRow,
+  VoteRow,
+} from '@/lib/supabase/types';
+import type { Competition, LiveAccess, Order, Vote } from '@/lib/types';
 
-// Type pour un billet enrichi avec les infos de l'événement
-export type EnrichedTicket = {
-  sale: Sale;
-  event: Event | null;
-  ticketTier: TicketTier | null;
-  ticketNumber: string; // Numéro unique du billet individuel
+export type EnrichedVote = {
+  vote: Vote;
+  competition: Competition | null;
 };
 
+export type EnrichedLiveAccess = {
+  access: LiveAccess;
+  competition: Competition | null;
+};
+
+export type AccountActivity = {
+  votes: EnrichedVote[];
+  liveAccesses: EnrichedLiveAccess[];
+  orders: Order[];
+  totalVotesCast: number;
+  totalSpent: number;
+};
+
+/** Ligne accompagnée du concours joint par la requête. */
+type WithCompetition<T> = T & { competition: CompetitionRow | null };
+
 /**
- * Récupère tous les billets achetés par l'utilisateur connecté
+ * Activité complète de l'utilisateur connecté : votes, accès live et commandes.
+ *
+ * Les concours sont ramenés par jointure, ce qui évite la série de requêtes
+ * supplémentaires qu'imposait le modèle documentaire.
  */
-export async function getUserTickets(): Promise<{
+export async function getAccountActivity(): Promise<{
   success: boolean;
-  tickets?: EnrichedTicket[];
+  activity?: AccountActivity;
   error?: string;
 }> {
   try {
-    console.log('[GET USER TICKETS] 🎫 Starting...');
-
-    // 1. Vérifier la session
     const session = await auth();
-    if (!session?.user?.email) {
+    if (!session?.user?.id || !session.user.email) {
       return {
         success: false,
-        error: 'Vous devez être connecté pour voir vos billets.',
+        error: 'Vous devez être connecté pour consulter votre activité.',
       };
     }
 
-    console.log('[GET USER TICKETS] ✅ User authenticated:', session.user.email);
+    const supabase = getSupabaseAdmin();
 
-    // 2. Récupérer les ventes de l'utilisateur par email
-    const salesSnapshot = await firestore
-      .collection('sales')
-      .where('customerEmail', '==', session.user.email)
-      .orderBy('purchaseDate', 'desc')
-      .get();
+    const [votesResult, accessResult, ordersResult] = await Promise.all([
+      supabase
+        .from('votes')
+        .select('*, competition:competitions(*, vote_packs(*))')
+        .eq('user_id', session.user.id)
+        .order('created_at', { ascending: false }),
+      supabase
+        .from('live_access')
+        .select('*, competition:competitions(*, vote_packs(*))')
+        .eq('user_id', session.user.id)
+        .order('purchase_date', { ascending: false }),
+      supabase
+        .from('orders')
+        .select('*')
+        .eq('customer_email', session.user.email)
+        .order('created_at', { ascending: false }),
+    ]);
 
-    console.log('[GET USER TICKETS] 📊 Found', salesSnapshot.size, 'sales');
+    const firstError = votesResult.error || accessResult.error || ordersResult.error;
+    if (firstError) throw new Error(firstError.message);
 
-    if (salesSnapshot.empty) {
-      return {
-        success: true,
-        tickets: [],
-      };
-    }
+    const voteRows = (votesResult.data ?? []) as unknown as WithCompetition<VoteRow>[];
+    const accessRows = (accessResult.data ?? []) as unknown as WithCompetition<LiveAccessRow>[];
+    const orderRows = (ordersResult.data ?? []) as OrderRow[];
 
-    // 3. Récupérer les IDs d'événements uniques
-    const sales = salesSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data(),
-    })) as Sale[];
+    const votes = voteRows.map((row) => ({
+      vote: toVote(row),
+      competition: row.competition ? toCompetition(row.competition) : null,
+    }));
 
-    const eventIds = [...new Set(sales.map(sale => sale.eventId))];
+    const liveAccesses = accessRows.map((row) => ({
+      access: toLiveAccess(row),
+      competition: row.competition ? toCompetition(row.competition) : null,
+    }));
 
-    // 4. Récupérer tous les événements en une seule requête
-    const eventsMap = new Map<string, Event>();
-    
-    // Firestore limite les requêtes "in" à 30 éléments
-    const chunks = [];
-    for (let i = 0; i < eventIds.length; i += 30) {
-      chunks.push(eventIds.slice(i, i + 30));
-    }
-
-    for (const chunk of chunks) {
-      const eventsSnapshot = await firestore
-        .collection('events')
-        .where('__name__', 'in', chunk)
-        .get();
-
-      eventsSnapshot.docs.forEach(doc => {
-        eventsMap.set(doc.id, { id: doc.id, ...doc.data() } as Event);
-      });
-    }
-
-    console.log('[GET USER TICKETS] 🎪 Loaded', eventsMap.size, 'events');
-
-    // 5. Enrichir les billets avec les données des événements
-    const enrichedTickets: EnrichedTicket[] = [];
-    sales.forEach(sale => {
-      const event = eventsMap.get(sale.eventId) || null;
-      const ticketTier = event?.tickets.find(t => t.id === sale.ticketId) || null;
-
-      // Boucler sur la quantité pour créer un billet individuel pour chaque
-      for (let i = 1; i <= sale.quantity; i++) {
-        // Générer un numéro de billet unique pour chaque instance
-        // Ex: ORD-XXXX-1, ORD-XXXX-2
-        const uniqueTicketNumber = `${sale.id}-I${i}`;
-
-        enrichedTickets.push({
-          sale,
-          event,
-          ticketTier,
-          ticketNumber: uniqueTicketNumber,
-        });
-      }
-    });
-
-    console.log('[GET USER TICKETS] ✅ Success - returning', enrichedTickets.length, 'individual tickets');
+    const orders = orderRows.map(toOrder);
 
     return {
       success: true,
-      tickets: enrichedTickets,
+      activity: {
+        votes,
+        liveAccesses,
+        orders,
+        totalVotesCast: votes.reduce((sum, entry) => sum + entry.vote.quantity, 0),
+        totalSpent: orders
+          .filter((order) => order.status === 'PAID')
+          .reduce((sum, order) => sum + order.amount, 0),
+      },
     };
-
   } catch (error) {
-    console.error('[GET USER TICKETS] ❌ Error:', error);
+    console.error('[GET ACCOUNT ACTIVITY] ❌', error);
     return {
       success: false,
-      error: 'Une erreur est survenue lors de la récupération de vos billets.',
+      error: 'Une erreur est survenue lors de la récupération de votre activité.',
     };
   }
 }

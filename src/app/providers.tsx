@@ -1,13 +1,12 @@
-
 'use client';
 
 import { SessionProvider } from 'next-auth/react';
-import { FirebaseClientProvider } from '@/firebase/client-provider';
 
+/**
+ * L'accès aux données temps réel passe par le hook `useRealtimeQuery`, qui
+ * instancie lui-même le client Supabase : aucun fournisseur de contexte
+ * supplémentaire n'est nécessaire.
+ */
 export function Providers({ children }: { children: React.ReactNode }) {
-  return (
-    <SessionProvider>
-      <FirebaseClientProvider>{children}</FirebaseClientProvider>
-    </SessionProvider>
-  );
+  return <SessionProvider>{children}</SessionProvider>;
 }

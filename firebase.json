@@ -1,6 +1,4 @@
 {
-  "firestore": {
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
-  }
+  "_comment": "Les données vivent désormais dans Supabase (voir supabase/migrations). Firebase ne sert plus qu'à l'hébergement via App Hosting, configuré dans apphosting.yaml.",
+  "hosting": []
 }

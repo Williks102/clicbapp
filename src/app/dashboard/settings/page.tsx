@@ -381,7 +381,7 @@ export default function SettingsPage() {
               }
             />
             <Label htmlFor="email-notifications" className="cursor-pointer">
-              Recevoir les notifications par e-mail pour les ventes de billets.
+              Recevoir les notifications par e-mail pour les ventes de votes et d'accès aux directs.
             </Label>
           </div>
           <div className="flex items-center space-x-2">

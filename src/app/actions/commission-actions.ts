@@ -1,9 +1,9 @@
 'use server';
 
 import { auth } from '@/auth';
-import { firestore } from '@/lib/firebase-admin';
 import { revalidatePath } from 'next/cache';
-import type { Sale, User } from '@/lib/types';
+import { getSupabaseAdmin } from '@/lib/supabase/server';
+import type { OrderRow, PlatformSettingsRow } from '@/lib/supabase/types';
 
 // ==================== TYPES ====================
 
@@ -27,8 +27,8 @@ export type OrganizerPayout = {
   platformCommission: number;
   transactionFees: number;
   netPayout: number;
-  salesCount: number;
-  lastSaleDate?: string;
+  ordersCount: number;
+  lastOrderDate?: string;
 };
 
 export type CommissionSettings = {
@@ -36,11 +36,13 @@ export type CommissionSettings = {
   transactionFeePercentage: number;
 };
 
+const DEFAULT_SETTINGS: CommissionSettings = {
+  platformFeePercentage: 5,
+  transactionFeePercentage: 2.5,
+};
+
 // ==================== HELPERS ====================
 
-/**
- * Helper function to verify admin role
- */
 async function ensureAdmin() {
   const session = await auth();
   if (!session?.user || session.user.role !== 'admin') {
@@ -49,316 +51,264 @@ async function ensureAdmin() {
   return session.user;
 }
 
+function num(value: number | string | null | undefined): number {
+  if (value === null || value === undefined) return 0;
+  return typeof value === 'number' ? value : Number.parseFloat(value) || 0;
+}
+
 // ==================== ACTIONS ====================
 
-/**
- * Récupère les paramètres de commission
- */
 export async function getCommissionSettings(): Promise<CommissionSettings> {
   try {
     await ensureAdmin();
-    console.log('[COMMISSION SETTINGS] 📊 Fetching settings...');
-    
-    // Récupérer les paramètres depuis Firestore
-    const settingsDoc = await firestore
-      .collection('percentageConfigurations')
-      .doc('default')
-      .get();
 
-    if (settingsDoc.exists) {
-      const data = settingsDoc.data();
-      return {
-        platformFeePercentage: data?.platformFeePercentage || 5,
-        transactionFeePercentage: data?.transactionFeePercentage || 2.5,
-      };
-    }
+    const { data, error } = await getSupabaseAdmin()
+      .from('platform_settings')
+      .select('*')
+      .eq('id', 'default')
+      .maybeSingle();
 
-    // Valeurs par défaut
+    if (error || !data) return DEFAULT_SETTINGS;
+
+    const settings = data as PlatformSettingsRow;
     return {
-      platformFeePercentage: 5,
-      transactionFeePercentage: 2.5,
+      platformFeePercentage: num(settings.platform_fee_percentage),
+      transactionFeePercentage: num(settings.transaction_fee_percentage),
     };
-
   } catch (error) {
-    console.error('[COMMISSION SETTINGS] ❌ Error:', error);
-    // Retourner les valeurs par défaut en cas d'erreur (y compris d'auth)
-    return {
-      platformFeePercentage: 5,
-      transactionFeePercentage: 2.5,
-    };
+    console.error('[COMMISSION SETTINGS] ❌', error);
+    return DEFAULT_SETTINGS;
   }
 }
 
-/**
- * Met à jour les paramètres de commission
- */
 export async function updateCommissionSettings(
   platformFee: number,
   transactionFee: number
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const user = await ensureAdmin();
-    console.log('[UPDATE COMMISSION] 📝 Updating settings...');
 
-    // Validation
     if (platformFee < 0 || platformFee > 100) {
-      return { success: false, error: 'Le pourcentage de commission doit être entre 0 et 100' };
+      return {
+        success: false,
+        error: 'Le pourcentage de commission doit être entre 0 et 100',
+      };
     }
     if (transactionFee < 0 || transactionFee > 100) {
-      return { success: false, error: 'Les frais de transaction doivent être entre 0 et 100' };
+      return {
+        success: false,
+        error: 'Les frais de transaction doivent être entre 0 et 100',
+      };
     }
 
-    // Mettre à jour dans Firestore
-    await firestore
-      .collection('percentageConfigurations')
-      .doc('default')
-      .set({
-        platformFeePercentage: platformFee,
-        transactionFeePercentage: transactionFee,
-        updatedAt: new Date().toISOString(),
-        updatedBy: user.id,
-      }, { merge: true });
+    const { error } = await getSupabaseAdmin().from('platform_settings').upsert({
+      id: 'default',
+      platform_fee_percentage: platformFee,
+      transaction_fee_percentage: transactionFee,
+      updated_at: new Date().toISOString(),
+      updated_by: user.id,
+    });
 
-    console.log('[UPDATE COMMISSION] ✅ Settings updated');
+    if (error) throw new Error(error.message);
+
     revalidatePath('/admin/commissions');
     return { success: true };
-
   } catch (error) {
-    console.error('[UPDATE COMMISSION] ❌ Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Erreur lors de la mise à jour';
-    return { success: false, error: errorMessage };
+    console.error('[UPDATE COMMISSION] ❌', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Erreur lors de la mise à jour',
+    };
   }
 }
 
 /**
- * Récupère les paiements à effectuer par organisateur
+ * Reversements dus par organisateur.
+ * Le calcul est fait par la base : le volume de commandes n'a plus d'incidence
+ * sur le coût de la page.
  */
 export async function getOrganizerPayouts(): Promise<OrganizerPayout[]> {
   try {
     await ensureAdmin();
-    console.log('[ORGANIZER PAYOUTS] 📊 Fetching payouts...');
-    
-    // Récupérer les paramètres de commission
-    const settings = await getCommissionSettings();
-    const totalFeePercentage = settings.platformFeePercentage + settings.transactionFeePercentage;
 
-    // Récupérer toutes les ventes
-    const salesSnapshot = await firestore
-      .collection('sales')
-      .orderBy('purchaseDate', 'desc')
-      .get();
+    const { data, error } = await getSupabaseAdmin().rpc('organizer_payouts');
+    if (error) throw new Error(error.message);
 
-    const sales = salesSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Sale[];
-
-    // Récupérer tous les organisateurs
-    const usersSnapshot = await firestore
-      .collection('users')
-      .where('role', '==', 'organizer')
-      .get();
-
-    const organizers = usersSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as User[];
-
-    // Calculer les paiements par organisateur
-    const payouts: OrganizerPayout[] = organizers.map(organizer => {
-      const organizerSales = sales.filter(s => s.organizerId === organizer.id);
-      const totalRevenue = organizerSales.reduce((sum, sale) => sum + sale.totalPrice, 0);
-      
-      const platformCommission = totalRevenue * (settings.platformFeePercentage / 100);
-      const transactionFees = totalRevenue * (settings.transactionFeePercentage / 100);
-      const netPayout = totalRevenue - platformCommission - transactionFees;
-
-      // Dernière vente
-      const lastSale = organizerSales.length > 0 ? organizerSales[0] : null;
-
-      return {
-        organizerId: organizer.id,
-        organizerName: organizer.name,
-        organizerEmail: organizer.email,
-        totalRevenue,
-        platformCommission,
-        transactionFees,
-        netPayout,
-        salesCount: organizerSales.length,
-        lastSaleDate: lastSale?.purchaseDate,
-      };
-    });
-
-    // Trier par revenus décroissants
-    payouts.sort((a, b) => b.totalRevenue - a.totalRevenue);
-
-    console.log(`[ORGANIZER PAYOUTS] ✅ Fetched ${payouts.length} payouts`);
-    return payouts;
-
+    return (
+      data as Array<{
+        organizer_id: string;
+        organizer_name: string;
+        organizer_email: string;
+        total_revenue: number | string;
+        platform_commission: number | string;
+        transaction_fees: number | string;
+        net_payout: number | string;
+        orders_count: number | string;
+        last_order_date: string | null;
+      }>
+    ).map((row) => ({
+      organizerId: row.organizer_id,
+      organizerName: row.organizer_name,
+      organizerEmail: row.organizer_email,
+      totalRevenue: num(row.total_revenue),
+      platformCommission: num(row.platform_commission),
+      transactionFees: num(row.transaction_fees),
+      netPayout: num(row.net_payout),
+      ordersCount: num(row.orders_count),
+      lastOrderDate: row.last_order_date ?? undefined,
+    }));
   } catch (error) {
-    console.error('[ORGANIZER PAYOUTS] ❌ Error:', error);
+    console.error('[ORGANIZER PAYOUTS] ❌', error);
     return [];
   }
 }
 
-/**
- * Récupère les dernières transactions
- */
+/** Dernières commissions, dérivées des commandes payées. */
 export async function getRecentTransactions(limit: number = 10): Promise<Transaction[]> {
   try {
     await ensureAdmin();
-    console.log('[RECENT TRANSACTIONS] 📋 Fetching transactions...');
-    
-    // Pour l'instant, on génère des transactions basées sur les ventes récentes
-    // Plus tard, on créera une vraie collection 'transactions'
-    const salesSnapshot = await firestore
-      .collection('sales')
-      .orderBy('purchaseDate', 'desc')
-      .limit(limit)
-      .get();
 
-    const sales = salesSnapshot.docs.map(doc => ({
-      id: doc.id,
-      ...doc.data()
-    })) as Sale[];
-
-    // Récupérer les paramètres de commission
     const settings = await getCommissionSettings();
 
-    // Convertir les ventes en transactions
-    const transactions: Transaction[] = sales.map(sale => {
-      const commission = sale.totalPrice * (settings.platformFeePercentage / 100);
-      
-      return {
-        id: sale.id,
-        organizerId: sale.organizerId,
-        amount: commission,
-        type: 'commission' as const,
-        status: 'paid' as const,
-        date: sale.purchaseDate,
-        description: `Commission sur vente - ${sale.customerName}`,
-      };
-    });
+    const { data, error } = await getSupabaseAdmin()
+      .from('orders')
+      .select('id, organizer_id, amount, created_at, type, votes, candidate_name, competition_title')
+      .eq('status', 'PAID')
+      .order('created_at', { ascending: false })
+      .limit(limit);
 
-    console.log(`[RECENT TRANSACTIONS] ✅ Fetched ${transactions.length} transactions`);
-    return transactions;
+    if (error) throw new Error(error.message);
 
+    return (data as OrderRow[]).map((order) => ({
+      id: order.id,
+      organizerId: order.organizer_id,
+      amount: num(order.amount) * (settings.platformFeePercentage / 100),
+      type: 'commission' as const,
+      status: 'paid' as const,
+      date: order.created_at,
+      description:
+        order.type === 'VOTE_PACK'
+          ? `Commission sur ${order.votes ?? 0} votes - ${order.candidate_name ?? ''}`
+          : `Commission sur accès live - ${order.competition_title}`,
+    }));
   } catch (error) {
-    console.error('[RECENT TRANSACTIONS] ❌ Error:', error);
+    console.error('[RECENT TRANSACTIONS] ❌', error);
     return [];
   }
 }
 
-/**
- * Effectue un paiement à un organisateur
- */
+/** Enregistre un versement effectué à un organisateur. */
 export async function fundOrganizer(
   organizerId: string,
   amount: number
 ): Promise<{ success: boolean; error?: string; transactionId?: string }> {
   try {
     const user = await ensureAdmin();
-    console.log('[FUND ORGANIZER] 💰 Processing payment...');
-    
-    // Validation
+
     if (amount <= 0) {
       return { success: false, error: 'Le montant doit être supérieur à 0' };
     }
 
-    // Vérifier que l'organisateur existe
-    const organizerDoc = await firestore
-      .collection('users')
-      .doc(organizerId)
-      .get();
+    const supabase = getSupabaseAdmin();
 
-    if (!organizerDoc.exists || organizerDoc.data()?.role !== 'organizer') {
+    const { data: organizer } = await supabase
+      .from('users')
+      .select('id, role')
+      .eq('id', organizerId)
+      .maybeSingle();
+
+    if (!organizer || (organizer as { role: string }).role !== 'organizer') {
       return { success: false, error: 'Organisateur introuvable' };
     }
 
-    // Créer la transaction (collection à créer dans Firestore)
-    const transactionRef = await firestore.collection('transactions').add({
-      organizerId,
-      amount,
-      type: 'payout',
-      status: 'paid',
-      date: new Date().toISOString(),
-      description: `Versement effectué par ${user.name || user.email}`,
-      createdBy: user.id,
-      createdAt: new Date().toISOString(),
-    });
+    const { data, error } = await supabase
+      .from('transactions')
+      .insert({
+        organizer_id: organizerId,
+        amount,
+        type: 'payout',
+        status: 'paid',
+        description: `Versement effectué par ${user.name || user.email}`,
+        created_by: user.id,
+      })
+      .select('id')
+      .single();
 
-    console.log('[FUND ORGANIZER] ✅ Payment recorded:', transactionRef.id);
+    if (error) throw new Error(error.message);
+
     revalidatePath('/admin/commissions');
-    
-    return { 
-      success: true, 
-      transactionId: transactionRef.id 
-    };
-
+    return { success: true, transactionId: (data as { id: string }).id };
   } catch (error) {
-    console.error('[FUND ORGANIZER] ❌ Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Erreur lors du traitement du paiement';
-    return { success: false, error: errorMessage };
+    console.error('[FUND ORGANIZER] ❌', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Erreur lors du traitement',
+    };
   }
 }
 
-/**
- * Effectue un remboursement
- */
+/** Rembourse tout ou partie d'une commande. */
 export async function refundTransaction(
-  saleId: string,
+  orderId: string,
   amount: number,
   reason: string
 ): Promise<{ success: boolean; error?: string }> {
   try {
     const user = await ensureAdmin();
-    console.log('[REFUND TRANSACTION] 💸 Processing refund...');
-    
-    // Récupérer la vente
-    const saleDoc = await firestore.collection('sales').doc(saleId).get();
-    if (!saleDoc.exists) {
-      return { success: false, error: 'Vente introuvable' };
-    }
+    const supabase = getSupabaseAdmin();
 
-    const sale = saleDoc.data() as Sale;
+    const { data, error: readError } = await supabase
+      .from('orders')
+      .select('id, organizer_id, amount')
+      .eq('id', orderId)
+      .maybeSingle();
 
-    // Validation
-    if (amount <= 0 || amount > sale.totalPrice) {
+    if (readError) throw new Error(readError.message);
+    if (!data) return { success: false, error: 'Commande introuvable' };
+
+    const order = data as Pick<OrderRow, 'id' | 'organizer_id' | 'amount'>;
+    const orderAmount = num(order.amount);
+
+    if (amount <= 0 || amount > orderAmount) {
       return { success: false, error: 'Montant de remboursement invalide' };
     }
 
-    // Créer la transaction de remboursement
-    await firestore.collection('transactions').add({
-      organizerId: sale.organizerId,
-      saleId: saleId,
-      amount: -amount, // Négatif pour un remboursement
+    const { error } = await supabase.from('transactions').insert({
+      organizer_id: order.organizer_id,
+      order_id: orderId,
+      amount: -amount, // négatif : c'est un remboursement
       type: 'refund',
       status: 'paid',
-      date: new Date().toISOString(),
       description: `Remboursement: ${reason}`,
-      createdBy: user.id,
-      createdAt: new Date().toISOString(),
+      created_by: user.id,
     });
 
-    // Mettre à jour le statut de la vente si remboursement total
-    if (amount === sale.totalPrice) {
-      await firestore.collection('sales').doc(saleId).update({
-        status: 'refunded',
-        refundedAt: new Date().toISOString(),
-        refundedBy: user.id,
-        refundReason: reason,
-      });
+    if (error) throw new Error(error.message);
+
+    // Un remboursement total repasse la commande en REFUNDED ; le trigger
+    // décrémente alors le chiffre d'affaires du concours.
+    if (amount === orderAmount) {
+      const { error: updateError } = await supabase
+        .from('orders')
+        .update({
+          status: 'REFUNDED',
+          refunded_at: new Date().toISOString(),
+          refunded_by: user.id,
+          refund_reason: reason,
+        })
+        .eq('id', orderId);
+
+      if (updateError) throw new Error(updateError.message);
     }
 
-    console.log('[REFUND TRANSACTION] ✅ Refund processed');
     revalidatePath('/admin/commissions');
-    revalidatePath('/admin/sales');
-    
+    revalidatePath('/admin/orders');
     return { success: true };
-
   } catch (error) {
-    console.error('[REFUND TRANSACTION] ❌ Error:', error);
-    const errorMessage = error instanceof Error ? error.message : 'Erreur lors du remboursement';
-    return { success: false, error: errorMessage };
+    console.error('[REFUND TRANSACTION] ❌', error);
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : 'Erreur lors du remboursement',
+    };
   }
 }

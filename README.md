@@ -1,5 +1,124 @@
-# Firebase Studio
+# ClicVote
 
-This is a NextJS starter in Firebase Studio.
+Plateforme de **vote en ligne** et de **diffusion d'événements en direct** :
+le public soutient ses candidats favoris (vote gratuit ou packs payants) et suit
+la finale en direct, avec classement temps réel et chat modéré.
 
-To get started, take a look at src/app/page.tsx.
+## Démarrer
+
+```bash
+npm install
+npm run dev        # http://localhost:9003
+```
+
+Autres scripts utiles :
+
+```bash
+npm run build      # build de production
+npm run typecheck  # vérification TypeScript
+npm run genkit:dev # flows Genkit (assistant de rédaction)
+```
+
+## Mise en place de la base (Supabase)
+
+1. Créez un projet sur [supabase.com](https://supabase.com).
+2. Appliquez le schéma — via la CLI :
+
+   ```bash
+   supabase link --project-ref <votre-ref>
+   supabase db push          # applique supabase/migrations/
+   ```
+
+   …ou en collant le contenu de `supabase/migrations/20260728120000_init.sql`
+   puis de `supabase/seed.sql` dans l'éditeur SQL du tableau de bord.
+
+3. Créez un compte administrateur :
+
+   ```bash
+   node scripts/create-admin.mjs admin@exemple.ci "motdepasse-solide" "Nom Admin"
+   ```
+
+Le schéma active la réplication temps réel sur `competitions`, `candidates` et
+`chat_messages` : rien d'autre à configurer pour le classement et le chat.
+
+Pour contrôler l'installation, exécutez `supabase/check-install.sql` dans
+l'éditeur SQL : chaque ligne doit afficher `OK`.
+
+## Variables d'environnement
+
+| Variable | Rôle |
+| --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | URL du projet Supabase |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clé publique, utilisée par le navigateur (lecture seule) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Clé serveur, contourne RLS — **ne jamais exposer au client** |
+| `AUTH_SECRET` | Secret de signature des sessions NextAuth |
+| `NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID` | Identifiant marchand Paiement Pro |
+| `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` | Preset d'upload Cloudinary |
+| `RESEND_API_KEY` | Envoi des e-mails de confirmation |
+| `NEXT_PUBLIC_BASE_URL` | URL publique, utilisée dans les e-mails |
+
+## Structure
+
+```
+src/
+├── app/
+│   ├── actions/          Server Actions (concours, candidats, votes, commandes, direct, chat)
+│   ├── competitions/     Pages publiques : concours, candidats, tunnel de vote, direct
+│   ├── live/             Liste des diffusions
+│   ├── dashboard/        Espace organisateur
+│   ├── admin/            Back-office plateforme
+│   └── api/payment/      Webhook Paiement Pro
+├── components/           Composants d'interface (player, chat, classement, formulaires)
+├── hooks/
+│   └── use-realtime-query.ts   Lecture + abonnement temps réel Supabase
+└── lib/
+    ├── supabase/         Clients, types de lignes SQL et convertisseurs
+    └── types.ts          Types applicatifs (camelCase) utilisés par l'interface
+
+supabase/
+├── migrations/           Schéma, triggers, fonctions et politiques RLS
+└── seed.sql              Catégories de référence
+```
+
+## Modèle de sécurité
+
+L'authentification repose sur NextAuth (mots de passe hachés en bcrypt dans la
+table `users`), pas sur Supabase Auth. Le navigateur n'utilise que la clé
+`anon`, dont les politiques RLS n'autorisent que la **lecture** des données
+publiques : concours publiés, candidats, chat, catégories, profils
+d'organisateurs. Toutes les écritures passent par des Server Actions qui
+vérifient session et rôle avec la clé `service_role`.
+
+## Intégrité du scrutin
+
+Garanties portées par la base, et non par le code applicatif :
+
+- **Dossards uniques** — contrainte `unique (competition_id, number)`.
+- **Compteurs de votes** — maintenus par triggers depuis la table `votes` ;
+  aucune dérive possible entre les votes et les totaux affichés.
+- **Vote gratuit** — la fonction `cast_free_vote` contrôle le délai d'attente
+  et enregistre le vote dans une seule transaction : deux requêtes simultanées
+  ne peuvent pas produire deux votes.
+- **Paiements** — `confirm_order_payment` est idempotente et revalide le
+  montant ; un webhook rejoué ne crédite jamais deux fois, et un montant
+  incohérent bascule la commande en `FLAGGED` sans créditer de votes.
+- **Accès aux directs** — `unique (user_id, competition_id)`.
+
+Voir `docs/blueprint.md` pour la spécification produit et `docs/backend.json`
+pour le modèle de données.
+
+## Déploiement
+
+L'application est un projet Next.js standard : elle se déploie sur Vercel comme
+sur Firebase App Hosting (`apphosting.yaml`).
+
+Déclarez toutes les variables du tableau ci-dessus chez l'hébergeur, puis
+**relancez un déploiement** : les variables `NEXT_PUBLIC_*` sont intégrées au
+build et ne sont pas prises en compte tant que le projet n'est pas reconstruit.
+
+`AUTH_SECRET` est indispensable — sans elle, aucune session ne peut être
+signée et la connexion échoue. Générez-la avec :
+
+```bash
+openssl rand -base64 32
+```

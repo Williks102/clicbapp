@@ -1,280 +1,324 @@
-
 import { PageHeader } from '@/components/page-header';
 import Footer from '@/components/footer';
 import MainNav from '@/components/main-nav';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
-import { FileText, Calendar } from 'lucide-react';
+import { Calendar, FileText } from 'lucide-react';
 import Link from 'next/link';
 
 export const metadata = {
-  title: 'Conditions Générales de Vente | ClicBillet',
-  description: 'Consultez les conditions générales de vente de ClicBillet CI.',
+  title: "Conditions Générales d'Utilisation et de Vente | ClicVote",
+  description:
+    "Consultez les conditions générales d'utilisation et de vente de ClicVote CI.",
 };
 
-// Section Title Component
 const SectionTitle = ({ children }: { children: React.ReactNode }) => (
-  <h2 className="font-headline text-2xl font-bold mt-8 mb-4">{children}</h2>
+  <h2 className="font-headline mb-4 mt-8 text-2xl font-bold">{children}</h2>
 );
 
-// Subsection Title Component
 const SubsectionTitle = ({ children }: { children: React.ReactNode }) => (
-  <h3 className="font-headline text-lg font-semibold mt-6 mb-3">{children}</h3>
+  <h3 className="font-headline mb-3 mt-6 text-lg font-semibold">{children}</h3>
 );
 
-// Highlight Box Component
 const HighlightBox = ({ children }: { children: React.ReactNode }) => (
-    <div className="my-4 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">{children}</div>
+  <div className="my-4 rounded-lg border border-primary/20 bg-primary/5 p-4 text-sm">
+    {children}
+  </div>
 );
 
 export default function CGUPage() {
   return (
     <div className="flex min-h-screen flex-col">
       <MainNav />
+
       <main className="flex-1 bg-secondary/30 py-12 md:py-16">
         <div className="container max-w-4xl">
           <Card>
             <CardContent className="p-6 md:p-10">
-              <div className="text-center mb-8">
+              <div className="mb-8 text-center">
                 <FileText className="mx-auto h-12 w-12 text-primary" />
                 <PageHeader
-                  title="Conditions Générales de Vente"
-                  description="ClicBillet CI - Plateforme de billetterie ivoirienne"
+                  title="Conditions Générales d'Utilisation et de Vente"
+                  description="ClicVote CI — Plateforme de vote en ligne et de diffusion d'événements en direct"
                   className="mt-4"
                 />
-                <div className="mt-4 text-sm text-muted-foreground flex items-center justify-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    <strong>Dernière mise à jour :</strong> 04/12/2025
+                <div className="mt-4 flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                  <Calendar className="h-4 w-4" />
+                  <strong>Dernière mise à jour :</strong> 28/07/2026
                 </div>
               </div>
 
               <Separator />
 
-              <div className="prose prose-lg max-w-none text-foreground/90 mt-8">
+              <div className="prose prose-lg mt-8 max-w-none text-foreground/90">
                 <SectionTitle>1. Présentation</SectionTitle>
                 <p>
-                  Les présentes CGV ont pour objet de définir les droits et obligations des parties dans le cadre de la vente de tickets d'événements et de services connexes par l'intermédiaire de la plateforme de billetterie <strong>CLICBILLET</strong>.
+                  Les présentes conditions générales d&apos;utilisation et de vente,
+                  ci-après dénommées <strong>« CGUV »</strong>, définissent les droits
+                  et obligations des parties dans le cadre de l&apos;utilisation de la
+                  plateforme <strong>CLICVOTE</strong>, de l&apos;achat de packs de
+                  votes et de l&apos;accès aux diffusions en direct.
                 </p>
                 <p>
-                  Les présentes conditions générales de vente ci-après dénommées <strong>«CGV»</strong> sont conclues d'une part par la société <strong>KOULIBALY ABISCHEK FINANCE MULTIBANKING FINANCE</strong> au capital de <strong>1 000 000 FCFA</strong> dont le siège social est situé à <strong>7 AVENUE NORGUES IMMEUBLE BSIC</strong>, immatriculée au registre du commerce et des sociétés d'Abidjan sous le numéro <strong>CI-ABJ-2017-B-21203</strong>, éditrice de la plateforme <strong>clicbillet.com</strong>, ci-après dénommé <strong>« CLICBILLET »</strong> et d'autre part, par toute personne physique ou morale ci-après dénommée <strong>« le Client »</strong>, souhaitant effectuer un achat via le site internet <strong>https://clicbillet.com</strong> et applications mobiles associées ci-après dénommées <strong>« la plateforme »</strong>.
+                  Elles sont conclues d&apos;une part par la société{' '}
+                  <strong>KOULIBALY ABISCHEK FINANCE MULTIBANKING FINANCE</strong> au
+                  capital de <strong>1 000 000 FCFA</strong>, dont le siège social est
+                  situé au <strong>7 AVENUE NORGUES, IMMEUBLE BSIC</strong>,
+                  immatriculée au registre du commerce et des sociétés d&apos;Abidjan
+                  sous le numéro <strong>CI-ABJ-2017-B-21203</strong>, éditrice de la
+                  plateforme, ci-après dénommée <strong>« CLICVOTE »</strong>, et
+                  d&apos;autre part par toute personne physique ou morale, ci-après
+                  dénommée <strong>« l&apos;Utilisateur »</strong>, accédant à la
+                  plateforme ou y effectuant un achat.
                 </p>
 
+                <SubsectionTitle>1.1 Définitions</SubsectionTitle>
+                <ul>
+                  <li>
+                    <strong>Concours :</strong> compétition publiée sur la plateforme
+                    par un Organisateur, ouverte au vote du public pendant une période
+                    déterminée.
+                  </li>
+                  <li>
+                    <strong>Organisateur :</strong> personne physique ou morale qui
+                    crée et administre un Concours, ses candidats et sa diffusion.
+                  </li>
+                  <li>
+                    <strong>Candidat :</strong> participant présenté au vote du public
+                    dans le cadre d&apos;un Concours.
+                  </li>
+                  <li>
+                    <strong>Vote gratuit :</strong> vote unique offert à tout
+                    Utilisateur disposant d&apos;un compte, renouvelé après le délai
+                    d&apos;attente défini par l&apos;Organisateur.
+                  </li>
+                  <li>
+                    <strong>Pack de votes :</strong> lot de votes payant, proposé à un
+                    prix fixé par l&apos;Organisateur.
+                  </li>
+                  <li>
+                    <strong>Accès au direct :</strong> droit d&apos;accès individuel à
+                    la diffusion en direct d&apos;un Concours lorsque celle-ci est
+                    payante.
+                  </li>
+                </ul>
+
+                <SectionTitle>2. Objet de la plateforme</SectionTitle>
+                <p>
+                  CLICVOTE met à disposition des Organisateurs un service technique
+                  leur permettant de publier des Concours, de recueillir les votes du
+                  public et de diffuser leurs événements en direct. CLICVOTE
+                  intervient en qualité de <strong>prestataire technique</strong> et
+                  de <strong>mandataire de l&apos;Organisateur</strong> pour
+                  l&apos;encaissement des sommes dues.
+                </p>
                 <HighlightBox>
-                  <SubsectionTitle>Définitions :</SubsectionTitle>
-                  <ul className="list-disc pl-5 space-y-1">
-                    <li><strong>Catalogue :</strong> liste des événements disponibles proposant des tickets sur la plateforme au moment de la consultation</li>
-                    <li><strong>Code Client :</strong> code unique associé à chaque utilisateur inscrit sur la plateforme</li>
-                    <li><strong>Promoteur :</strong> personne physique ou morale ayant publié un ou plusieurs événements sur la plateforme</li>
-                    <li><strong>Articles :</strong> tout bien ou service en vente sur la plateforme à savoir des tickets d'événements et produits connexes</li>
-                  </ul>
+                  CLICVOTE ne fixe ni le prix des packs de votes, ni le règlement des
+                  Concours, ni la désignation des vainqueurs. Ces éléments relèvent de
+                  la seule responsabilité de l&apos;Organisateur.
                 </HighlightBox>
 
-                <SectionTitle>2. Objet du contrat</SectionTitle>
+                <SectionTitle>3. Compte utilisateur</SectionTitle>
                 <p>
-                  Les présentes CGV ont pour objet de définir les droits et obligations des parties dans le cadre de la vente de tickets d'événements et de services connexes par l'intermédiaire de la plateforme de billetterie <strong>CLICBILLET</strong>.
+                  La création d&apos;un compte est requise pour utiliser le vote
+                  gratuit, participer au chat des diffusions et accéder aux directs
+                  payants. L&apos;Utilisateur s&apos;engage à fournir des informations
+                  exactes et à préserver la confidentialité de ses identifiants.
+                </p>
+                <p>
+                  Un compte par personne est autorisé. La création de comptes
+                  multiples dans le but de contourner la limite de votes gratuits
+                  constitue une fraude et peut entraîner la suspension du compte et
+                  l&apos;annulation des votes concernés.
                 </p>
 
-                <SectionTitle>3. Acceptation des CGV</SectionTitle>
+                <SectionTitle>4. Votes</SectionTitle>
+                <SubsectionTitle>4.1 Vote gratuit</SubsectionTitle>
                 <p>
-                  Toute commande passée par le biais de la plateforme entraîne l'acceptation sans réserve des présentes CGV. Ces CGV fonctionnent conjointement avec notre politique de confidentialité et conditions générales d'utilisation.
+                  Lorsque l&apos;Organisateur l&apos;active, chaque Utilisateur
+                  connecté dispose d&apos;un vote gratuit par Concours, renouvelable
+                  après le délai d&apos;attente indiqué sur la page du Concours. Le
+                  vote gratuit ne peut être ni cédé, ni cumulé, ni reporté.
                 </p>
 
-                <SectionTitle>4. Caractéristiques des articles</SectionTitle>
+                <SubsectionTitle>4.2 Packs de votes payants</SubsectionTitle>
                 <p>
-                  Les tickets en vente sont pour les événements mentionnés dans le catalogue. Cependant, nous pouvons également fournir d'autres articles liés aux tickets. Ces tickets sont disponibles à l'achat jusqu'à épuisement des stocks.
+                  Les packs de votes sont proposés au prix affiché sur la page du
+                  Candidat, exprimé en <strong>francs CFA (XOF)</strong>. Les votes
+                  sont crédités au Candidat désigné lors de l&apos;achat, dès
+                  confirmation du paiement par l&apos;opérateur.
                 </p>
-                <p>
-                  Chaque événement est représenté par une image, une description textuelle, un ensemble de types de tickets et de nombreuses autres informations provenant de l'organisateur.
-                </p>
-                <p>
-                  Sur la plateforme, vous trouverez presque tous les types d'événements, allant des concerts aux festivals et aux événements sportifs et touristiques.
-                </p>
-
-                <SectionTitle>5. Zone géographique</SectionTitle>
-                <p>
-                  La vente de tickets d'événements sur la plateforme n'est pas limitée à une zone géographique, bien que ces événements se déroulent généralement en <strong>Côte d'Ivoire</strong>.
-                </p>
-                <p>
-                  Les dates des événements et toutes les conditions se référant aux dates sauf indication contraire sont dans le fuseau horaire <strong>GMT (heure d'Abidjan)</strong>.
-                </p>
-
-                <SectionTitle>6. Tarifs</SectionTitle>
-                <p>
-                  Les prix indiqués dans le catalogue et sur la page de sélection des tickets sont les prix mentionnés par l'organisateur de l'événement. <strong>CLICBILLET ne fixe pas le prix des tickets des événements</strong>, chaque organisateur est libre de fixer les prix des tickets et peut les modifier à tout moment.
-                </p>
-                <p>
-                  Des <strong>frais de service</strong> (taxes, frais de paiement...etc.), dont le montant est indiqué sur la page de paiement, peuvent s'ajouter à ces prix. Le montant TTC payé au moment de l'achat est donc le prix des tickets fixé par l'organisateur, majoré éventuellement des frais de service, constituant ainsi le prix TTC tenant compte de la TVA applicable à la date de la commande.
-                </p>
-                <p>
-                  <strong>CLICBILLET</strong> se réserve le droit de modifier à tout moment le montant des frais de service, étant entendu que le montant figurant sur la page de paiement au jour de la commande sera le seul applicable au Client.
-                </p>
-                
-                <SectionTitle>7. Commandes</SectionTitle>
-                <p>
-                  Afin de passer une commande sur la plateforme, il est recommandé que le Client dispose d'une adresse e-mail valide et suive l'un des processus de commande suivants :
-                </p>
-                
                 <HighlightBox>
-                    <SubsectionTitle>Processus d'achat :</SubsectionTitle>
-                    <ol className="list-decimal pl-5 space-y-1">
-                        <li><strong>Sélectionner</strong> des articles (tickets, sièges et produits connexes)</li>
-                        <li><strong>Saisir les coordonnées</strong> du Client : e-mail, numéro de téléphone et informations de facturation éventuellement</li>
-                        <li><strong>Payer</strong> la commande avec l'un des moyens de paiement disponibles</li>
-                        <li>Pour les deux autres procédures, le Client doit posséder un compte préalablement sur la plateforme</li>
-                    </ol>
+                  Les votes sont <strong>nominatifs et définitifs</strong> : ils ne
+                  peuvent être transférés vers un autre Candidat ni vers un autre
+                  Concours après validation du paiement.
                 </HighlightBox>
-                
+
+                <SubsectionTitle>4.3 Période de vote</SubsectionTitle>
                 <p>
-                  Après validation du paiement, le Client reçoit un email de confirmation de commande. Le Client peut à tout moment au cours du processus de commande consulter le détail de sa commande ainsi que son prix total et corriger d'éventuelles erreurs, avant de confirmer pour exprimer son acceptation.
-                </p>
-                <p>
-                  Toute commande emporte contractuellement l'acceptation sans réserve de l'intégralité des conditions générales applicables au moment de l'achat telles que les conditions générales de vente et la politique de confidentialité disponibles sur la plateforme.
-                </p>
-                <p>
-                  En tant que <strong>mandataire de l'organisateur</strong> de l'événement dans la vente de ses tickets, <strong>CLICBILLET</strong> se réserve la propriété des articles jusqu'au règlement complet de la commande, c'est-à-dire jusqu'à l'encaissement du prix TTC de la commande.
-                </p>
-                <p>
-                  <strong>CLICBILLET</strong> se réserve le droit d'annuler ou de refuser toute commande d'un Client avec lequel existerait un quelconque litige, notamment relatif au paiement d'une commande antérieure.
-                </p>
-                <p>
-                  <strong>CLICBILLET</strong> s'engage à honorer les commandes reçues sur la plateforme seulement dans la limite des stocks disponibles.
+                  Les votes ne sont acceptés que pendant la période d&apos;ouverture
+                  indiquée sur la page du Concours. Aucun vote ne peut être enregistré
+                  après la clôture, y compris si un paiement était en cours au moment
+                  de celle-ci ; dans cette hypothèse, la commande est remboursée.
                 </p>
 
-                <SectionTitle>8. Modalités de paiement</SectionTitle>
-                <p>Le règlement des achats s'effectue par l'un des moyens suivants, au choix du Client :</p>
-                <ul className="list-disc pl-5 space-y-1">
-                    <li><strong>Par Mobile Money</strong></li>
-                    <li><strong>Par carte bancaire</strong></li>
-                    <li><strong>Par code coupon</strong></li>
+                <SectionTitle>5. Diffusion en direct</SectionTitle>
+                <p>
+                  Lorsqu&apos;un Concours propose une diffusion en direct payante,
+                  l&apos;accès est personnel, individuel et rattaché au compte de
+                  l&apos;acheteur. Le partage d&apos;identifiants en vue de permettre
+                  à des tiers d&apos;accéder à la diffusion est interdit.
+                </p>
+                <p>
+                  La diffusion est assurée au moyen du flux fourni par
+                  l&apos;Organisateur. CLICVOTE met en œuvre les moyens raisonnables
+                  pour assurer la disponibilité du service, sans pouvoir garantir
+                  l&apos;absence totale d&apos;interruption liée aux réseaux ou aux
+                  plateformes vidéo tierces.
+                </p>
+
+                <SectionTitle>6. Paiement</SectionTitle>
+                <p>
+                  Les paiements sont réalisés par <strong>Mobile Money</strong> ou par{' '}
+                  <strong>carte bancaire</strong>, via le prestataire de paiement
+                  sécurisé. Le montant débité correspond au prix affiché au moment de
+                  la commande. Une confirmation est adressée par courrier électronique
+                  après validation du paiement.
+                </p>
+                <p>
+                  En cas d&apos;échec du paiement, aucun vote n&apos;est crédité et
+                  aucun accès n&apos;est ouvert. La commande peut être relancée depuis
+                  la page du Candidat ou du direct.
+                </p>
+
+                <SectionTitle>7. Droit de rétractation et remboursement</SectionTitle>
+                <p>
+                  Conformément à la nature des services proposés — contenus numériques
+                  fournis immédiatement et services de divertissement rattachés à une
+                  date déterminée — les votes achetés et les accès aux directs
+                  <strong> ne font pas l&apos;objet d&apos;un droit de rétractation</strong>{' '}
+                  une fois la prestation exécutée.
+                </p>
+                <p>Un remboursement est néanmoins accordé dans les cas suivants :</p>
+                <ul>
+                  <li>annulation du Concours par l&apos;Organisateur ;</li>
+                  <li>
+                    annulation définitive de la diffusion en direct sans rediffusion
+                    proposée ;
+                  </li>
+                  <li>
+                    votes débités sans avoir été crédités au Candidat désigné, du fait
+                    d&apos;un dysfonctionnement technique.
+                  </li>
                 </ul>
                 <p>
-                  Dès confirmation de l'achat, <strong>CLICBILLET</strong> se charge d'envoyer les tickets par e-mail au Client. Le délai de traitement de l'envoi de l'email est de <strong>5 minutes</strong> après validation du paiement. Les délais de réception de l'e-mail ne dépendent pas de <strong>CLICBILLET</strong>, mais du serveur de messagerie du Client.
-                </p>
-                <p>
-                  <strong>CLICBILLET</strong> s'engage à livrer les commandes passées par le Client dans les délais impartis. En cas de non livraison des articles plus de <strong>deux (2) heures</strong> après la commande, le Client pourra procéder à la résolution de la vente et demander le remboursement, sauf cas de force majeure constaté.
-                </p>
-                <p>
-                  Le Client dispose d'un délai de <strong>sept (7) jours</strong> à compter de la date d'achat de la commande pour signaler la non réception. Passé ce délai, toute demande de résolution de la vente ne pourra être acceptée. Le Client devra adresser un courrier de réclamation à l'adresse suivante : <a href="mailto:contacts@clicbillet.com" className="text-primary hover:underline">contacts@clicbillet.com</a>.
-                </p>
-                <p>
-                  Le Client est tenu de vérifier le bon état des articles livrés au moment de la livraison. Toute anomalie constatée (articles manquants, informations erronées, etc.) devra être signalée à <strong>CLICBILLET</strong>, par tous moyens suivant la livraison, notamment en écrivant à <a href="mailto:contacts@clicbillet.com" className="text-primary hover:underline">contacts@clicbillet.com</a>.
-                </p>
-                <p>
-                  Avec les mêmes délais de livraison que l'envoi par email, les tickets d'événements réservés sont également disponibles, via la plateforme avec le compte associé à l'email qui a été utilisé lors de la commande.
+                  Toute demande doit être adressée à{' '}
+                  <a
+                    href="mailto:contact@clicvote.com"
+                    className="text-primary hover:underline"
+                  >
+                    contact@clicvote.com
+                  </a>{' '}
+                  dans un délai de <strong>sept (7) jours</strong> suivant les faits,
+                  en précisant la référence de la commande.
                 </p>
 
-                <SectionTitle>9. Utilisation et validité des tickets</SectionTitle>
-                <SubsectionTitle>Validité du ticket</SubsectionTitle>
+                <SectionTitle>8. Intégrité des votes</SectionTitle>
                 <p>
-                  Un ticket n'est valable que pour l'événement qu'il concerne, à la date, à l'heure et dans les conditions indiquées sur le ticket. Il est disponible à tout moment dans le compte <strong>CLICBILLET</strong> associé à l'email utilisé lors de la réservation jusqu'à la fin de l'événement.
+                  CLICVOTE met en œuvre des mesures destinées à garantir la sincérité
+                  des scrutins : identification des comptes, délai entre deux votes
+                  gratuits, contrôle du montant des paiements et journalisation des
+                  votes.
                 </p>
-                <SubsectionTitle>Revente de ticket</SubsectionTitle>
+                <p>Sont notamment interdits et sanctionnés par l&apos;annulation des votes :</p>
+                <ul>
+                  <li>la création de comptes multiples par une même personne ;</li>
+                  <li>
+                    l&apos;utilisation de robots, scripts ou tout dispositif
+                    automatisé de vote ;
+                  </li>
+                  <li>l&apos;usage de moyens de paiement frauduleux ;</li>
+                  <li>toute tentative d&apos;altération des compteurs de votes.</li>
+                </ul>
+
+                <SectionTitle>9. Obligations de l&apos;Organisateur</SectionTitle>
+                <p>L&apos;Organisateur garantit :</p>
+                <ul>
+                  <li>
+                    disposer des droits et autorisations nécessaires sur les images,
+                    noms et contenus des Candidats publiés ;
+                  </li>
+                  <li>
+                    disposer des droits de diffusion sur les contenus retransmis en
+                    direct ;
+                  </li>
+                  <li>
+                    publier un règlement de concours clair et le respecter, notamment
+                    quant à la désignation du vainqueur ;
+                  </li>
+                  <li>
+                    traiter les données des votants conformément à la réglementation
+                    applicable.
+                  </li>
+                </ul>
+
+                <SectionTitle>10. Modération du chat</SectionTitle>
                 <p>
-                  Sauf accord préalable et écrit de <strong>CLICBILLET</strong>, il est formellement et expressément interdit d'offrir à la vente, vendre, revendre, échanger ou transférer un ticket, d'une quelconque manière et à quelque fin que ce soit (en ce compris promotionnelles ou dans le cadre d'une activité commerciale). Il est ainsi notamment interdit de revendre, de permettre la revente d'un ticket sur des plateformes commerciales ou par le biais d'intermédiaires ou de proposer un ticket sur lesdites plateformes, sans l'accord préalable et écrit de <strong>CLICBILLET</strong>. La seule alternative envisageable est le transfert de ticket entre utilisateurs <strong>CLICBILLET</strong> en utilisant la plateforme.
-                </p>
-                <SubsectionTitle>Reproduction de ticket</SubsectionTitle>
-                <p>
-                  Toute quelconque falsification, d'une quelconque manière et à quelque fin que ce soit, est formellement et expressément interdite, sous peine d'éventuelles poursuites judiciaires.
-                </p>
-                <p>
-                  Sauf stipulation expresse contraire de <strong>CLICBILLET</strong>, l'utilisation d'un ticket, quelle que soit sa forme, est unique, pour une seule entrée et pour un seul événement.
-                </p>
-                <p>
-                  L'organisateur peut refuser l'accès au lieu de l'événement s'il a des doutes sur l'origine ou la qualité du ticket qui lui est présenté. Compte tenu de la difficulté de vérifier avec certitude l'identité de l'acheteur, en cas de vérification obligatoire, seul le porteur du ticket original présenté directement sur la plateforme (dans l'application mobile par exemple) sera admis.
+                  Les chats associés aux diffusions sont modérés par l&apos;Organisateur
+                  et par CLICVOTE. Les propos injurieux, haineux, diffamatoires, à
+                  caractère publicitaire non sollicité ou contraires à la loi sont
+                  supprimés et peuvent entraîner l&apos;exclusion définitive de leur
+                  auteur.
                 </p>
 
-                <SectionTitle>10. Contrôle des tickets</SectionTitle>
+                <SectionTitle>11. Responsabilité</SectionTitle>
                 <p>
-                  <strong>CLICBILLET</strong> met à la disposition de l'organisateur de l'événement un système de validation, lecture du code QR des tickets. Sous la responsabilité de l'organisateur, ce système est le seul autorisé pour le contrôle des tickets.
-                </p>
-                <p>
-                  Le jour de l'événement, le Client ou participant à l'événement doit présenter le <strong>QR code</strong> du ticket valide aux personnes en charge du contrôle des tickets. Le QR code et les informations du ticket doivent être suffisamment éclairés et facilement lisibles. Le QR code permet l'identification du participant et le détail du ticket. L'organisateur pourra remettre éventuellement au Client, après contrôle, un ticket standard avec deux souches ou un bracelet lui permettant d'assister à l'événement.
-                </p>
-                <p>
-                  Chaque ticket ne peut être présenté qu'<strong>une seule fois</strong> au point de contrôle. Si un participant souhaite retourner au point de contrôle (après avoir quitté la salle par exemple), il est impératif de contacter les contrôleurs au préalable.
-                </p>
-
-                <SectionTitle>11. Contrôle de l'identité</SectionTitle>
-                <p>
-                  L'organisateur et son équipe de contrôleurs se réservent le droit de contrôler l'identité du Client à l'entrée du lieu où se déroule l'événement. Le Client doit donc être muni d'une <strong>pièce d'identité officielle</strong>, en cours de validité et avec photo si nécessaire : carte d'identité, passeport, permis de conduire, titre de séjour ou tout autre document accepté par l'organisateur et les contrôleurs.
+                  CLICVOTE ne saurait être tenue responsable de l&apos;organisation du
+                  Concours, du déroulement de l&apos;événement, de la désignation du
+                  vainqueur ou de la remise des prix, qui relèvent de
+                  l&apos;Organisateur. La responsabilité de CLICVOTE est limitée aux
+                  seuls dysfonctionnements de la plateforme qui lui sont directement
+                  imputables.
                 </p>
 
-                <SectionTitle>12. Annulation et remboursements</SectionTitle>
+                <SectionTitle>12. Données personnelles</SectionTitle>
                 <p>
-                  Tout ticket acheté sur la plateforme n'est annulable que <strong>30 JOURS</strong> avant la date de début de l'événement.
-                </p>
-                <p>
-                  Lorsque le Client annule sa réservation d'un ticket, il bénéficie d'un remboursement.
-                </p>
-                <p>
-                  Si un événement a été <strong>annulé par l'organisateur</strong> de l'événement, tous les participants seront remboursés.
-                </p>
-                <HighlightBox>
-                  <p>
-                    <strong>Important :</strong> En cas de remboursement d'un ticket, quelle que soit la raison, le montant remboursé sera partiel et équivaudra à <strong>90%</strong> du prix du ticket. Le remboursement se fait par le biais de <strong>code coupon</strong>, utilisable uniquement sur la plateforme jusqu'à épuisement de son montant.
-                  </p>
-                </HighlightBox>
-                
-                <SectionTitle>13. Responsabilité</SectionTitle>
-                <p>
-                  <strong>CLICBILLET</strong> est responsable à l'égard des présentes CGV. Conformément à nos conditions générales d'utilisation, <strong>CLICBILLET</strong> décline toute responsabilité en cas d'indisponibilité ou dysfonctionnement du service résultant d'un cas de force majeure.
-                </p>
-                <p>
-                  <strong>CLICBILLET</strong> ne pourra être tenu responsable des incidents pouvant survenir lors de la commande. De même, <strong>CLICBILLET</strong> n'est pas responsable en cas de perte, de vol ou d'utilisation illicite d'un ticket.
-                </p>
-                <p>
-                  <strong>CLICBILLET</strong> n'est pas responsable des questions de santé et de sécurité des événements du catalogue.
-                </p>
-                <p>
-                  <strong>CLICBILLET</strong> n'est pas responsable du déroulement de l'événement (modification de contenu, changement de distribution artistique ou sportive, changement d'horaires, etc.) ou de son annulation.
-                </p>
-                <p>
-                  Chaque organisateur fixe les règles propres à l'organisation de l'événement. Ce règlement est communiqué par l'organisateur au Client.
-                </p>
-                <p>
-                  Toute commande du Client implique son adhésion au règlement de l'organisateur, sous peine de voir sa responsabilité engagée.
+                  Le traitement des données personnelles est décrit dans notre{' '}
+                  <Link href="/privacy" className="text-primary hover:underline">
+                    politique de confidentialité
+                  </Link>
+                  .
                 </p>
 
-                <SectionTitle>14. Service Client</SectionTitle>
-                 <HighlightBox>
-                  <SubsectionTitle>Besoin d'aide ?</SubsectionTitle>
-                  <p>Pour toute information, vous pouvez contacter le service Client de <strong>CLICBILLET</strong> :</p>
-                  <p>
-                    <strong>Téléphone :</strong> <a href="tel:+22507024902" className="text-primary hover:underline">+225 07 02 49 02 77</a>
-                    <br />
-                    <small>(prix d'un appel local)</small>
-                  </p>
-                  <p>
-                    <strong>Email :</strong> <a href="mailto:contact@clicbillet.com" className="text-primary hover:underline">contact@clicbillet.com</a>
-                  </p>
-                </HighlightBox>
-
-                <SectionTitle>15. Droit applicable et litiges</SectionTitle>
+                <SectionTitle>13. Droit applicable</SectionTitle>
                 <p>
-                  Les ventes de tickets effectuées sur la plateforme sont soumises à la <strong>loi ivoirienne</strong>. En cas de litige, les <strong>tribunaux ivoiriens</strong> seront seuls compétents.
+                  Les présentes CGUV sont soumises au <strong>droit ivoirien</strong>.
+                  À défaut de résolution amiable, tout litige relève de la compétence
+                  des tribunaux d&apos;Abidjan.
                 </p>
 
-                <Separator className="my-8" />
-                
-                <div className="text-center">
-                    <p className="text-muted-foreground">
-                        Ces conditions générales de vente sont effectives à compter du 04/12/2025
-                    </p>
-                    <div className="mt-4 flex flex-col sm:flex-row justify-center gap-4">
-                        <Link href="/" className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-primary bg-primary/10 hover:bg-primary/20">
-                            Retour à l'accueil
-                        </Link>
-                        <Link href="/contact" className="inline-flex items-center justify-center px-4 py-2 border border-transparent text-sm font-medium rounded-full text-white bg-primary hover:bg-primary/90">
-                            Questions sur les CGV
-                        </Link>
-                    </div>
-                </div>
-
+                <SectionTitle>14. Contact</SectionTitle>
+                <p>
+                  Pour toute question relative aux présentes conditions, écrivez-nous
+                  via la{' '}
+                  <Link href="/contact" className="text-primary hover:underline">
+                    page de contact
+                  </Link>{' '}
+                  ou à l&apos;adresse{' '}
+                  <a
+                    href="mailto:contact@clicvote.com"
+                    className="text-primary hover:underline"
+                  >
+                    contact@clicvote.com
+                  </a>
+                  .
+                </p>
               </div>
             </CardContent>
           </Card>
         </div>
       </main>
+
       <Footer />
     </div>
   );

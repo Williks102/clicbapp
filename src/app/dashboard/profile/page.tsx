@@ -16,10 +16,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { PlaceHolderImages } from '@/lib/placeholder-images';
-import { useDoc, useFirebase } from '@/firebase';
+import { useRealtimeRow } from '@/hooks/use-realtime-query';
+import { toOrganizer } from '@/lib/supabase/mappers';
+import type { OrganizerRow } from '@/lib/supabase/types';
 import { useSession } from 'next-auth/react';
 import { useMemo, useEffect, useState } from 'react';
-import { doc } from 'firebase/firestore';
 import type { Organizer } from '@/lib/types';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useForm, Controller } from 'react-hook-form';
@@ -39,16 +40,18 @@ type ProfileFormValues = z.infer<typeof profileSchema>;
 
 export default function ProfilePage() {
   const { data: session, status, update: updateSession } = useSession();
-  const { firestore } = useFirebase();
   const isLoadingSession = status === 'loading';
   const { toast } = useToast();
   const [isSaving, setIsSaving] = useState(false);
 
-  const organizerRef = useMemo(
-    () => (firestore && session?.user?.id ? doc(firestore, 'organizers', session.user.id) : null),
-    [firestore, session]
-  );
-  const { data: organizer, isLoading: isLoadingOrganizer } = useDoc<Organizer>(organizerRef);
+  const { data: organizer, isLoading: isLoadingOrganizer } = useRealtimeRow<
+    OrganizerRow,
+    Organizer
+  >({
+    table: 'organizers',
+    id: session?.user?.id,
+    map: toOrganizer,
+  });
 
   const form = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema),

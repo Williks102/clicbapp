@@ -161,7 +161,7 @@ export default function AdminCommissionsPageClient({
       'Commission Plateforme',
       'Frais Transaction',
       'Net à verser',
-      'Nb Ventes'
+      'Nb Commandes'
     ];
     
     const rows = payouts.map(p => [
@@ -171,7 +171,7 @@ export default function AdminCommissionsPageClient({
       p.platformCommission.toString(),
       p.transactionFees.toString(),
       p.netPayout.toString(),
-      p.salesCount.toString(),
+      p.ordersCount.toString(),
     ]);
 
     const csvContent = [
@@ -278,14 +278,14 @@ export default function AdminCommissionsPageClient({
         <CardHeader>
           <CardTitle>Paramétrage des Frais</CardTitle>
           <CardDescription>
-            Ces frais s'appliquent à chaque billet vendu sur la plateforme.
+            Ces frais s'appliquent à chaque commande payée sur la plateforme (packs de votes et accès aux directs).
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="percentage-platform">
-                Commission Plateforme ClicBillet (%)
+                Commission Plateforme ClicVote (%)
               </Label>
               <Input
                 id="percentage-platform"
@@ -317,7 +317,7 @@ export default function AdminCommissionsPageClient({
               Total Frais de Service par défaut: {totalFee.toFixed(2)}%
             </p>
             <p className="text-xs text-muted-foreground mt-1">
-              Les organisateurs recevront {(100 - totalFee).toFixed(2)}% du prix de chaque billet vendu
+              Les organisateurs recevront {(100 - totalFee).toFixed(2)}% du montant de chaque commande payée
             </p>
           </div>
         </CardContent>
@@ -348,7 +348,7 @@ export default function AdminCommissionsPageClient({
           {payouts.length === 0 ? (
             <div className="py-12 text-center">
               <p className="text-muted-foreground">
-                Aucun organisateur avec des ventes pour le moment.
+                Aucun organisateur avec des commandes pour le moment.
               </p>
             </div>
           ) : (
@@ -361,7 +361,7 @@ export default function AdminCommissionsPageClient({
                     <TableHead className="hidden lg:table-cell text-right">Commission</TableHead>
                     <TableHead className="hidden lg:table-cell text-right">Frais</TableHead>
                     <TableHead className="text-right">Net à verser</TableHead>
-                    <TableHead className="text-center">Ventes</TableHead>
+                    <TableHead className="text-center">Commandes</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -390,7 +390,7 @@ export default function AdminCommissionsPageClient({
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge variant="secondary">
-                          {payout.salesCount}
+                          {payout.ordersCount}
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right">

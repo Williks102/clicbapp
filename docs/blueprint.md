@@ -1,24 +1,73 @@
-# **App Name**: Ivoire Events
+# ClicVote — Vote en ligne & diffusion d'événements en direct
 
-## Core Features:
+## Positionnement
 
-- Event Listing: Browse and search for events in Côte d'Ivoire by category, date, and location.
-- Ticket Purchase: Securely purchase tickets online with multiple payment options.
-- Event Creation: Allow organizers to create and manage their event listings, including setting ticket prices and availability.
-- Ticket Delivery: Generate and deliver electronic tickets via email or mobile app.
-- Recommendation Engine: AI-powered tool analyzes user preferences and suggests relevant events. The LLM will reason over multiple characteristics of the events such as dates, pricing, descriptions, and locations, and incorporates the best opportunities into its output.
-- Ticketing System Creation: It allows the creation of different types of ticketing systems.
-- Percentage Configuration Interface: Une interface pour paramétrer les pourcentages
-- Organizer Profile: Un profil d'utilisateur visible en front end pour chaque organisateur
-- User Interface: Une interface admin, organisateur et acheteur
+Plateforme ivoirienne permettant au public de voter pour les candidats d'un
+concours (Miss, télé-crochet, awards, compétition sportive…) et de suivre la
+finale en direct, avec classement temps réel et chat modéré.
 
-## Style Guidelines:
+## Fonctionnalités principales
 
-- Primary color: Vibrant orange (#FF9500) to represent energy and excitement, reflecting the lively culture of Côte d'Ivoire.
-- Background color: Light orange (#FFF3E0) to create a warm and inviting atmosphere, subtly complementing the primary color.
-- Accent color: Blue (#007AFF) to provide contrast and highlight key interactive elements, drawing inspiration from the Ivorian flag.
-- Headline font: 'Poppins' (sans-serif) for a contemporary, fashionable feel.
-- Body font: 'PT Sans' (sans-serif) for a modern look with a little warmth and personality; pairs well with 'Poppins'.
-- Use modern, clean icons to represent event categories and actions. Icons should be easily recognizable and intuitive.
-- Implement a clear and responsive layout, optimizing for both desktop and mobile devices to ensure accessibility for all users.
-- Incorporate subtle animations and transitions to enhance user experience and provide visual feedback for interactions.
+### Public
+
+- **Découverte** : catalogue des concours, filtres par catégorie et par statut,
+  page dédiée aux diffusions en direct.
+- **Vote hybride** :
+  - un **vote gratuit** par concours et par compte, renouvelé après un délai
+    paramétré par l'organisateur (24 h par défaut) ;
+  - des **packs de votes payants** réglés par Mobile Money ou carte bancaire.
+- **Classement temps réel** : les scores se mettent à jour à la seconde via les
+  listeners Firestore ; l'organisateur peut les masquer jusqu'à la proclamation.
+- **Diffusion en direct** : player embarqué (YouTube, Facebook, Vimeo, HLS ou
+  iframe), avec paywall optionnel, chat modéré et panneau de vote intégré.
+- **Espace personnel** : historique des votes, accès aux directs achetés,
+  suivi des paiements.
+
+### Organisateur
+
+- Création et cycle de vie du concours (brouillon → publié → votes ouverts →
+  clôturé → terminé).
+- Gestion des candidats : dossard unique, photo, présentation, élimination.
+- Configuration des packs de votes et du vote gratuit.
+- Régie du direct : lancement/arrêt de l'antenne, changement de flux à chaud,
+  modération du chat, prévisualisation.
+- Statistiques : votes, revenus, meilleures compétitions, commandes.
+- Assistant de rédaction (Genkit / Gemini) pour la présentation du concours.
+
+### Administration
+
+- Vue consolidée de la plateforme : revenus, votes, organisateurs, membres.
+- Supervision des concours et des commandes, avec détection des montants
+  incohérents.
+- Gestion des utilisateurs, des catégories et des commissions.
+
+## Architecture
+
+- **Next.js 15** (App Router, Server Actions) et **React 18**.
+- **PostgreSQL / Supabase** pour les données ; la clé `service_role` porte
+  toutes les écritures côté serveur, la clé `anon` est en lecture seule et
+  alimente le temps réel (classement, chat).
+- **NextAuth** (JWT) pour les sessions et les rôles, mots de passe en bcrypt.
+- **Paiement Pro** pour l'encaissement, avec webhook idempotent et validation
+  serveur du montant.
+- **Cloudinary** pour les visuels, **Resend** pour les e-mails transactionnels.
+
+## Intégrité du scrutin
+
+- Prix et nombre de votes lus exclusivement depuis la base : le client ne peut
+  pas les manipuler.
+- Dossards uniques et accès aux directs non dupliqués : contraintes SQL.
+- Compteurs de votes maintenus par triggers depuis la table `votes`.
+- Vote gratuit : délai d'attente et enregistrement dans une seule transaction
+  (`cast_free_vote`).
+- Webhook idempotent et revalidation du montant (`confirm_order_payment`).
+- Écart entre montant payé et montant attendu → commande marquée `FLAGGED`,
+  aucun vote crédité.
+
+## Style
+
+- Couleur primaire : orange vif (#FF9500), énergie et culture ivoirienne.
+- Accent secondaire : rouge « direct » pour les diffusions en cours.
+- Police de titres : **Poppins** ; police de texte : **PT Sans**.
+- Icônes Lucide, composants shadcn/ui, thèmes clair et sombre.
+- Mise en page responsive, pensée mobile d'abord (usage majoritaire du public).

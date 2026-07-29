@@ -31,3 +31,7 @@ pnpm-debug.log*
 
 # Firebase service account key
 service-account-key.json
+
+# TypeScript build artifacts
+tsconfig.tsbuildinfo
+*.tsbuildinfo

@@ -9,17 +9,27 @@ type CloudinaryUploadWidgetProps = {
   value?: string;
   onChange: (url: string) => void;
   onRemove?: () => void;
+  /** Dossier Cloudinary de destination. */
+  folder?: string;
+  /** Aperçu carré pour les portraits de candidats. */
+  aspect?: 'video' | 'square';
 };
 
 export function CloudinaryUploadWidget({
   value,
   onChange,
   onRemove,
+  folder = 'competitions',
+  aspect = 'video',
 }: CloudinaryUploadWidgetProps) {
   return (
     <div className="space-y-4">
       {value ? (
-        <div className="relative aspect-video w-full overflow-hidden rounded-lg border">
+        <div
+          className={`relative w-full overflow-hidden rounded-lg border ${
+            aspect === 'square' ? 'aspect-square max-w-[240px]' : 'aspect-video'
+          }`}
+        >
           <Image
             src={value}
             alt="Image uploadée"
@@ -52,7 +62,7 @@ export function CloudinaryUploadWidget({
           cropping: false, // ✅ Pas de cropping forcé
           // croppingAspectRatio: 16 / 9, // Désactivé
          showSkipCropButton: true, // Optionnel si cropping activé
-          folder: 'events',
+          folder,
           clientAllowedFormats: ['png', 'jpg', 'jpeg', 'webp'],
           maxImageWidth: 1920,
           maxImageHeight: 1080,
@@ -72,7 +82,8 @@ export function CloudinaryUploadWidget({
       </CldUploadWidget>
 
       <p className="text-xs text-muted-foreground">
-        PNG, JPG, WEBP. Max 5MB. Format 16:9 recommandé.
+        PNG, JPG, WEBP. Max 5 Mo. Format{' '}
+        {aspect === 'square' ? 'carré (1:1)' : '16:9'} recommandé.
       </p>
     </div>
   );

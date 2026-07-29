@@ -30,9 +30,9 @@ import {
 import Link from 'next/link';
 
 export const metadata = {
-  title: 'Politique de Confidentialité | ClicBillet',
+  title: 'Politique de Confidentialité | ClicVote',
   description:
-    'Consultez la politique de confidentialité de ClicBillet CI.',
+    'Consultez la politique de confidentialité de ClicVote CI.',
 };
 
 // Helper components for styling
@@ -72,7 +72,7 @@ export default function PrivacyPolicyPage() {
                 <Shield className="mx-auto h-12 w-12 text-primary" />
                 <PageHeader
                   title="Politique de confidentialité"
-                  description="ClicBillet CI - Plateforme de billetterie ivoirienne"
+                  description="ClicVote CI — Plateforme de vote en ligne et de diffusion live"
                   className="mt-4"
                 />
                 <div className="mt-4 text-sm text-muted-foreground flex items-center justify-center gap-2">
@@ -89,7 +89,7 @@ export default function PrivacyPolicyPage() {
                 </SectionTitle>
                 <p>
                   Cette politique de confidentialité s'applique à toutes les
-                  données personnelles traitées par <strong>ClicBillet CI</strong>{' '}
+                  données personnelles traitées par <strong>ClicVote CI</strong>{' '}
                   en tant que responsable de traitement conformément au droit
                   ivoirien, notamment à la loi n°2013-450 du 19 juin 2013
                   relative à la protection des données personnelles.
@@ -177,7 +177,7 @@ export default function PrivacyPolicyPage() {
                 </p>
                 <SubsectionTitle>Tierces parties</SubsectionTitle>
                 <p>
-                  Nous pouvons partager des données utilisateur avec les tiers suivants : Organisateurs d'événements, Prestataires de paiement, Services de messagerie. Les tiers ne pourront pas accéder aux données de l'utilisateur au-delà de ce qui est raisonnablement nécessaire pour atteindre l'objectif donné.
+                  Nous pouvons partager des données utilisateur avec les tiers suivants : Organisateurs de concours, Prestataires de paiement, Services de messagerie. Les tiers ne pourront pas accéder aux données de l'utilisateur au-delà de ce qui est raisonnablement nécessaire pour atteindre l'objectif donné.
                 </p>
 
                 <SectionTitle>Combien de temps conservons-nous les données personnelles ?</SectionTitle>
@@ -200,8 +200,8 @@ export default function PrivacyPolicyPage() {
                 <HighlightBox variant="success">
                     <h4 className="font-semibold mb-2 flex items-center"><LifeBuoy className="h-5 w-5 mr-2"/>Contact Data Protection Officer (DPO)</h4>
                     <ul className="list-none p-0 space-y-1">
-                        <li><strong>Email spécialisé :</strong> privacy@clicbillet.com</li>
-                        <li><strong>Email général :</strong> contact@clicbillet.com</li>
+                        <li><strong>Email spécialisé :</strong> privacy@clicvote.com</li>
+                        <li><strong>Email général :</strong> contact@clicvote.com</li>
                         <li><strong>Téléphone :</strong> +225 07 02 49 02 77</li>
                     </ul>
                 </HighlightBox>
