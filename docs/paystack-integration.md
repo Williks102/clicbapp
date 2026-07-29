@@ -65,9 +65,30 @@ Paystack.
 | **Webhook URL** | `https://votre-domaine/api/payment/webhook` |
 | **Callback URL** | *laisser vide* — le code fournit un `callback_url` par transaction |
 
-Le webhook est la seule voie qui crédite les votes. Sans lui, l'acheteur paie
-mais la commande reste `PENDING`. Les onglets *Test* et *Live* ont chacun leur
+Le webhook est la voie normale. Les onglets *Test* et *Live* ont chacun leur
 propre configuration : l'URL doit être déclarée dans les deux.
+
+`NEXT_PUBLIC_BASE_URL` détermine le domaine de retour. À défaut, on retombe sur
+le domaine exposé par Vercel (`VERCEL_PROJECT_PRODUCTION_URL`, puis
+`VERCEL_URL`) — jamais sur un domaine codé en dur, qui renverrait l'acheteur
+sur une page inexistante après un paiement pourtant abouti.
+
+## Règlement d'une commande
+
+`settleOrder` porte la vérification et le crédit. Elle est appelée par **deux**
+chemins, car le webhook peut ne jamais arriver — URL mal déclarée, domaine
+injoignable, indisponibilité passagère — alors que l'argent, lui, est encaissé :
+
+1. le **webhook**, après validation de la signature ;
+2. la **page de retour** `/vote/success`, qui rapproche toute commande encore
+   `PENDING` en interrogeant Paystack.
+
+Les deux chemins sont sûrs : le montant provient de l'API Paystack et non de
+l'appelant, et `confirm_order_payment` le revalide en base tout en restant
+idempotente. Un rejeu ne crédite jamais deux fois.
+
+Une commande reste `PENDING` uniquement si l'acheteur n'est jamais revenu
+**et** que le webhook n'est pas passé.
 
 Aucun secret n'est à placer dans cette URL : l'authenticité repose sur la
 signature du corps de la requête.

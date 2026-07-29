@@ -70,5 +70,39 @@ check('aucun appel réseau émis avec une clé invalide', networkCalls === 0);
 process.env.PAYSTACK_SECRET_KEY = originalKey;
 globalThis.fetch = realFetch;
 
+/*
+ * URL de retour après paiement. Un domaine erroné renvoie l'acheteur sur une
+ * page inexistante alors que le montant a bien été débité.
+ */
+console.log("\nRésolution de l'URL publique :");
+
+const { resolveBaseUrl } = await import('../src/lib/base-url.ts');
+
+check(
+  'NEXT_PUBLIC_BASE_URL prioritaire',
+  resolveBaseUrl({
+    NEXT_PUBLIC_BASE_URL: 'https://clicvote.ci',
+    VERCEL_PROJECT_PRODUCTION_URL: 'projet.vercel.app',
+  }) === 'https://clicvote.ci'
+);
+check(
+  'domaine de production Vercel à défaut',
+  resolveBaseUrl({ VERCEL_PROJECT_PRODUCTION_URL: 'projet.vercel.app', VERCEL_URL: 'dep.vercel.app' }) ===
+    'https://projet.vercel.app'
+);
+check(
+  'URL du déploiement en dernier recours',
+  resolveBaseUrl({ VERCEL_URL: 'dep-xyz.vercel.app' }) === 'https://dep-xyz.vercel.app'
+);
+check('protocole ajouté aux valeurs Vercel',
+  resolveBaseUrl({ VERCEL_URL: 'dep.vercel.app' }).startsWith('https://'));
+check('barre oblique finale retirée',
+  resolveBaseUrl({ NEXT_PUBLIC_BASE_URL: 'https://clicvote.ci/' }) === 'https://clicvote.ci');
+check('valeur vide ignorée',
+  resolveBaseUrl({ NEXT_PUBLIC_BASE_URL: '   ', VERCEL_URL: 'dep.vercel.app' }) ===
+    'https://dep.vercel.app');
+check('aucun domaine codé en dur sans configuration',
+  resolveBaseUrl({}) === 'http://localhost:9003');
+
 console.log(ko === 0 ? '\nToutes les vérifications passent.' : `\n${ko} échec(s).`);
 process.exit(ko === 0 ? 0 : 1);

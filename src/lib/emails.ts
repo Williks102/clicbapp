@@ -1,5 +1,6 @@
 import { Resend } from 'resend';
 import { formatFCFA } from '@/lib/utils';
+import { resolveBaseUrl } from '@/lib/base-url';
 import type { Order } from '@/lib/types';
 
 let client: Resend | null = null;
@@ -20,7 +21,12 @@ function getResend(): Resend | null {
 }
 
 const FROM = 'ClicVote <contact@monticket.online>';
-const BASE_URL = process.env.NEXT_PUBLIC_BASE_URL || 'https://clicvote.com';
+/**
+ * Domaine utilisé dans les liens des e-mails. Résolu à chaque envoi : les
+ * variables d'environnement de l'hébergeur ne sont pas toutes disponibles au
+ * moment où ce module est évalué pendant le build.
+ */
+const baseUrl = resolveBaseUrl;
 
 function layout(title: string, body: string) {
   return `<!DOCTYPE html>
@@ -55,7 +61,7 @@ function row(label: string, value: string) {
 export async function sendVoteConfirmationEmail(order: Order) {
   if (!order.customerEmail) return;
 
-  const candidateUrl = `${BASE_URL}/competitions/${order.competitionId}/candidates/${order.candidateId}`;
+  const candidateUrl = `${baseUrl()}/competitions/${order.competitionId}/candidates/${order.candidateId}`;
 
   const body = `
     <p>Bonjour ${order.customerName},</p>
@@ -89,7 +95,7 @@ export async function sendVoteConfirmationEmail(order: Order) {
 export async function sendLiveAccessEmail(order: Order) {
   if (!order.customerEmail) return;
 
-  const liveUrl = `${BASE_URL}/competitions/${order.competitionId}/live`;
+  const liveUrl = `${baseUrl()}/competitions/${order.competitionId}/live`;
 
   const body = `
     <p>Bonjour ${order.customerName},</p>

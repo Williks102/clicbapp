@@ -86,7 +86,7 @@ d'évaluer les politiques RLS, et l'application ne peut rien lire ni écrire.
 | `PAYSTACK_SECRET_KEY` | Clé secrète Paystack — une seule variable pour les deux modes : `sk_test_…` en recette, `sk_live_…` en production. **Jamais préfixée `NEXT_PUBLIC_`** |
 | `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` | Preset d'upload Cloudinary |
 | `RESEND_API_KEY` | Envoi des e-mails de confirmation |
-| `NEXT_PUBLIC_BASE_URL` | URL publique, utilisée dans les e-mails |
+| `NEXT_PUBLIC_BASE_URL` | URL publique du site : retour après paiement et liens des e-mails. À défaut, le domaine exposé par Vercel est utilisé |
 
 ## Structure
 
