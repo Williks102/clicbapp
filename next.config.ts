@@ -24,17 +24,17 @@ const cspHeader = `
     object-src 'none';
     base-uri 'self';
     form-action 'self' https://clicbillet.com https://www.clicbillet.com https://*.paiementpro.net https://paiementpro.net https://mpayment.orange-money.com https://monticket.online https://*.monticket.online;
-    frame-ancestors *;
+    frame-ancestors 'self';
     upgrade-insecure-requests;
 `;
 
 const nextConfig: NextConfig = {
-  /* TypeScript Configuration */
+  /* TypeScript : une erreur de type doit bloquer le déploiement. */
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
 
-  /* ESLint Configuration */
+  /* ESLint */
   eslint: {
     ignoreDuringBuilds: true,
   },

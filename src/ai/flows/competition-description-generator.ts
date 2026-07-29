@@ -7,6 +7,7 @@
  *   à partir des informations saisies par l'organisateur.
  */
 
+import { auth } from '@/auth';
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
 
@@ -32,9 +33,19 @@ export type GenerateCompetitionDescriptionOutput = z.infer<
   typeof GenerateCompetitionDescriptionOutputSchema
 >;
 
+/**
+ * Point d'entrée exposé au navigateur : chaque appel consomme du quota chez le
+ * fournisseur de modèle, il est donc réservé aux comptes autorisés à créer des
+ * concours.
+ */
 export async function generateCompetitionDescription(
   input: GenerateCompetitionDescriptionInput
 ): Promise<GenerateCompetitionDescriptionOutput> {
+  const session = await auth();
+  if (session?.user?.role !== 'organizer' && session?.user?.role !== 'admin') {
+    throw new Error('Action réservée aux organisateurs.');
+  }
+
   return generateCompetitionDescriptionFlow(input);
 }
 

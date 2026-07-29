@@ -5,8 +5,15 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
+/**
+ * Identifiant non devinable, utilisé comme référence de paiement.
+ * `Math.random()` n'est pas cryptographiquement sûr : une référence prédictible
+ * permettrait de consulter, voire de forger, les commandes d'autrui.
+ */
 export function generateId(prefix: string) {
-  return `${prefix}_${Math.random().toString(36).substring(2, 11)}`;
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  const token = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+  return `${prefix}_${token}`;
 }
 
 /** Formate un montant en francs CFA. */

@@ -350,6 +350,13 @@ export async function deleteCompetition(competitionId: string): Promise<ActionRe
 
 // ==================== LECTURE ====================
 
+/**
+ * Concours par identifiant.
+ *
+ * Un brouillon n'est renvoyé qu'à son organisateur ou à un administrateur :
+ * cette fonction étant une Server Action, elle est appelable directement depuis
+ * le navigateur et ne doit pas divulguer les concours non publiés.
+ */
 export async function getCompetition(competitionId: string): Promise<Competition | null> {
   const { data, error } = await getSupabaseAdmin()
     .from('competitions')
@@ -362,7 +369,16 @@ export async function getCompetition(competitionId: string): Promise<Competition
     return null;
   }
 
-  return data ? toCompetition(data as unknown as CompetitionRow) : null;
+  if (!data) return null;
+
+  const competition = toCompetition(data as unknown as CompetitionRow);
+  if (competition.status !== 'draft') return competition;
+
+  const session = await auth();
+  const canSeeDraft =
+    session?.user?.id === competition.organizerId || session?.user?.role === 'admin';
+
+  return canSeeDraft ? competition : null;
 }
 
 /** Concours accessible en écriture par l'utilisateur courant. */

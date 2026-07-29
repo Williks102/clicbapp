@@ -8,6 +8,46 @@ import { sendLiveAccessEmail, sendVoteConfirmationEmail } from '@/lib/emails';
 const SUCCESS_STATUSES = new Set(['SUCCESSFUL', 'SUCCESS', 'PAID', 'success', 'paid']);
 
 /**
+ * Authentifie l'appelant du webhook.
+ *
+ * ⚠️ Sans secret configuré, cet endpoint est **forgeable** : toute personne
+ * connaissant la référence d'une commande — à commencer par l'acheteur, qui la
+ * voit dans son navigateur — peut se faire créditer des votes sans payer.
+ *
+ * Pour fermer cette porte, déclarez `PAYMENT_WEBHOOK_SECRET` et enregistrez
+ * l'URL de notification correspondante **dans le tableau de bord Paiement Pro**
+ * (et non depuis le client, où le secret serait visible) :
+ *     https://votre-domaine/api/payment/webhook?secret=<PAYMENT_WEBHOOK_SECRET>
+ *
+ * Le secret est comparé en temps constant afin de ne pas le divulguer par
+ * mesure du temps de réponse.
+ */
+function isAuthenticCaller(request: Request): boolean {
+  const expected = process.env.PAYMENT_WEBHOOK_SECRET;
+
+  if (!expected) {
+    console.warn(
+      '[Webhook] ⚠️ PAYMENT_WEBHOOK_SECRET non défini : endpoint non authentifié, ' +
+        'des votes peuvent être crédités sans paiement réel.'
+    );
+    return true;
+  }
+
+  const provided =
+    new URL(request.url).searchParams.get('secret') ??
+    request.headers.get('x-webhook-secret') ??
+    '';
+
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length) return false;
+
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
+}
+
+/**
  * Webhook Paiement Pro.
  *
  * L'application ne fait que relayer la notification : la confirmation, le
@@ -17,6 +57,11 @@ const SUCCESS_STATUSES = new Set(['SUCCESSFUL', 'SUCCESS', 'PAID', 'success', 'p
  */
 export async function POST(request: Request) {
   try {
+    if (!isAuthenticCaller(request)) {
+      console.error('[Webhook] ⛔ Appel rejeté : secret invalide ou absent.');
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     const body = await request.json();
     console.log('[Webhook] 🔔 Notification Paiement Pro reçue:', body);
 
