@@ -2,6 +2,7 @@
 
 import { auth } from '@/auth';
 import { checkCredentials } from '@/lib/paystack';
+import { resolveBaseUrl } from '@/lib/base-url';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
 import { toCompetition, toUser } from '@/lib/supabase/mappers';
 import { COMPETITION_COLUMNS, type CompetitionRow, type UserRow } from '@/lib/supabase/types';
@@ -120,6 +121,12 @@ export type PaymentGatewayStatus = {
   reachable: boolean;
   /** Cause précise de l'échec, à destination de l'administrateur. */
   problem?: string;
+  /** Domaine réellement utilisé pour le retour après paiement. */
+  baseUrl: string;
+  /** URL à déclarer dans le tableau de bord Paystack. */
+  webhookUrl: string;
+  /** `NEXT_PUBLIC_BASE_URL` est absente : le domaine vient de l'hébergeur. */
+  baseUrlInferred: boolean;
 };
 
 /**
@@ -131,12 +138,20 @@ export type PaymentGatewayStatus = {
  * valide mais compte inaccessible.
  */
 export async function getPaymentGatewayStatus(): Promise<PaymentGatewayStatus> {
+  const baseUrl = resolveBaseUrl();
+  const urls = {
+    baseUrl,
+    webhookUrl: `${baseUrl}/api/payment/webhook`,
+    baseUrlInferred: !process.env.NEXT_PUBLIC_BASE_URL?.trim(),
+  };
+
   try {
     await ensureAdmin();
 
     const key = (process.env.PAYSTACK_SECRET_KEY ?? '').trim();
     if (!key) {
       return {
+        ...urls,
         configured: false,
         mode: 'inconnu',
         reachable: false,
@@ -152,13 +167,20 @@ export async function getPaymentGatewayStatus(): Promise<PaymentGatewayStatus> {
 
     const check = await checkCredentials();
     if (!check.ok) {
-      return { configured: mode !== 'inconnu', mode, reachable: false, problem: check.reason };
+      return {
+        ...urls,
+        configured: mode !== 'inconnu',
+        mode,
+        reachable: false,
+        problem: check.reason,
+      };
     }
 
-    return { configured: true, mode, reachable: true };
+    return { ...urls, configured: true, mode, reachable: true };
   } catch (error) {
     console.error('[PAYMENT GATEWAY STATUS] ❌', error);
     return {
+      ...urls,
       configured: false,
       mode: 'inconnu',
       reachable: false,

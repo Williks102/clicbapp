@@ -125,9 +125,33 @@ export default function AdminSettingsPage() {
               </AlertDescription>
             </Alert>
           )}
+          {gateway && (
+            <div className="mt-4 space-y-3 rounded-lg border bg-muted/40 p-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Domaine de retour après paiement</p>
+                <p className="break-all font-mono text-xs">{gateway.baseUrl}</p>
+                {gateway.baseUrlInferred && (
+                  <p className="mt-1 text-xs text-amber-600">
+                    Déduit de l'hébergeur : <code className="font-mono">NEXT_PUBLIC_BASE_URL</code>{' '}
+                    n'est pas définie. Renseignez-la pour figer le domaine.
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-muted-foreground">
+                  URL à déclarer dans Paystack (champ <em>Webhook URL</em>)
+                </p>
+                <p className="break-all font-mono text-xs">{gateway.webhookUrl}</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Le champ <em>Callback URL</em> reste vide : l'application en fournit une par
+                  transaction. Les onglets Test et Live ont chacun leur configuration.
+                </p>
+              </div>
+            </div>
+          )}
         </CardContent>
         <CardFooter className="border-t px-6 py-4">
-          <p className="text-sm text-muted-foreground">Cette valeur est lue depuis les variables d'environnement et ne peut pas être modifiée ici.</p>
+          <p className="text-sm text-muted-foreground">Ces valeurs sont lues depuis les variables d'environnement et ne peuvent pas être modifiées ici.</p>
         </CardFooter>
       </Card>
 
