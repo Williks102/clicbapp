@@ -1,5 +1,5 @@
 process.env.PAYSTACK_SECRET_KEY = 'sk_test_exemple_de_cle_secrete';
-const { verifyWebhookSignature, toSubunit, fromSubunit } =
+const { verifyWebhookSignature, toSubunit, fromSubunit, initializeTransaction } =
   await import('../src/lib/paystack.ts');
 const { createHmac } = await import('node:crypto');
 
@@ -32,6 +32,43 @@ check('2 000 F CFA → 200000 sous-unités', toSubunit(2000) === 200000);
 check('200000 sous-unités → 2 000 F CFA', fromSubunit(200000) === 2000);
 check('aller-retour stable sur 5 000 F', fromSubunit(toSubunit(5000)) === 5000);
 check('montant entier même si décimal en entrée', Number.isInteger(toSubunit(1500.4)));
+
+/*
+ * Clés mal configurées : l'échec doit être immédiat et explicite, sans qu'un
+ * appel réseau ne parte vers Paystack.
+ */
+console.log('\nContrôle de la clé secrète :');
+
+let networkCalls = 0;
+const realFetch = globalThis.fetch;
+globalThis.fetch = (...args) => {
+  networkCalls++;
+  return realFetch(...args);
+};
+
+const params = {
+  email: 'test@exemple.ci',
+  amount: 2000,
+  reference: 'VOTE-test',
+  callbackUrl: 'https://exemple.ci/vote/success',
+};
+
+const originalKey = process.env.PAYSTACK_SECRET_KEY;
+const initWith = async (key) => {
+  if (key === undefined) delete process.env.PAYSTACK_SECRET_KEY;
+  else process.env.PAYSTACK_SECRET_KEY = key;
+  return initializeTransaction(params);
+};
+
+const isRefused = (r) => r.success === false && /pas correctement configuré/.test(r.error);
+
+check('clé publique (pk_) refusée', isRefused(await initWith('pk_live_abcdef')));
+check('clé au format inconnu refusée', isRefused(await initWith('abcdef123')));
+check('clé absente refusée', isRefused(await initWith(undefined)));
+check('aucun appel réseau émis avec une clé invalide', networkCalls === 0);
+
+process.env.PAYSTACK_SECRET_KEY = originalKey;
+globalThis.fetch = realFetch;
 
 console.log(ko === 0 ? '\nToutes les vérifications passent.' : `\n${ko} échec(s).`);
 process.exit(ko === 0 ? 0 : 1);

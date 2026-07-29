@@ -11,6 +11,14 @@ import { createHmac, timingSafeEqual } from 'node:crypto';
 
 const PAYSTACK_API = 'https://api.paystack.co';
 
+/**
+ * Message affiché à l'acheteur quand la passerelle est mal configurée.
+ * Le détail technique reste dans les journaux du serveur.
+ */
+const CONFIG_ERROR =
+  "Le service de paiement n'est pas correctement configuré. " +
+  "Merci de réessayer plus tard ou de contacter l'organisateur.";
+
 /** Devise de la plateforme. Le franc CFA n'a pas de décimale. */
 export const CURRENCY = 'XOF';
 
@@ -27,13 +35,39 @@ export function fromSubunit(amount: number): number {
   return amount / 100;
 }
 
+/**
+ * Clé secrète Paystack, contrôlée avant tout appel.
+ *
+ * Paystack répond « Invalid key » sans distinguer les causes. Ces contrôles
+ * les séparent côté serveur : clé absente, clé publique copiée à la place de
+ * la clé secrète, ou espaces conservés lors du copier-coller.
+ */
 function secretKey(): string {
-  const key = process.env.PAYSTACK_SECRET_KEY;
-  if (!key) {
+  const raw = process.env.PAYSTACK_SECRET_KEY;
+  if (!raw) {
     throw new Error(
       'PAYSTACK_SECRET_KEY manquante : impossible de contacter Paystack.'
     );
   }
+
+  // Un saut de ligne ou une espace collée avec la clé suffit à la faire
+  // rejeter ; l'en-tête Authorization les transmet tels quels.
+  const key = raw.trim();
+
+  if (key.startsWith('pk_')) {
+    throw new Error(
+      'PAYSTACK_SECRET_KEY contient une clé publique (pk_…). ' +
+        'Paystack attend la clé secrète (sk_test_… ou sk_live_…).'
+    );
+  }
+
+  if (!key.startsWith('sk_')) {
+    throw new Error(
+      'PAYSTACK_SECRET_KEY ne ressemble pas à une clé Paystack : ' +
+        'elle doit commencer par sk_test_ ou sk_live_.'
+    );
+  }
+
   return key;
 }
 
@@ -58,11 +92,21 @@ export type InitializeResult =
 export async function initializeTransaction(
   params: InitializeParams
 ): Promise<InitializeResult> {
+  // Hors du try : une clé mal configurée doit être signalée comme telle, et
+  // non confondue avec une panne réseau.
+  let key: string;
+  try {
+    key = secretKey();
+  } catch (error) {
+    console.error('[Paystack] ❌ Configuration :', error);
+    return { success: false, error: CONFIG_ERROR };
+  }
+
   try {
     const response = await fetch(`${PAYSTACK_API}/transaction/initialize`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${secretKey()}`,
+        Authorization: `Bearer ${key}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -84,7 +128,18 @@ export async function initializeTransaction(
     };
 
     if (!response.ok || !payload.status || !payload.data?.authorization_url) {
-      console.error('[Paystack] ❌ Initialisation refusée :', payload.message);
+      console.error(
+        `[Paystack] ❌ Initialisation refusée (HTTP ${response.status}) :`,
+        payload.message
+      );
+
+      // 401 : la clé elle-même est rejetée. C'est un défaut de configuration
+      // de la plateforme, pas une erreur imputable à l'acheteur — inutile de
+      // lui montrer le message brut de Paystack.
+      if (response.status === 401) {
+        return { success: false, error: CONFIG_ERROR };
+      }
+
       return {
         success: false,
         error: payload.message || "Paystack n'a pas pu initialiser le paiement.",
@@ -99,6 +154,55 @@ export async function initializeTransaction(
   } catch (error) {
     console.error('[Paystack] ❌ Appel impossible :', error);
     return { success: false, error: 'Service de paiement injoignable.' };
+  }
+}
+
+export type CredentialCheck =
+  | { ok: true; mode: 'test' | 'live' }
+  | { ok: false; reason: string };
+
+/**
+ * Vérifie que la clé secrète est acceptée par Paystack.
+ *
+ * Interroge `/balance`, le point d'entrée authentifié le plus léger : il ne
+ * crée rien et ne dépend d'aucune transaction existante. Réservé à
+ * l'administration — il sert à diagnostiquer un « Invalid key » sans avoir à
+ * lancer un vrai paiement.
+ */
+export async function checkCredentials(): Promise<CredentialCheck> {
+  let key: string;
+  try {
+    key = secretKey();
+  } catch (error) {
+    return {
+      ok: false,
+      reason: error instanceof Error ? error.message : 'Clé illisible.',
+    };
+  }
+
+  try {
+    const response = await fetch(`${PAYSTACK_API}/balance`, {
+      headers: { Authorization: `Bearer ${key}` },
+      cache: 'no-store',
+    });
+
+    if (response.status === 401) {
+      return {
+        ok: false,
+        reason:
+          'Paystack rejette la clé (« Invalid key »). Elle est incomplète, ' +
+          'révoquée, ou provient d’un autre compte.',
+      };
+    }
+
+    if (!response.ok) {
+      return { ok: false, reason: `Paystack a répondu HTTP ${response.status}.` };
+    }
+
+    return { ok: true, mode: key.startsWith('sk_live_') ? 'live' : 'test' };
+  } catch (error) {
+    console.error('[Paystack] ❌ Vérification de la clé impossible :', error);
+    return { ok: false, reason: 'API Paystack injoignable depuis le serveur.' };
   }
 }
 

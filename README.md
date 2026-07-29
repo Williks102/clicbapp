@@ -83,7 +83,7 @@ d'évaluer les politiques RLS, et l'application ne peut rien lire ni écrire.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clé publique, utilisée par le navigateur (lecture seule) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Clé serveur, contourne RLS — **ne jamais exposer au client** |
 | `AUTH_SECRET` | Secret de signature des sessions NextAuth |
-| `PAYSTACK_SECRET_KEY` | Clé secrète Paystack (`sk_test_…` / `sk_live_…`) — **jamais préfixée `NEXT_PUBLIC_`** |
+| `PAYSTACK_SECRET_KEY` | Clé secrète Paystack — une seule variable pour les deux modes : `sk_test_…` en recette, `sk_live_…` en production. **Jamais préfixée `NEXT_PUBLIC_`** |
 | `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` | Preset d'upload Cloudinary |
 | `RESEND_API_KEY` | Envoi des e-mails de confirmation |
 | `NEXT_PUBLIC_BASE_URL` | URL publique, utilisée dans les e-mails |

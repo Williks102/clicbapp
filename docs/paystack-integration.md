@@ -48,14 +48,41 @@ créditerait cent fois trop. La conversion est isolée dans `toSubunit` /
 | `PAYSTACK_SECRET_KEY` | Clé secrète (`sk_test_…` ou `sk_live_…`). **Jamais préfixée `NEXT_PUBLIC_`** |
 | `NEXT_PUBLIC_BASE_URL` | Base de l'URL de retour après paiement |
 
-Dans le tableau de bord Paystack, section *Webhooks*, déclarez l'URL :
+**Une seule variable pour les deux modes.** Il n'existe pas de
+`PAYSTACK_TEST_SECRET_KEY` : le mode n'est pas déduit du nom de la variable
+mais du préfixe de la clé qu'elle contient. Coller une clé `sk_test_…` place
+la plateforme en test, une clé `sk_live_…` la place en production. Pour
+basculer, on remplace la valeur — jamais le nom.
 
-```
-https://votre-domaine/api/payment/webhook
-```
+La clé publique `pk_…` n'est utilisée nulle part : le paiement est initialisé
+de serveur à serveur, l'acheteur est ensuite redirigé vers l'URL renvoyée par
+Paystack.
+
+### URL à déclarer dans le tableau de bord
+
+| Champ | Valeur |
+| --- | --- |
+| **Webhook URL** | `https://votre-domaine/api/payment/webhook` |
+| **Callback URL** | *laisser vide* — le code fournit un `callback_url` par transaction |
+
+Le webhook est la seule voie qui crédite les votes. Sans lui, l'acheteur paie
+mais la commande reste `PENDING`. Les onglets *Test* et *Live* ont chacun leur
+propre configuration : l'URL doit être déclarée dans les deux.
 
 Aucun secret n'est à placer dans cette URL : l'authenticité repose sur la
 signature du corps de la requête.
+
+## Diagnostic
+
+Paystack répond `Invalid key` (HTTP 401) sans distinguer les causes. Le
+contrôle de format dans `secretKey()` les sépare avant tout appel réseau, et
+la page **Admin → Paramètres** interroge `/balance` pour confirmer que la clé
+est réellement acceptée. Causes classiques, par fréquence :
+
+1. la clé publique `pk_…` a été collée à la place de la clé secrète ;
+2. la clé a été recopiée depuis l'affichage masqué, donc tronquée ;
+3. un espace ou un saut de ligne a été conservé au collage (`trim()` le corrige) ;
+4. la variable a été ajoutée chez l'hébergeur sans redéploiement.
 
 ## Recette
 

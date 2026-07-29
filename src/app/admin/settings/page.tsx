@@ -14,7 +14,10 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { initializeCategories } from '@/app/actions/category-actions';
-import { getPaymentGatewayStatus } from '@/app/actions/admin-actions';
+import {
+  getPaymentGatewayStatus,
+  type PaymentGatewayStatus,
+} from '@/app/actions/admin-actions';
 import { toast } from '@/hooks/use-toast';
 import { useEffect, useState } from 'react';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -22,10 +25,7 @@ import { Terminal, AlertTriangle } from 'lucide-react';
 
 export default function AdminSettingsPage() {
   const [isInitializingCategories, setIsInitializingCategories] = useState(false);
-  const [gateway, setGateway] = useState<{
-    configured: boolean;
-    mode: 'test' | 'live' | 'inconnu';
-  } | null>(null);
+  const [gateway, setGateway] = useState<PaymentGatewayStatus | null>(null);
 
   useEffect(() => {
     getPaymentGatewayStatus().then(setGateway);
@@ -88,13 +88,15 @@ export default function AdminSettingsPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {gateway?.configured ? (
+          {gateway === null ? (
+            <p className="text-sm text-muted-foreground">Vérification en cours…</p>
+          ) : gateway.reachable ? (
             <Alert variant="default" className="border-green-500 bg-green-50 text-green-800">
               <Terminal className="h-4 w-4" />
-              <AlertTitle>Paystack configuré</AlertTitle>
+              <AlertTitle>Paystack opérationnel</AlertTitle>
               <AlertDescription>
                 <p>
-                  La clé secrète est en place, en mode{' '}
+                  La clé secrète a été acceptée par Paystack, en mode{' '}
                   <strong>{gateway.mode === 'live' ? 'production' : gateway.mode}</strong>.
                 </p>
                 {gateway.mode === 'test' && (
@@ -108,15 +110,17 @@ export default function AdminSettingsPage() {
           ) : (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
-              <AlertTitle>Action requise : clé Paystack manquante</AlertTitle>
+              <AlertTitle>Action requise : aucun paiement ne peut aboutir</AlertTitle>
               <AlertDescription>
-                <p>
-                  La variable <code className="font-mono text-xs">PAYSTACK_SECRET_KEY</code> n'est pas définie.
-                </p>
+                <p>{gateway.problem}</p>
                 <p className="mt-2">
-                  Aucun paiement ne peut aboutir sans elle. Ajoutez-la dans les
-                  variables d'environnement de votre hébergeur — sans le préfixe
-                  <code className="font-mono text-xs"> NEXT_PUBLIC_</code>, qui l'exposerait au navigateur.
+                  Renseignez <code className="font-mono text-xs">PAYSTACK_SECRET_KEY</code> chez
+                  votre hébergeur avec la <strong>clé secrète</strong> du tableau de bord Paystack
+                  (<code className="font-mono text-xs">sk_test_…</code> ou{' '}
+                  <code className="font-mono text-xs">sk_live_…</code>), puis relancez un
+                  déploiement. La clé publique <code className="font-mono text-xs">pk_…</code> ne
+                  convient pas, et le préfixe{' '}
+                  <code className="font-mono text-xs">NEXT_PUBLIC_</code> l'exposerait au navigateur.
                 </p>
               </AlertDescription>
             </Alert>

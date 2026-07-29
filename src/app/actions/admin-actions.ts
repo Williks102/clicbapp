@@ -1,6 +1,7 @@
 'use server';
 
 import { auth } from '@/auth';
+import { checkCredentials } from '@/lib/paystack';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
 import { toCompetition, toUser } from '@/lib/supabase/mappers';
 import { COMPETITION_COLUMNS, type CompetitionRow, type UserRow } from '@/lib/supabase/types';
@@ -111,34 +112,57 @@ export async function updateUserStatus(
   }
 }
 
+export type PaymentGatewayStatus = {
+  /** La clé est présente et bien formée. */
+  configured: boolean;
+  mode: 'test' | 'live' | 'inconnu';
+  /** La clé a été acceptée par l'API Paystack. */
+  reachable: boolean;
+  /** Cause précise de l'échec, à destination de l'administrateur. */
+  problem?: string;
+};
+
 /**
  * État de configuration de la passerelle de paiement.
  *
- * La clé Paystack est secrète : cette action ne renvoie qu'un booléen et le
- * mode (test ou production), déduit du préfixe de la clé. Elle ne divulgue
- * jamais la clé elle-même, contrairement à l'identifiant marchand public de
- * l'ancienne passerelle.
+ * La clé Paystack est secrète : cette action ne renvoie jamais sa valeur, mais
+ * le résultat d'un appel réel à l'API. Cela distingue les trois situations que
+ * le message « Invalid key » confond : clé absente, clé mal recopiée, ou clé
+ * valide mais compte inaccessible.
  */
-export async function getPaymentGatewayStatus(): Promise<{
-  configured: boolean;
-  mode: 'test' | 'live' | 'inconnu';
-}> {
+export async function getPaymentGatewayStatus(): Promise<PaymentGatewayStatus> {
   try {
     await ensureAdmin();
 
-    const key = process.env.PAYSTACK_SECRET_KEY ?? '';
-    if (!key) return { configured: false, mode: 'inconnu' };
+    const key = (process.env.PAYSTACK_SECRET_KEY ?? '').trim();
+    if (!key) {
+      return {
+        configured: false,
+        mode: 'inconnu',
+        reachable: false,
+        problem: "La variable PAYSTACK_SECRET_KEY n'est pas définie.",
+      };
+    }
 
-    return {
-      configured: true,
-      mode: key.startsWith('sk_test_')
-        ? 'test'
-        : key.startsWith('sk_live_')
-          ? 'live'
-          : 'inconnu',
-    };
+    const mode = key.startsWith('sk_test_')
+      ? ('test' as const)
+      : key.startsWith('sk_live_')
+        ? ('live' as const)
+        : ('inconnu' as const);
+
+    const check = await checkCredentials();
+    if (!check.ok) {
+      return { configured: mode !== 'inconnu', mode, reachable: false, problem: check.reason };
+    }
+
+    return { configured: true, mode, reachable: true };
   } catch (error) {
     console.error('[PAYMENT GATEWAY STATUS] ❌', error);
-    return { configured: false, mode: 'inconnu' };
+    return {
+      configured: false,
+      mode: 'inconnu',
+      reachable: false,
+      problem: 'Vérification impossible.',
+    };
   }
 }
