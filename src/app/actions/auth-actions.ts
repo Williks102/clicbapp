@@ -1,8 +1,15 @@
 'use server';
 
+import { headers } from 'next/headers';
 import { z } from 'zod';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
 import { hashPassword } from '@/lib/passwords';
+import {
+  clientIp,
+  consumeRateLimit,
+  formatRetryAfter,
+  LIMITS,
+} from '@/lib/rate-limit';
 
 /**
  * Attention : toute fonction exportée d'un fichier « use server » devient un
@@ -31,6 +38,23 @@ export type SignupResult = {
 export async function createUserAccount(data: SignupFormData): Promise<SignupResult> {
   try {
     const validated = signupSchema.parse(data);
+
+    /*
+     * Borne la création de comptes en masse. Le compteur est consommé après
+     * validation du formulaire mais avant l'écriture : une requête malformée
+     * ne doit pas pénaliser l'appelant, une requête valide oui.
+     */
+    const ipKey = `signup:ip:${clientIp(await headers())}`;
+    const verdict = await consumeRateLimit(ipKey, LIMITS.signupByIp);
+
+    if (!verdict.allowed) {
+      console.warn(`[SIGNUP] ⛔ Trop d'inscriptions (${ipKey}).`);
+      return {
+        success: false,
+        error: `Trop de tentatives d'inscription. Réessayez dans ${formatRetryAfter(verdict.retryAfter)}.`,
+      };
+    }
+
     const supabase = getSupabaseAdmin();
 
     const passwordHash = await hashPassword(validated.password);

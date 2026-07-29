@@ -16,7 +16,7 @@ Autres scripts utiles :
 ```bash
 npm run build      # build de production
 npm run typecheck  # vérification TypeScript
-npm run test:paystack  # signature du webhook et conversion des montants
+npm test           # signature du webhook, montants, URL de diffusion
 npm run genkit:dev # flows Genkit (assistant de rédaction)
 ```
 
@@ -87,6 +87,7 @@ d'évaluer les politiques RLS, et l'application ne peut rien lire ni écrire.
 | `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` | Preset d'upload Cloudinary |
 | `RESEND_API_KEY` | Envoi des e-mails de confirmation |
 | `NEXT_PUBLIC_BASE_URL` | URL publique du site : retour après paiement et liens des e-mails. À défaut, le domaine exposé par Vercel est utilisé |
+| `CRON_SECRET` | Protège `/api/cron/maintenance`. **Sans elle, l'entretien périodique est refusé** |
 
 ## Structure
 
@@ -134,6 +135,36 @@ Garanties portées par la base, et non par le code applicatif :
   montant ; un webhook rejoué ne crédite jamais deux fois, et un montant
   incohérent bascule la commande en `FLAGGED` sans créditer de votes.
 - **Accès aux directs** — `unique (user_id, competition_id)`.
+- **Commandes abandonnées** — `expire_stale_orders` clôt les commandes restées
+  en attente au-delà de 24 h. Le statut `EXPIRED` reste réversible : un
+  règlement confirmé tardivement par Paystack crédite quand même les votes.
+
+## Entretien périodique
+
+`/api/cron/maintenance` clôt les commandes abandonnées et purge les compteurs
+de limitation de débit. Il est déclenché une fois par jour par le planificateur
+déclaré dans `vercel.json` et s'authentifie par `CRON_SECRET` : sans ce secret,
+le point d'entrée refuse toute requête plutôt que de rester ouvert.
+
+## Résistance aux tentatives répétées
+
+La connexion et l'inscription sont limitées en débit, par adresse IP **et** par
+adresse e-mail : la première borne le balayage de plusieurs comptes, la seconde
+l'essai de mots de passe sur un compte précis. Les compteurs vivent dans la
+table `auth_throttle` et non en mémoire — les instances serverless ne partagent
+rien et sont recyclées en permanence, si bien qu'un compteur en mémoire se
+réinitialise à chaque démarrage à froid.
+
+Le contrôle est appliqué dans `authorize`, et non dans la page de connexion :
+le point d'entrée NextAuth est public et s'appelle directement.
+
+## Adresses de diffusion
+
+Les URL de direct et de rediffusion finissent dans le `src` d'une iframe.
+`checkLiveUrl` impose HTTPS et restreint les hôtes à ceux autorisés par
+`frame-src` dans la Content Security Policy — un domaine hors de cette liste
+serait de toute façon bloqué par le navigateur, sans message pour
+l'organisateur. La liste des deux fichiers doit rester alignée.
 
 Voir `docs/blueprint.md` pour la spécification produit et `docs/backend.json`
 pour le modèle de données.

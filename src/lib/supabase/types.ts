@@ -120,7 +120,7 @@ export type OrderRow = {
   customer_email: string;
   customer_phone: string | null;
   user_id: string | null;
-  status: 'PENDING' | 'PAID' | 'FAILED' | 'FLAGGED' | 'REFUNDED';
+  status: 'PENDING' | 'PAID' | 'FAILED' | 'FLAGGED' | 'REFUNDED' | 'EXPIRED';
   payment_details: unknown;
   refund_reason: string | null;
   refunded_at: string | null;

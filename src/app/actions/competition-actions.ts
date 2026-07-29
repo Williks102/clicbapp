@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { checkLiveUrl } from '@/lib/live-url';
 import { toCandidate, toCompetition } from '@/lib/supabase/mappers';
 import {
   COMPETITION_COLUMNS,
@@ -64,6 +65,19 @@ const competitionSchema = z
   .refine((data) => !data.liveEnabled || !data.livePaid || data.livePrice > 0, {
     message: "Le prix d'accès au direct doit être supérieur à 0.",
     path: ['livePrice'],
+  })
+  /*
+   * Les deux adresses finissent dans le `src` d'une iframe : le direct quand
+   * l'antenne est ouverte, la rediffusion ensuite (`live-player.tsx`). Elles
+   * subissent donc le même contrôle.
+   */
+  .superRefine((data, ctx) => {
+    for (const field of ['liveUrl', 'liveReplayUrl'] as const) {
+      const check = checkLiveUrl(data.liveProvider, data[field] ?? '');
+      if (!check.ok) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: check.error, path: [field] });
+      }
+    }
   });
 
 export type CompetitionFormValues = z.input<typeof competitionSchema>;

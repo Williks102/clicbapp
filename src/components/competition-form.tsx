@@ -6,6 +6,7 @@ import { useFieldArray, useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { Loader2, PlusCircle, Sparkles, Trash2 } from 'lucide-react';
+import { checkLiveUrl } from '@/lib/live-url';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -90,6 +91,16 @@ const formSchema = z
   .refine((data) => !data.liveEnabled || !data.livePaid || data.livePrice > 0, {
     message: "Indiquez un prix d'accès supérieur à 0.",
     path: ['livePrice'],
+  })
+  // Même contrôle que côté serveur, ici pour un retour immédiat à la saisie.
+  // Le serveur revalide : ce contrôle est un confort, pas une garantie.
+  .superRefine((data, ctx) => {
+    for (const field of ['liveUrl', 'liveReplayUrl'] as const) {
+      const check = checkLiveUrl(data.liveProvider, data[field] ?? '');
+      if (!check.ok) {
+        ctx.addIssue({ code: z.ZodIssueCode.custom, message: check.error, path: [field] });
+      }
+    }
   });
 
 type CompetitionFormSchema = z.infer<typeof formSchema>;

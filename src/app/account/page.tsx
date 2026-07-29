@@ -30,6 +30,7 @@ const STATUS_LABELS: Record<OrderStatus, { label: string; variant: 'default' | '
   FAILED: { label: 'Échoué', variant: 'destructive' },
   FLAGGED: { label: 'À vérifier', variant: 'destructive' },
   REFUNDED: { label: 'Remboursé', variant: 'outline' },
+  EXPIRED: { label: 'Expiré', variant: 'outline' },
 };
 
 export default async function AccountPage() {

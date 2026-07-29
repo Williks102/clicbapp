@@ -43,14 +43,18 @@ export default function LoginPage() {
       });
 
       if (result?.error) {
-        if (result.error === 'CredentialsSignin') {
-            setError('Email ou mot de passe incorrect.');
-        } else {
-            setError('Une erreur est survenue. Veuillez réessayer.');
-        }
+        const tooManyAttempts = result.code === 'rate_limited';
+
+        const message = tooManyAttempts
+          ? 'Trop de tentatives de connexion. Réessayez dans quelques minutes.'
+          : result.error === 'CredentialsSignin'
+            ? 'Email ou mot de passe incorrect.'
+            : 'Une erreur est survenue. Veuillez réessayer.';
+
+        setError(message);
         toast({
-          title: 'Erreur de connexion',
-          description: 'Veuillez vérifier vos identifiants.',
+          title: tooManyAttempts ? 'Connexion temporairement bloquée' : 'Erreur de connexion',
+          description: message,
           variant: 'destructive',
         });
         setIsLoading(false);
