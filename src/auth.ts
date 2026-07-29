@@ -2,7 +2,8 @@
 // src/auth.ts
 import NextAuth, { type NextAuthConfig } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { validateCredentials } from '@/app/actions/auth-actions';
+import { z } from 'zod';
+import { verifyLogin } from '@/lib/passwords';
 import { authConfig as baseAuthConfig } from '@/auth.config';
 
 // Force this file and its dependencies to run in the Node.js environment
@@ -20,16 +21,13 @@ const authConfig = {
         password: { label: 'Password', type: 'password' },
       },
       async authorize(credentials) {
-        // Appelle la Server Action pour valider les identifiants
-        const user = await validateCredentials(credentials);
+        const parsed = z
+          .object({ email: z.string().email(), password: z.string() })
+          .safeParse(credentials);
 
-        if (user) {
-          // Retourne l'objet utilisateur si la validation est réussie
-          return user;
-        } else {
-          // Retourne null si la validation échoue
-          return null;
-        }
+        if (!parsed.success) return null;
+
+        return verifyLogin(parsed.data.email, parsed.data.password);
       },
     }),
   ],

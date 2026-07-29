@@ -48,6 +48,25 @@ where pubname = 'supabase_realtime'
 
 union all
 select
+  'Droits lecture (anon)',
+  count(*) || ' / 6',
+  case when count(*) = 6 then 'OK' else 'LANCER grants.sql' end
+from information_schema.role_table_grants
+where grantee = 'anon' and privilege_type = 'SELECT'
+  and table_name in ('competitions','vote_packs','candidates',
+                     'chat_messages','organizers','categories')
+
+union all
+select
+  'Droits serveur (service_role)',
+  count(*) || ' / 13',
+  case when count(*) = 13 then 'OK' else 'LANCER grants.sql' end
+from information_schema.role_table_grants
+where grantee = 'service_role' and privilege_type = 'SELECT'
+  and table_schema = 'public'
+
+union all
+select
   'Categories',
   count(*) || ' attendues : 9',
   case when count(*) >= 9 then 'OK' else 'LANCER seed.sql' end

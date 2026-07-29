@@ -16,6 +16,7 @@ Autres scripts utiles :
 ```bash
 npm run build      # build de production
 npm run typecheck  # vérification TypeScript
+npm run test:paystack  # signature du webhook et conversion des montants
 npm run genkit:dev # flows Genkit (assistant de rédaction)
 ```
 
@@ -32,17 +33,47 @@ npm run genkit:dev # flows Genkit (assistant de rédaction)
    …ou en collant le contenu de `supabase/migrations/20260728120000_init.sql`
    puis de `supabase/seed.sql` dans l'éditeur SQL du tableau de bord.
 
-3. Créez un compte administrateur :
+3. Créez un compte administrateur, au choix.
+
+   **Depuis l'éditeur SQL** — `pgcrypto` produit un hachage bcrypt que
+   l'application sait relire, aucune installation locale n'est nécessaire :
+
+   ```sql
+   insert into users (name, email, password_hash, role)
+   values (
+     'Nom Admin',
+     'admin@exemple.ci',
+     crypt('motdepasse-solide', gen_salt('bf', 12)),
+     'admin'
+   );
+   ```
+
+   Pour promouvoir un compte déjà inscrit via `/signup` :
+
+   ```sql
+   update users set role = 'admin' where email = 'admin@exemple.ci';
+   ```
+
+   **Ou en local**, avec `NEXT_PUBLIC_SUPABASE_URL` et
+   `SUPABASE_SERVICE_ROLE_KEY` dans un `.env` :
 
    ```bash
-   node scripts/create-admin.mjs admin@exemple.ci "motdepasse-solide" "Nom Admin"
+   npm run create-admin admin@exemple.ci "motdepasse-solide" "Nom Admin"
    ```
+
+   Le rôle est inscrit dans la session à la connexion : après une promotion,
+   déconnectez-vous puis reconnectez-vous.
 
 Le schéma active la réplication temps réel sur `competitions`, `candidates` et
 `chat_messages` : rien d'autre à configurer pour le classement et le chat.
 
 Pour contrôler l'installation, exécutez `supabase/check-install.sql` dans
 l'éditeur SQL : chaque ligne doit afficher `OK`.
+
+Les privilèges des rôles `anon` et `service_role` sont accordés par la
+migration. Sur une base créée avant leur ajout, exécutez `supabase/grants.sql` :
+sans ces privilèges, PostgreSQL refuse l'accès aux tables avant même
+d'évaluer les politiques RLS, et l'application ne peut rien lire ni écrire.
 
 ## Variables d'environnement
 
@@ -52,10 +83,10 @@ l'éditeur SQL : chaque ligne doit afficher `OK`.
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clé publique, utilisée par le navigateur (lecture seule) |
 | `SUPABASE_SERVICE_ROLE_KEY` | Clé serveur, contourne RLS — **ne jamais exposer au client** |
 | `AUTH_SECRET` | Secret de signature des sessions NextAuth |
-| `NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID` | Identifiant marchand Paiement Pro |
+| `PAYSTACK_SECRET_KEY` | Clé secrète Paystack — une seule variable pour les deux modes : `sk_test_…` en recette, `sk_live_…` en production. **Jamais préfixée `NEXT_PUBLIC_`** |
 | `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` | Preset d'upload Cloudinary |
 | `RESEND_API_KEY` | Envoi des e-mails de confirmation |
-| `NEXT_PUBLIC_BASE_URL` | URL publique, utilisée dans les e-mails |
+| `NEXT_PUBLIC_BASE_URL` | URL publique du site : retour après paiement et liens des e-mails. À défaut, le domaine exposé par Vercel est utilisé |
 
 ## Structure
 
@@ -67,7 +98,7 @@ src/
 │   ├── live/             Liste des diffusions
 │   ├── dashboard/        Espace organisateur
 │   ├── admin/            Back-office plateforme
-│   └── api/payment/      Webhook Paiement Pro
+│   └── api/payment/      Webhook Paystack
 ├── components/           Composants d'interface (player, chat, classement, formulaires)
 ├── hooks/
 │   └── use-realtime-query.ts   Lecture + abonnement temps réel Supabase

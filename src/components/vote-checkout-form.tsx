@@ -1,26 +1,18 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import Script from 'next/script';
 import Image from 'next/image';
 import { useSession } from 'next-auth/react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
-import { AlertTriangle, CreditCard, Loader2, Zap } from 'lucide-react';
+import { CreditCard, Loader2, ShieldCheck, Zap } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { CustomerFields, PaymentChannelPicker } from '@/components/payment-fields';
-import {
-  PAIEMENTPRO_SCRIPT_URL,
-  redirectToPayment,
-  usePaiementProStatus,
-  type PaymentChannel,
-} from '@/hooks/use-paiementpro';
+import { CustomerFields } from '@/components/payment-fields';
 import { initializeVotePackOrder } from '@/app/actions/order-actions';
 import { formatFCFA } from '@/lib/utils';
 import type { Candidate, Competition, VotePack } from '@/lib/types';
@@ -28,7 +20,6 @@ import type { Candidate, Competition, VotePack } from '@/lib/types';
 const formSchema = z.object({
   fullName: z.string().min(2, 'Le nom complet est requis.'),
   email: z.string().email("L'adresse e-mail est invalide."),
-  phone: z.string().min(8, 'Le numéro de téléphone est requis.'),
 });
 
 type VoteCheckoutFormProps = {
@@ -47,16 +38,12 @@ export function VoteCheckoutForm({
   const { data: session } = useSession();
   const { toast } = useToast();
   const [isProcessing, setIsProcessing] = useState(false);
-  const [channel, setChannel] = useState<PaymentChannel>('mobile-money');
-  const { scriptReady, setScriptReady, scriptError, setScriptError } =
-    usePaiementProStatus(isProcessing);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
     defaultValues: {
       fullName: session?.user?.name || '',
       email: session?.user?.email || '',
-      phone: '',
     },
   });
 
@@ -75,24 +62,15 @@ export function VoteCheckoutForm({
         packId: pack.id,
         fullName: values.fullName,
         email: values.email,
-        phone: values.phone,
       });
 
-      if (!init.success || !init.reference || !init.amount || !init.merchantId) {
+      if (!init.success || !init.authorizationUrl) {
         throw new Error(init.error || "Impossible d'initialiser le paiement.");
       }
 
-      await redirectToPayment({
-        merchantId: init.merchantId,
-        reference: init.reference,
-        amount: init.amount,
-        description: init.description || `${pack.votes} votes pour ${candidate.name}`,
-        channel,
-        customerFullName: values.fullName,
-        customerEmail: values.email,
-        customerPhone: values.phone,
-        returnPath: `/vote/success?reference=${init.reference}`,
-      });
+      // Paystack héberge la page de paiement : le choix de l'opérateur
+      // (Orange, MTN, Moov) et la saisie du numéro s'y font.
+      window.location.href = init.authorizationUrl;
     } catch (error) {
       console.error('[VOTE CHECKOUT] ❌', error);
       toast({
@@ -107,25 +85,6 @@ export function VoteCheckoutForm({
 
   return (
     <>
-      <Script
-        src={PAIEMENTPRO_SCRIPT_URL}
-        strategy="afterInteractive"
-        onLoad={() => setScriptReady(true)}
-        onError={() =>
-          setScriptError(
-            "Le script de paiement n'a pas pu être chargé. Vérifiez votre connexion internet."
-          )
-        }
-      />
-
-      {scriptError && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Passerelle de paiement indisponible</AlertTitle>
-          <AlertDescription>{scriptError}</AlertDescription>
-        </Alert>
-      )}
-
       <Card>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)}>
@@ -170,7 +129,11 @@ export function VoteCheckoutForm({
                 </div>
               </div>
 
-              <PaymentChannelPicker value={channel} onChange={setChannel} />
+              <p className="flex items-center justify-center gap-2 text-center text-sm text-muted-foreground">
+                <ShieldCheck className="h-4 w-4 shrink-0 text-primary" />
+                Paiement sécurisé par Paystack — Orange Money, MTN, Moov ou carte
+                bancaire.
+              </p>
             </CardContent>
 
             <CardFooter>
@@ -178,17 +141,12 @@ export function VoteCheckoutForm({
                 type="submit"
                 size="lg"
                 className="w-full"
-                disabled={isProcessing || !scriptReady}
+                disabled={isProcessing}
               >
                 {isProcessing ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Traitement en cours…
-                  </>
-                ) : !scriptReady ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Chargement du paiement…
+                    Redirection vers le paiement…
                   </>
                 ) : (
                   <>

@@ -1,6 +1,8 @@
 'use server';
 
 import { auth } from '@/auth';
+import { checkCredentials } from '@/lib/paystack';
+import { resolveBaseUrl } from '@/lib/base-url';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
 import { toCompetition, toUser } from '@/lib/supabase/mappers';
 import { COMPETITION_COLUMNS, type CompetitionRow, type UserRow } from '@/lib/supabase/types';
@@ -107,6 +109,82 @@ export async function updateUserStatus(
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Erreur lors de la mise à jour',
+    };
+  }
+}
+
+export type PaymentGatewayStatus = {
+  /** La clé est présente et bien formée. */
+  configured: boolean;
+  mode: 'test' | 'live' | 'inconnu';
+  /** La clé a été acceptée par l'API Paystack. */
+  reachable: boolean;
+  /** Cause précise de l'échec, à destination de l'administrateur. */
+  problem?: string;
+  /** Domaine réellement utilisé pour le retour après paiement. */
+  baseUrl: string;
+  /** URL à déclarer dans le tableau de bord Paystack. */
+  webhookUrl: string;
+  /** `NEXT_PUBLIC_BASE_URL` est absente : le domaine vient de l'hébergeur. */
+  baseUrlInferred: boolean;
+};
+
+/**
+ * État de configuration de la passerelle de paiement.
+ *
+ * La clé Paystack est secrète : cette action ne renvoie jamais sa valeur, mais
+ * le résultat d'un appel réel à l'API. Cela distingue les trois situations que
+ * le message « Invalid key » confond : clé absente, clé mal recopiée, ou clé
+ * valide mais compte inaccessible.
+ */
+export async function getPaymentGatewayStatus(): Promise<PaymentGatewayStatus> {
+  const baseUrl = resolveBaseUrl();
+  const urls = {
+    baseUrl,
+    webhookUrl: `${baseUrl}/api/payment/webhook`,
+    baseUrlInferred: !process.env.NEXT_PUBLIC_BASE_URL?.trim(),
+  };
+
+  try {
+    await ensureAdmin();
+
+    const key = (process.env.PAYSTACK_SECRET_KEY ?? '').trim();
+    if (!key) {
+      return {
+        ...urls,
+        configured: false,
+        mode: 'inconnu',
+        reachable: false,
+        problem: "La variable PAYSTACK_SECRET_KEY n'est pas définie.",
+      };
+    }
+
+    const mode = key.startsWith('sk_test_')
+      ? ('test' as const)
+      : key.startsWith('sk_live_')
+        ? ('live' as const)
+        : ('inconnu' as const);
+
+    const check = await checkCredentials();
+    if (!check.ok) {
+      return {
+        ...urls,
+        configured: mode !== 'inconnu',
+        mode,
+        reachable: false,
+        problem: check.reason,
+      };
+    }
+
+    return { ...urls, configured: true, mode, reachable: true };
+  } catch (error) {
+    console.error('[PAYMENT GATEWAY STATUS] ❌', error);
+    return {
+      ...urls,
+      configured: false,
+      mode: 'inconnu',
+      reachable: false,
+      problem: 'Vérification impossible.',
     };
   }
 }

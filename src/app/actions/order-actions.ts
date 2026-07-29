@@ -6,7 +6,13 @@ import { getSupabaseAdmin } from '@/lib/supabase/server';
 import { toOrder } from '@/lib/supabase/mappers';
 import type { CandidateRow, CompetitionRow, OrderRow, VotePackRow } from '@/lib/supabase/types';
 import { generateId } from '@/lib/utils';
+import { initializeTransaction } from '@/lib/paystack';
+import { settleOrder } from '@/lib/settle-order';
+import { resolveBaseUrl } from '@/lib/base-url';
 import type { Order, PaymentInitResult } from '@/lib/types';
+
+/** URL publique du site, utilisée comme page de retour après paiement. */
+const baseUrl = resolveBaseUrl;
 
 const votePackOrderSchema = z.object({
   competitionId: z.string().min(1),
@@ -14,7 +20,7 @@ const votePackOrderSchema = z.object({
   packId: z.string().min(1),
   fullName: z.string().min(2, 'Le nom complet est requis.'),
   email: z.string().email('Adresse e-mail invalide.'),
-  phone: z.string().min(8, 'Numéro de téléphone invalide.'),
+  phone: z.string().optional(),
 });
 
 export type VotePackOrderInput = z.infer<typeof votePackOrderSchema>;
@@ -115,19 +121,38 @@ export async function initializeVotePackOrder(
       amount,
       customer_name: values.fullName,
       customer_email: values.email,
-      customer_phone: values.phone,
+      customer_phone: values.phone ?? null,
       user_id: session?.user?.id ?? null,
       status: 'PENDING',
     });
 
     if (error) throw new Error(error.message);
 
+    // La transaction est créée de serveur à serveur : le montant ne transite
+    // jamais par le navigateur.
+    const payment = await initializeTransaction({
+      email: values.email,
+      amount,
+      reference,
+      callbackUrl: `${baseUrl()}/vote/success?reference=${reference}`,
+      metadata: {
+        competition: competition.title,
+        candidate: candidate.name,
+        pack: pack.name,
+        votes: pack.votes,
+      },
+    });
+
+    if (!payment.success) {
+      await supabase.from('orders').update({ status: 'FAILED' }).eq('id', reference);
+      return { success: false, error: payment.error };
+    }
+
     return {
       success: true,
       reference,
       amount,
-      merchantId: process.env.NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID,
-      description: `${pack.votes} votes pour ${candidate.name} — ${competition.title}`,
+      authorizationUrl: payment.authorizationUrl,
     };
   } catch (error) {
     console.error('[INIT VOTE ORDER] ❌', error);
@@ -142,7 +167,7 @@ const liveAccessOrderSchema = z.object({
   competitionId: z.string().min(1),
   fullName: z.string().min(2, 'Le nom complet est requis.'),
   email: z.string().email('Adresse e-mail invalide.'),
-  phone: z.string().min(8, 'Numéro de téléphone invalide.'),
+  phone: z.string().optional(),
 });
 
 export type LiveAccessOrderInput = z.infer<typeof liveAccessOrderSchema>;
@@ -210,19 +235,34 @@ export async function initializeLiveAccessOrder(
       amount,
       customer_name: values.fullName,
       customer_email: values.email,
-      customer_phone: values.phone,
+      customer_phone: values.phone ?? null,
       user_id: session.user.id,
       status: 'PENDING',
     });
 
     if (error) throw new Error(error.message);
 
+    const payment = await initializeTransaction({
+      email: values.email,
+      amount,
+      reference,
+      callbackUrl: `${baseUrl()}/vote/success?reference=${reference}`,
+      metadata: {
+        competition: competition.title,
+        type: 'Accès au direct',
+      },
+    });
+
+    if (!payment.success) {
+      await supabase.from('orders').update({ status: 'FAILED' }).eq('id', reference);
+      return { success: false, error: payment.error };
+    }
+
     return {
       success: true,
       reference,
       amount,
-      merchantId: process.env.NEXT_PUBLIC_PAIEMENTPRO_MERCHANT_ID,
-      description: `Accès au direct — ${competition.live_title || competition.title}`,
+      authorizationUrl: payment.authorizationUrl,
     };
   } catch (error) {
     console.error('[INIT LIVE ORDER] ❌', error);
@@ -274,15 +314,41 @@ export async function getOrderStatus(reference: string): Promise<{
   competitionId?: string;
   competitionTitle?: string;
 }> {
-  const { data } = await getSupabaseAdmin()
-    .from('orders')
-    .select(
-      'status, type, amount, votes, candidate_id, candidate_name, competition_id, competition_title'
-    )
-    .eq('id', reference)
-    .maybeSingle();
+  const supabase = getSupabaseAdmin();
+
+  const columns =
+    'status, type, amount, votes, candidate_id, candidate_name, competition_id, competition_title';
+
+  let { data } = await supabase.from('orders').select(columns).eq('id', reference).maybeSingle();
 
   if (!data) return { found: false };
+
+  /*
+   * Rapprochement de secours.
+   *
+   * Si la commande est encore en attente, le webhook n'est pas passé — URL mal
+   * déclarée, domaine injoignable, ou simple délai. On interroge alors Paystack
+   * directement : l'acheteur qui revient sur cette page voit son paiement pris
+   * en compte au lieu d'attendre une notification qui ne viendra peut-être
+   * jamais. Le montant provient de l'API Paystack, jamais de l'appelant.
+   */
+  if ((data as { status: Order['status'] }).status === 'PENDING') {
+    try {
+      const outcome = await settleOrder(reference, 'callback');
+      if (outcome === 'paid' || outcome === 'already_processed') {
+        const { data: refreshed } = await supabase
+          .from('orders')
+          .select(columns)
+          .eq('id', reference)
+          .maybeSingle();
+        if (refreshed) data = refreshed;
+      }
+    } catch (error) {
+      // Un rapprochement en échec laisse la commande en attente : le webhook
+      // ou une visite ultérieure la reprendront.
+      console.error('[ORDER STATUS] ⚠️ Rapprochement impossible :', error);
+    }
+  }
 
   const order = data as Pick<
     OrderRow,

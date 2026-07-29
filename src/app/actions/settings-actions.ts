@@ -4,7 +4,7 @@ import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
-import { hashPassword, verifyCurrentPassword } from '@/app/actions/auth-actions';
+import { hashPassword, verifyPasswordForUser } from '@/lib/passwords';
 import type { UserRow } from '@/lib/supabase/types';
 
 // ==================== SCHÉMAS ====================
@@ -168,7 +168,7 @@ export async function updateUserPassword(data: UpdatePasswordData): Promise<Acti
 
     const validated = updatePasswordSchema.parse(data);
 
-    const isCurrentPasswordValid = await verifyCurrentPassword(
+    const isCurrentPasswordValid = await verifyPasswordForUser(
       session.user.id,
       validated.currentPassword
     );

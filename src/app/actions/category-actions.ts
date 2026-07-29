@@ -1,5 +1,6 @@
 'use server';
 
+import { auth } from '@/auth';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
 import type { CategoryRow } from '@/lib/supabase/types';
 import type { Category } from '@/lib/types';
@@ -21,6 +22,14 @@ export async function getCategories(): Promise<Category[]> {
   }
 }
 
+/** Les catégories sont des données de référence : seuls les admins les modifient. */
+async function ensureAdmin() {
+  const session = await auth();
+  if (session?.user?.role !== 'admin') {
+    throw new Error('Action réservée aux administrateurs.');
+  }
+}
+
 const DEFAULT_CATEGORIES = [
   'Beauté & Miss',
   'Musique & Télé-crochet',
@@ -39,6 +48,7 @@ export async function initializeCategories(): Promise<{
   message: string;
 }> {
   try {
+    await ensureAdmin();
     const supabase = getSupabaseAdmin();
 
     const { count, error: countError } = await supabase
@@ -65,7 +75,10 @@ export async function initializeCategories(): Promise<{
     console.error('[INIT CATEGORIES] ❌', error);
     return {
       success: false,
-      message: "Erreur lors de l'initialisation des catégories.",
+      message:
+        error instanceof Error && error.message.includes('administrateurs')
+          ? error.message
+          : "Erreur lors de l'initialisation des catégories.",
     };
   }
 }
@@ -76,6 +89,8 @@ export async function addCategory(name: string): Promise<{
   categoryId?: string;
 }> {
   try {
+    await ensureAdmin();
+
     const trimmed = name.trim();
     if (!trimmed) {
       return { success: false, message: 'Le nom de la catégorie est requis.' };
@@ -102,6 +117,12 @@ export async function addCategory(name: string): Promise<{
     };
   } catch (error) {
     console.error('[ADD CATEGORY] ❌', error);
-    return { success: false, message: 'Erreur lors de la création de la catégorie.' };
+    return {
+      success: false,
+      message:
+        error instanceof Error && error.message.includes('administrateurs')
+          ? error.message
+          : 'Erreur lors de la création de la catégorie.',
+    };
   }
 }
