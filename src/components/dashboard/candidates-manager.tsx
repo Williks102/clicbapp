@@ -40,7 +40,7 @@ import {
   FormLabel,
   FormMessage,
 } from '@/components/ui/form';
-import { CloudinaryUploadWidget } from '@/components/cloudinary-upload-widget';
+import { ImageUploader } from '@/components/image-uploader';
 import { useToast } from '@/hooks/use-toast';
 import {
   createCandidate,
@@ -352,7 +352,7 @@ export function CandidatesManager({
                   <FormItem>
                     <FormLabel>Photo</FormLabel>
                     <FormControl>
-                      <CloudinaryUploadWidget
+                      <ImageUploader
                         value={field.value}
                         onChange={field.onChange}
                         onRemove={() => field.onChange('')}

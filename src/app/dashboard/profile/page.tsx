@@ -28,7 +28,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useToast } from '@/hooks/use-toast';
 import { updateUserProfile } from '@/app/actions/settings-actions';
-import { CloudinaryUploadWidget } from '@/components/cloudinary-upload-widget';
+import { ImageUploader } from '@/components/image-uploader';
 import { Loader2 } from 'lucide-react';
 
 const profileSchema = z.object({
@@ -123,7 +123,7 @@ export default function ProfilePage() {
               name="avatar"
               control={form.control}
               render={({ field }) => (
-                <CloudinaryUploadWidget
+                <ImageUploader
                   value={field.value}
                   onChange={field.onChange}
                   onRemove={() => field.onChange('')}
