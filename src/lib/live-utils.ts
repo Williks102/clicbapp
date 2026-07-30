@@ -60,9 +60,16 @@ export function isLiveFree(competition: Pick<Competition, 'live'>) {
 
 /** Le vote est-il ouvert à cet instant ? */
 export function isVotingOpen(
-  competition: Pick<Competition, 'status' | 'votingStartsAt' | 'votingEndsAt'>
+  competition: Pick<
+    Competition,
+    'status' | 'votingEnabled' | 'votingStartsAt' | 'votingEndsAt'
+  >
 ) {
+  // Un événement de diffusion pure n'a ni scrutin ni fenêtre de vote.
+  if (!competition.votingEnabled) return false;
+  if (!competition.votingStartsAt || !competition.votingEndsAt) return false;
   if (competition.status !== 'voting') return false;
+
   const now = Date.now();
   const start = new Date(competition.votingStartsAt).getTime();
   const end = new Date(competition.votingEndsAt).getTime();

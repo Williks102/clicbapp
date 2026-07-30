@@ -59,11 +59,12 @@ const formSchema = z
     category: z.string().min(1, 'La catégorie est requise.'),
     description: z.string().min(10, 'La description est trop courte.'),
     coverImage: z.string().optional(),
-    votingStartsAt: z.string().min(1, "L'ouverture des votes est requise."),
-    votingEndsAt: z.string().min(1, 'La clôture des votes est requise.'),
+    votingEnabled: z.boolean().default(true),
+    votingStartsAt: z.string().default(''),
+    votingEndsAt: z.string().default(''),
     status: z.enum(['draft', 'published', 'voting', 'closed', 'finished']),
     hideResults: z.boolean().default(false),
-    votePacks: z.array(packSchema).min(1, 'Au moins un pack de votes est requis.'),
+    votePacks: z.array(packSchema).default([]),
     freeVoteEnabled: z.boolean().default(true),
     freeVoteCooldownHours: z.coerce.number().int().min(1).max(720),
     liveEnabled: z.boolean().default(false),
@@ -76,14 +77,48 @@ const formSchema = z
     liveChatEnabled: z.boolean().default(true),
     liveReplayUrl: z.string().optional(),
   })
-  .refine(
-    (data) =>
-      new Date(data.votingEndsAt).getTime() > new Date(data.votingStartsAt).getTime(),
-    {
-      message: 'La clôture doit être postérieure à l’ouverture des votes.',
-      path: ['votingEndsAt'],
+  // Le vote est facultatif : ces règles ne visent que les événements qui en
+  // organisent un. Le serveur applique exactement les mêmes.
+  .superRefine((data, ctx) => {
+    if (!data.votingEnabled) return;
+
+    if (!data.votingStartsAt) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "L'ouverture des votes est requise.",
+        path: ['votingStartsAt'],
+      });
     }
-  )
+    if (!data.votingEndsAt) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'La clôture des votes est requise.',
+        path: ['votingEndsAt'],
+      });
+    }
+    if (
+      data.votingStartsAt &&
+      data.votingEndsAt &&
+      new Date(data.votingEndsAt).getTime() <= new Date(data.votingStartsAt).getTime()
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'La clôture doit être postérieure à l’ouverture des votes.',
+        path: ['votingEndsAt'],
+      });
+    }
+    if (data.votePacks.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Au moins un pack de votes est requis.',
+        path: ['votePacks'],
+      });
+    }
+  })
+  .refine((data) => data.votingEnabled || data.liveEnabled, {
+    message: 'Activez au moins le vote ou la diffusion en direct.',
+    path: ['liveEnabled'],
+  })
   .refine((data) => !data.liveEnabled || !!data.liveTitle, {
     message: 'Le titre du direct est requis.',
     path: ['liveTitle'],
@@ -144,6 +179,7 @@ export function CompetitionForm({ competition }: CompetitionFormProps) {
           category: competition.category,
           description: competition.description,
           coverImage: competition.coverImage,
+          votingEnabled: competition.votingEnabled ?? true,
           votingStartsAt: toLocalInput(competition.votingStartsAt),
           votingEndsAt: toLocalInput(competition.votingEndsAt),
           status: competition.status,
@@ -172,6 +208,7 @@ export function CompetitionForm({ competition }: CompetitionFormProps) {
           category: '',
           description: '',
           coverImage: '',
+          votingEnabled: true,
           votingStartsAt: dates.start,
           votingEndsAt: dates.end,
           status: 'draft',
@@ -205,6 +242,7 @@ export function CompetitionForm({ competition }: CompetitionFormProps) {
   }, []);
 
   const liveEnabled = form.watch('liveEnabled');
+  const votingEnabled = form.watch('votingEnabled');
   const livePaid = form.watch('livePaid');
   const freeVoteEnabled = form.watch('freeVoteEnabled');
 
@@ -427,7 +465,40 @@ export function CompetitionForm({ competition }: CompetitionFormProps) {
           </CardContent>
         </Card>
 
+        {/* ---------- Organiser un vote ---------- */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Vote</CardTitle>
+            <CardDescription>
+              Un événement peut se limiter à une diffusion en direct, sans scrutin.
+              Dans ce cas il apparaît sur la page des diffusions, pas dans le
+              catalogue des concours.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FormField
+              control={form.control}
+              name="votingEnabled"
+              render={({ field }) => (
+                <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                  <div className="space-y-0.5">
+                    <FormLabel>Organiser un vote</FormLabel>
+                    <FormDescription>
+                      Candidats, packs de votes et classement. Désactivez pour une
+                      simple retransmission.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch checked={field.value} onCheckedChange={field.onChange} />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+
         {/* ---------- Période de vote ---------- */}
+        {votingEnabled && (
         <Card>
           <CardHeader>
             <CardTitle>Période de vote</CardTitle>
@@ -487,7 +558,10 @@ export function CompetitionForm({ competition }: CompetitionFormProps) {
           </CardContent>
         </Card>
 
+        )}
+
         {/* ---------- Vote gratuit ---------- */}
+        {votingEnabled && (
         <Card>
           <CardHeader>
             <CardTitle>Vote gratuit</CardTitle>
@@ -536,7 +610,10 @@ export function CompetitionForm({ competition }: CompetitionFormProps) {
           </CardContent>
         </Card>
 
+        )}
+
         {/* ---------- Packs de votes ---------- */}
+        {votingEnabled && (
         <Card>
           <CardHeader>
             <CardTitle>Packs de votes</CardTitle>
@@ -638,6 +715,8 @@ export function CompetitionForm({ competition }: CompetitionFormProps) {
             )}
           </CardContent>
         </Card>
+
+        )}
 
         {/* ---------- Diffusion en direct ---------- */}
         <Card>

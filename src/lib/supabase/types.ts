@@ -57,8 +57,9 @@ export type CompetitionRow = {
   description: string;
   cover_image: string;
   status: 'draft' | 'published' | 'voting' | 'closed' | 'finished';
-  voting_starts_at: string;
-  voting_ends_at: string;
+  voting_enabled: boolean;
+  voting_starts_at: string | null;
+  voting_ends_at: string | null;
   hide_results: boolean;
   winner_candidate_id: string | null;
 

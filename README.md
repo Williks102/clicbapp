@@ -158,6 +158,18 @@ Garanties portées par la base, et non par le code applicatif :
   en attente au-delà de 24 h. Le statut `EXPIRED` reste réversible : un
   règlement confirmé tardivement par Paystack crédite quand même les votes.
 
+## Événements sans vote
+
+Le vote est facultatif. Un événement peut se limiter à une diffusion en direct :
+la fenêtre de scrutin devient alors inutile, aucun candidat n'est attendu, et
+les packs de votes ne sont pas demandés. La contrainte `event_offers_something`
+impose seulement qu'un événement porte l'un des deux — vote ou diffusion.
+
+Ces événements apparaissent sur `/live` mais **pas** dans le catalogue des
+concours : on ne propose pas de voter là où il n'y a rien à voter. Le refus est
+également porté par la base — `cast_free_vote` lève `VOTING_DISABLED` — de sorte
+qu'aucune voie d'appel ne peut enregistrer un vote sur une retransmission.
+
 ## Entretien périodique
 
 `/api/cron/maintenance` clôt les commandes abandonnées et purge les compteurs

@@ -42,9 +42,13 @@ export default async function CompetitionOverviewPage({ params }: PageProps) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <PageHeader
           title={competition.title}
-          description={`${competition.category} · Clôture le ${new Date(
+          description={
             competition.votingEndsAt
-          ).toLocaleDateString('fr-FR')}`}
+              ? `${competition.category} · Clôture le ${new Date(
+                  competition.votingEndsAt
+                ).toLocaleDateString('fr-FR')}`
+              : `${competition.category} · Diffusion sans vote`
+          }
         />
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant="secondary">

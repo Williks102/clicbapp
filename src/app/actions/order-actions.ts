@@ -27,8 +27,15 @@ export type VotePackOrderInput = z.infer<typeof votePackOrderSchema>;
 
 /** Le vote est-il ouvert à cet instant, d'après la base ? */
 function isVotingOpenRow(
-  competition: Pick<CompetitionRow, 'status' | 'voting_starts_at' | 'voting_ends_at'>
+  competition: Pick<
+    CompetitionRow,
+    'status' | 'voting_enabled' | 'voting_starts_at' | 'voting_ends_at'
+  >
 ) {
+  // Un événement de diffusion pure n'a ni scrutin ni fenêtre de vote.
+  if (!competition.voting_enabled) return false;
+  if (!competition.voting_starts_at || !competition.voting_ends_at) return false;
+
   const now = Date.now();
   return (
     competition.status === 'voting' &&
@@ -61,7 +68,7 @@ export async function initializeVotePackOrder(
     const [competitionResult, candidateResult, packResult] = await Promise.all([
       supabase
         .from('competitions')
-        .select('id, title, organizer_id, status, voting_starts_at, voting_ends_at')
+        .select('id, title, organizer_id, status, voting_enabled, voting_starts_at, voting_ends_at')
         .eq('id', values.competitionId)
         .maybeSingle(),
       supabase
@@ -78,7 +85,8 @@ export async function initializeVotePackOrder(
 
     const competition = competitionResult.data as Pick<
       CompetitionRow,
-      'id' | 'title' | 'organizer_id' | 'status' | 'voting_starts_at' | 'voting_ends_at'
+      | 'id' | 'title' | 'organizer_id' | 'status'
+      | 'voting_enabled' | 'voting_starts_at' | 'voting_ends_at'
     > | null;
     const candidate = candidateResult.data as Pick<
       CandidateRow,
