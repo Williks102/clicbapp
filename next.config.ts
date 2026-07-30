@@ -17,7 +17,7 @@ const cspHeader = `
     img-src 'self' blob: data: https://res.cloudinary.com https://placehold.co https://images.unsplash.com https://picsum.photos https://i.ytimg.com;
     font-src 'self' https://fonts.gstatic.com;
     media-src 'self' blob: https:;
-    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.cloudinary.com https://res.cloudinary.com vitals.vercel-insights.com https://vercel.live;
+    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.cloudinary.com https://res.cloudinary.com https://upload-widget.cloudinary.com vitals.vercel-insights.com https://vercel.live;
     worker-src 'self' blob:;
     frame-src 'self' https://checkout.paystack.com https://upload-widget.cloudinary.com https://vercel.live https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://www.facebook.com https://web.facebook.com https://player.vimeo.com;
     object-src 'none';
@@ -67,8 +67,12 @@ const nextConfig: NextConfig = {
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           {
+            // Le widget Cloudinary propose la prise de photo directe, utile
+            // pour les portraits de candidats depuis un mobile. Refuser la
+            // caméra à toute la page désactiverait cette source sans message.
             key: 'Permissions-Policy',
-            value: 'camera=(), microphone=(), geolocation=()',
+            value:
+              'camera=(self "https://upload-widget.cloudinary.com"), microphone=(), geolocation=()',
           },
         ],
       },

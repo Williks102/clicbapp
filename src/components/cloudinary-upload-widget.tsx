@@ -1,7 +1,7 @@
 'use client';
 
 import { CldUploadWidget } from 'next-cloudinary';
-import { AlertTriangle, Upload, X } from 'lucide-react';
+import { AlertTriangle, Loader2, Upload, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import Image from 'next/image';
@@ -119,15 +119,30 @@ export function CloudinaryUploadWidget({
           maxImageHeight: 1080,
         }}
       >
-        {({ open }) => (
+        {({ open, isLoading }) => (
+          /*
+           * Le bouton reste inactif tant que le script du widget n'est pas
+           * chargé : appelé trop tôt, `open()` lève une TypeError dans la
+           * bibliothèque — le widget n'existe pas encore — et l'utilisateur
+           * n'observe qu'un clic sans effet.
+           */
           <Button
             type="button"
             variant="outline"
             onClick={() => open()}
+            disabled={isLoading}
             className="w-full"
           >
-            <Upload className="mr-2 h-4 w-4" />
-            {value ? 'Changer l\'image' : 'Télécharger une image'}
+            {isLoading ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Upload className="mr-2 h-4 w-4" />
+            )}
+            {isLoading
+              ? 'Chargement du gestionnaire d’images…'
+              : value
+                ? "Changer l'image"
+                : 'Télécharger une image'}
           </Button>
         )}
       </CldUploadWidget>
