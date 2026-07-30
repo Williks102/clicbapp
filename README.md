@@ -84,7 +84,8 @@ d'évaluer les politiques RLS, et l'application ne peut rien lire ni écrire.
 | `SUPABASE_SERVICE_ROLE_KEY` | Clé serveur, contourne RLS — **ne jamais exposer au client** |
 | `AUTH_SECRET` | Secret de signature des sessions NextAuth |
 | `PAYSTACK_SECRET_KEY` | Clé secrète Paystack — une seule variable pour les deux modes : `sk_test_…` en recette, `sk_live_…` en production. **Jamais préfixée `NEXT_PUBLIC_`** |
-| `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` | Preset d'upload Cloudinary |
+| `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` | Nom du cloud Cloudinary — **requis** par le widget d'envoi d'images |
+| `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` | Preset d'upload Cloudinary, en mode **unsigned** |
 | `RESEND_API_KEY` | Envoi des e-mails de confirmation |
 | `NEXT_PUBLIC_BASE_URL` | URL publique du site : retour après paiement et liens des e-mails. À défaut, le domaine exposé par Vercel est utilisé |
 | `CRON_SECRET` | Protège `/api/cron/maintenance`. **Sans elle, l'entretien périodique est refusé** |
