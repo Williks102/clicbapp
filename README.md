@@ -113,6 +113,24 @@ supabase/
 └── seed.sql              Catégories de référence
 ```
 
+## Dépendances forcées
+
+Le bloc `overrides` de `package.json` impose des versions corrigées à quatre
+dépendances transitives. Elles ne remontent pas d'elles-mêmes : `dotprompt`
+reste figé et entraîne un `handlebars` vulnérable jusque dans la dernière
+version de Genkit, et le reste vient de la chaîne Firebase que Genkit
+réintroduit pour l'assistant de rédaction.
+
+| Paquet | Vulnérabilité corrigée | Amené par |
+| --- | --- | --- |
+| `handlebars` | injection de code via templates partiels | `genkit → dotprompt` |
+| `websocket-driver` | contournement des limites de ressources | `genkit → firebase` |
+| `fast-xml-parser` | expansion d'entités et dépassement de pile | `genkit → firebase-admin` |
+| `protobufjs` | exécution de code arbitraire | `genkit-cli` (développement) |
+
+Ces contraintes sont à réexaminer à chaque montée de Genkit : elles deviendront
+inutiles le jour où l'amont livrera les versions corrigées.
+
 ## Modèle de sécurité
 
 L'authentification repose sur NextAuth (mots de passe hachés en bcrypt dans la
