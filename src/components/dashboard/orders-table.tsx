@@ -26,12 +26,14 @@ const STATUS_META: Record<
   FAILED: { label: 'Échoué', variant: 'destructive' },
   FLAGGED: { label: 'À vérifier', variant: 'destructive' },
   REFUNDED: { label: 'Remboursé', variant: 'outline' },
+  EXPIRED: { label: 'Expiré', variant: 'outline' },
 };
 
 const STATUS_FILTERS: Array<{ value: 'all' | OrderStatus; label: string }> = [
   { value: 'all', label: 'Toutes' },
   { value: 'PAID', label: 'Payées' },
   { value: 'PENDING', label: 'En attente' },
+  { value: 'EXPIRED', label: 'Expirées' },
   { value: 'FAILED', label: 'Échouées' },
   { value: 'FLAGGED', label: 'À vérifier' },
 ];

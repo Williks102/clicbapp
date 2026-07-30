@@ -11,7 +11,9 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "create-admin": "node scripts/create-admin.mjs",
-    "test:paystack": "node --experimental-strip-types --conditions=react-server tests/paystack.test.mjs"
+    "test:paystack": "node --experimental-strip-types --conditions=react-server tests/paystack.test.mjs",
+    "test:live-url": "node --experimental-strip-types --conditions=react-server tests/live-url.test.mjs",
+    "test": "npm run test:paystack && npm run test:live-url"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.20.0",

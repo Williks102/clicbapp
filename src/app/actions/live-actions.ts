@@ -10,6 +10,7 @@ import {
   type LiveAccessRow,
 } from '@/lib/supabase/types';
 import { PUBLIC_COMPETITION_STATUSES } from '@/lib/live-utils';
+import { checkLiveUrl } from '@/lib/live-url';
 import type { ActionResult, Competition, LiveAccess } from '@/lib/types';
 
 async function requireLiveControl(competitionId: string) {
@@ -20,7 +21,7 @@ async function requireLiveControl(competitionId: string) {
 
   const { data, error } = await getSupabaseAdmin()
     .from('competitions')
-    .select('id, organizer_id, live_enabled, live_url')
+    .select('id, organizer_id, live_enabled, live_url, live_provider')
     .eq('id', competitionId)
     .maybeSingle();
 
@@ -29,7 +30,7 @@ async function requireLiveControl(competitionId: string) {
 
   const competition = data as Pick<
     CompetitionRow,
-    'id' | 'organizer_id' | 'live_enabled' | 'live_url'
+    'id' | 'organizer_id' | 'live_enabled' | 'live_url' | 'live_provider'
   >;
 
   if (competition.organizer_id !== session.user.id && session.user.role !== 'admin') {
@@ -90,11 +91,21 @@ export async function updateLiveUrl(
   url: string
 ): Promise<ActionResult> {
   try {
-    await requireLiveControl(competitionId);
+    const { competition } = await requireLiveControl(competitionId);
+
+    /*
+     * Ce point d'entrée court-circuite le formulaire complet : sans ce
+     * contrôle, il offrirait un moyen d'écrire une adresse arbitraire dans le
+     * `src` de l'iframe du direct.
+     */
+    const check = checkLiveUrl(competition.live_provider, url);
+    if (!check.ok) {
+      return { success: false, error: check.error };
+    }
 
     const { error } = await getSupabaseAdmin()
       .from('competitions')
-      .update({ live_url: url })
+      .update({ live_url: url.trim() })
       .eq('id', competitionId);
 
     if (error) throw new Error(error.message);

@@ -134,7 +134,7 @@ export type FreeVoteClaim = {
 
 export type OrderType = 'VOTE_PACK' | 'LIVE_ACCESS';
 
-export type OrderStatus = 'PENDING' | 'PAID' | 'FAILED' | 'FLAGGED' | 'REFUNDED';
+export type OrderStatus = 'PENDING' | 'PAID' | 'FAILED' | 'FLAGGED' | 'REFUNDED' | 'EXPIRED';
 
 export type Order = {
   id: string; // référence de paiement (= id du document)
