@@ -35,7 +35,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CloudinaryUploadWidget } from '@/components/cloudinary-upload-widget';
+import { ImageUploader } from '@/components/image-uploader';
 import { useToast } from '@/hooks/use-toast';
 import { getCategories } from '@/app/actions/category-actions';
 import {
@@ -413,7 +413,7 @@ export function CompetitionForm({ competition }: CompetitionFormProps) {
                 <FormItem>
                   <FormLabel>Image de couverture</FormLabel>
                   <FormControl>
-                    <CloudinaryUploadWidget
+                    <ImageUploader
                       value={field.value}
                       onChange={field.onChange}
                       onRemove={() => field.onChange('')}

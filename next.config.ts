@@ -6,20 +6,21 @@ import type { NextConfig } from 'next';
  * Toute origine appelée par le navigateur doit y figurer, sinon la requête est
  * bloquée avant même d'atteindre le réseau. Les origines nécessaires :
  *  - `*.supabase.co` : API REST (connect-src) et WebSocket temps réel (wss) ;
- *  - Cloudinary : script et iframe du widget d'upload, API d'envoi ;
+ *  - Cloudinary : API d'envoi des images et diffusion des visuels. L'envoi se
+ *    fait depuis notre propre page, sans iframe ni script tiers ;
  *  - Paystack : page de paiement hébergée, atteinte par redirection ;
  *  - YouTube, Facebook, Vimeo : lecteurs de diffusion embarqués.
  */
 const cspHeader = `
     default-src 'self';
-    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://upload-widget.cloudinary.com https://vercel.live;
+    script-src 'self' 'unsafe-eval' 'unsafe-inline' https://vercel.live;
     style-src 'self' 'unsafe-inline' https://fonts.googleapis.com;
     img-src 'self' blob: data: https://res.cloudinary.com https://placehold.co https://images.unsplash.com https://picsum.photos https://i.ytimg.com;
     font-src 'self' https://fonts.gstatic.com;
     media-src 'self' blob: https:;
-    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.cloudinary.com https://res.cloudinary.com https://upload-widget.cloudinary.com vitals.vercel-insights.com https://vercel.live;
+    connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.cloudinary.com https://res.cloudinary.com vitals.vercel-insights.com https://vercel.live;
     worker-src 'self' blob:;
-    frame-src 'self' https://checkout.paystack.com https://upload-widget.cloudinary.com https://vercel.live https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://www.facebook.com https://web.facebook.com https://player.vimeo.com;
+    frame-src 'self' https://checkout.paystack.com https://vercel.live https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://www.facebook.com https://web.facebook.com https://player.vimeo.com;
     object-src 'none';
     base-uri 'self';
     form-action 'self' https://checkout.paystack.com;
@@ -67,12 +68,11 @@ const nextConfig: NextConfig = {
           { key: 'X-Content-Type-Options', value: 'nosniff' },
           { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
           {
-            // Le widget Cloudinary propose la prise de photo directe, utile
-            // pour les portraits de candidats depuis un mobile. Refuser la
-            // caméra à toute la page désactiverait cette source sans message.
+            // La caméra reste ouverte à notre propre origine : le champ de
+            // prise de photo des portraits de candidats en dépend. Micro et
+            // géolocalisation ne servent nulle part.
             key: 'Permissions-Policy',
-            value:
-              'camera=(self "https://upload-widget.cloudinary.com"), microphone=(), geolocation=()',
+            value: 'camera=(self), microphone=(), geolocation=()',
           },
         ],
       },
