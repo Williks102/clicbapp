@@ -10,6 +10,7 @@ import {
   LogOut,
   PanelLeft,
   PlusCircle,
+  Radio,
   Receipt,
   Settings,
   Trophy,
@@ -46,6 +47,7 @@ import { BrandLogo } from '@/components/brand-logo';
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Tableau de bord', icon: LayoutDashboard, exact: true },
   { href: '/dashboard/competitions', label: 'Mes concours', icon: Trophy },
+  { href: '/dashboard/live', label: 'Mes directs', icon: Radio },
   { href: '/dashboard/orders', label: 'Ventes de votes', icon: Receipt },
   { href: '/dashboard/profile', label: 'Profil organisateur', icon: UserCircle },
   { href: '/dashboard/settings', label: 'Paramètres', icon: Settings },
@@ -170,6 +172,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <Link href="/dashboard/competitions/create">
                   <PlusCircle />
                   <span>Créer un concours</span>
+                </Link>
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+            <SidebarMenuItem>
+              <SidebarMenuButton asChild>
+                <Link href="/dashboard/live/create">
+                  <Radio />
+                  <span>Créer un direct</span>
                 </Link>
               </SidebarMenuButton>
             </SidebarMenuItem>

@@ -147,4 +147,36 @@ end;
 $$;
 
 \echo ''
+\echo 'Statuts réservés au scrutin :'
+
+do $$
+declare v_orga uuid := (select id from users limit 1);
+begin
+  perform assert('statut « voting » refusé sans scrutin', fails(format($f$
+    insert into competitions (title, description, organizer_id, category, cover_image,
+                              voting_enabled, live_enabled, live_title, status)
+    values ('Direct', 'desc', %L, 'Sport', 'img', false, true, 'Finale', 'voting')
+  $f$, v_orga)));
+
+  perform assert('statut « closed » refusé sans scrutin', fails(format($f$
+    insert into competitions (title, description, organizer_id, category, cover_image,
+                              voting_enabled, live_enabled, live_title, status)
+    values ('Direct', 'desc', %L, 'Sport', 'img', false, true, 'Finale', 'closed')
+  $f$, v_orga)));
+
+  perform assert('statut « published » accepté sans scrutin', not fails(format($f$
+    insert into competitions (title, description, organizer_id, category, cover_image,
+                              voting_enabled, live_enabled, live_title, status)
+    values ('Direct annoncé', 'desc', %L, 'Sport', 'img', false, true, 'Finale', 'published')
+  $f$, v_orga)));
+
+  perform assert('statut « finished » accepté sans scrutin', not fails(format($f$
+    insert into competitions (title, description, organizer_id, category, cover_image,
+                              voting_enabled, live_enabled, live_title, status)
+    values ('Direct terminé', 'desc', %L, 'Sport', 'img', false, true, 'Finale', 'finished')
+  $f$, v_orga)));
+end;
+$$;
+
+\echo ''
 \echo 'Toutes les vérifications passent.'

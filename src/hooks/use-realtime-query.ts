@@ -1,7 +1,7 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { RealtimePostgresChangesPayload } from '@supabase/supabase-js';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import type { RealtimeChannel, RealtimePostgresChangesPayload } from '@supabase/supabase-js';
 import { getSupabaseBrowser } from '@/lib/supabase/client';
 
 type EqualityFilters = Record<string, string | number | boolean>;
@@ -55,6 +55,21 @@ export function useRealtimeQuery<Row extends { id: string }, T>(
   const [data, setData] = useState<T[] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+
+  /*
+   * Identifiant propre à cette instance du hook, intégré au nom du canal.
+   *
+   * `supabase.channel(nom)` renvoie le canal existant lorsqu'un canal porte
+   * déjà ce nom. Un nom dérivé de la seule requête entrait donc en collision
+   * dès que deux composants interrogeaient la même table avec le même filtre —
+   * le classement et le panneau de vote sur la page du direct, par exemple.
+   * Le second recevait un canal déjà abonné, et `.on()` après `subscribe()`
+   * lève une exception qui remontait jusqu'à la page.
+   *
+   * Le remontage des effets en développement produisait la même collision, la
+   * suppression du canal précédent étant asynchrone.
+   */
+  const instanceId = useId();
 
   // Ces fonctions changent d'identité à chaque rendu : les garder dans des refs
   // évite de recréer l'abonnement temps réel en boucle.
@@ -162,56 +177,72 @@ export function useRealtimeQuery<Row extends { id: string }, T>(
     // Le serveur n'accepte qu'un seul filtre : les autres critères sont
     // revérifiés côté client par `matches`.
     const [firstColumn, firstValue] = Object.entries(filters)[0] ?? [];
-    const channel = supabase
-      .channel(`realtime:${table}:${matchKey}:${inKey}`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table,
-          ...(firstColumn ? { filter: `${firstColumn}=eq.${firstValue}` } : {}),
-        },
-        (payload: RealtimePostgresChangesPayload<Row>) => {
-          if (cancelled) return;
 
-          setData((current) => {
-            const items = current ?? [];
+    /*
+     * Le temps réel est un confort, pas une condition d'affichage : les données
+     * proviennent du SELECT ci-dessus. Un abonnement qui échoue est donc
+     * journalisé, jamais propagé — sans quoi la liste, pourtant chargée,
+     * disparaîtrait derrière une page d'erreur.
+     */
+    let channel: RealtimeChannel | null = null;
 
-            if (payload.eventType === 'DELETE') {
-              const removedId = (payload.old as Partial<Row>)?.id;
-              if (!removedId) return items;
-              return items.filter((item) => identify(item) !== removedId);
-            }
+    try {
+      channel = supabase
+        .channel(`realtime:${table}:${matchKey}:${inKey}:${instanceId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table,
+            ...(firstColumn ? { filter: `${firstColumn}=eq.${firstValue}` } : {}),
+          },
+          (payload: RealtimePostgresChangesPayload<Row>) => {
+            if (cancelled) return;
 
-            const row = payload.new as Row;
-            if (!row?.id) return items;
+            setData((current) => {
+              const items = current ?? [];
 
-            // Une ligne qui ne satisfait plus les filtres doit disparaître
-            // (par exemple un concours repassé en brouillon).
-            if (!matches(row)) {
-              return items.filter((item) => identify(item) !== row.id);
-            }
+              if (payload.eventType === 'DELETE') {
+                const removedId = (payload.old as Partial<Row>)?.id;
+                if (!removedId) return items;
+                return items.filter((item) => identify(item) !== removedId);
+              }
 
-            const mapped = mapRef.current(row);
-            const index = items.findIndex((item) => identify(item) === row.id);
-            const next =
-              index >= 0
-                ? items.map((item, i) => (i === index ? mapped : item))
-                : [...items, mapped];
+              const row = payload.new as Row;
+              if (!row?.id) return items;
 
-            return normalize(next);
-          });
-        }
-      )
-      .subscribe();
+              // Une ligne qui ne satisfait plus les filtres doit disparaître
+              // (par exemple un concours repassé en brouillon).
+              if (!matches(row)) {
+                return items.filter((item) => identify(item) !== row.id);
+              }
+
+              const mapped = mapRef.current(row);
+              const index = items.findIndex((item) => identify(item) === row.id);
+              const next =
+                index >= 0
+                  ? items.map((item, i) => (i === index ? mapped : item))
+                  : [...items, mapped];
+
+              return normalize(next);
+            });
+          }
+        )
+        .subscribe();
+    } catch (subscriptionError) {
+      console.error(
+        `[Supabase] ⚠️ Abonnement temps réel impossible sur « ${table} » : `,
+        subscriptionError
+      );
+    }
 
     return () => {
       cancelled = true;
-      void supabase.removeChannel(channel);
+      if (channel) void supabase.removeChannel(channel);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [table, select, matchKey, inKey, orderKey, limit, enabled, normalize, identify]);
+  }, [table, select, matchKey, inKey, orderKey, limit, enabled, normalize, identify, instanceId]);
 
   return { data, isLoading, error };
 }
