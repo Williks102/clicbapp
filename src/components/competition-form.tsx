@@ -156,12 +156,32 @@ function defaultDates() {
   return { start: toLocalInput(start.toISOString()), end: toLocalInput(end.toISOString()) };
 }
 
+/**
+ * `competition` — le formulaire organise un vote, la diffusion est optionnelle.
+ * `live` — le formulaire décrit une retransmission, sans scrutin.
+ *
+ * Les deux parcours partagent la même entité et le même enregistrement ; seul
+ * ce qui est demandé à l'organisateur change.
+ */
+export type CompetitionFormMode = 'competition' | 'live';
+
 type CompetitionFormProps = {
   /** Concours existant en mode édition. */
   competition?: Competition;
+  mode?: CompetitionFormMode;
 };
 
-export function CompetitionForm({ competition }: CompetitionFormProps) {
+export function CompetitionForm({
+  competition,
+  mode = 'competition',
+}: CompetitionFormProps) {
+  // En édition, la nature de l'événement vient de la base et non de la route.
+  const formMode: CompetitionFormMode = competition
+    ? competition.votingEnabled
+      ? 'competition'
+      : 'live'
+    : mode;
+  const isLiveMode = formMode === 'live';
   const router = useRouter();
   const { toast } = useToast();
   const [categories, setCategories] = useState<Category[]>([]);
@@ -208,19 +228,22 @@ export function CompetitionForm({ competition }: CompetitionFormProps) {
           category: '',
           description: '',
           coverImage: '',
-          votingEnabled: true,
-          votingStartsAt: dates.start,
-          votingEndsAt: dates.end,
+          votingEnabled: mode !== 'live',
+          votingStartsAt: mode === 'live' ? '' : dates.start,
+          votingEndsAt: mode === 'live' ? '' : dates.end,
           status: 'draft',
           hideResults: false,
-          votePacks: [
-            { name: 'Pack Découverte', votes: 10, price: 500, highlighted: false },
-            { name: 'Pack Supporter', votes: 50, price: 2000, highlighted: true },
-            { name: 'Pack Champion', votes: 150, price: 5000, highlighted: false },
-          ],
+          votePacks:
+            mode === 'live'
+              ? []
+              : [
+                  { name: 'Pack Découverte', votes: 10, price: 500, highlighted: false },
+                  { name: 'Pack Supporter', votes: 50, price: 2000, highlighted: true },
+                  { name: 'Pack Champion', votes: 150, price: 5000, highlighted: false },
+                ],
           freeVoteEnabled: true,
           freeVoteCooldownHours: 24,
-          liveEnabled: false,
+          liveEnabled: mode === 'live',
           liveTitle: '',
           liveProvider: 'youtube',
           liveUrl: '',
@@ -328,7 +351,7 @@ export function CompetitionForm({ competition }: CompetitionFormProps) {
         {/* ---------- Informations générales ---------- */}
         <Card>
           <CardHeader>
-            <CardTitle>Informations du concours</CardTitle>
+            <CardTitle>{isLiveMode ? "Informations de l'événement" : 'Informations du concours'}</CardTitle>
             <CardDescription>
               Ces éléments sont affichés sur la page publique du concours.
             </CardDescription>
@@ -386,14 +409,31 @@ export function CompetitionForm({ competition }: CompetitionFormProps) {
                           <SelectValue />
                         </SelectTrigger>
                       </FormControl>
+                      {/*
+                        « Votes ouverts » et « Votes clôturés » décrivent l'état
+                        d'un scrutin : ils n'ont pas de sens pour une
+                        retransmission, qui passe de brouillon à annoncé puis
+                        terminé. La base impose la même règle.
+                      */}
                       <SelectContent>
                         <SelectItem value="draft">Brouillon (privé)</SelectItem>
-                        <SelectItem value="published">
-                          Publié (votes pas encore ouverts)
-                        </SelectItem>
-                        <SelectItem value="voting">Votes ouverts</SelectItem>
-                        <SelectItem value="closed">Votes clôturés</SelectItem>
-                        <SelectItem value="finished">Terminé</SelectItem>
+                        {isLiveMode ? (
+                          <>
+                            <SelectItem value="published">
+                              Annoncé (visible du public)
+                            </SelectItem>
+                            <SelectItem value="finished">Terminé</SelectItem>
+                          </>
+                        ) : (
+                          <>
+                            <SelectItem value="published">
+                              Publié (votes pas encore ouverts)
+                            </SelectItem>
+                            <SelectItem value="voting">Votes ouverts</SelectItem>
+                            <SelectItem value="closed">Votes clôturés</SelectItem>
+                            <SelectItem value="finished">Terminé</SelectItem>
+                          </>
+                        )}
                       </SelectContent>
                     </Select>
                     <FormMessage />
@@ -466,6 +506,7 @@ export function CompetitionForm({ competition }: CompetitionFormProps) {
         </Card>
 
         {/* ---------- Organiser un vote ---------- */}
+        {!isLiveMode && (
         <Card>
           <CardHeader>
             <CardTitle>Vote</CardTitle>
@@ -496,6 +537,8 @@ export function CompetitionForm({ competition }: CompetitionFormProps) {
             />
           </CardContent>
         </Card>
+
+        )}
 
         {/* ---------- Période de vote ---------- */}
         {votingEnabled && (
@@ -728,23 +771,31 @@ export function CompetitionForm({ competition }: CompetitionFormProps) {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <FormField
-              control={form.control}
-              name="liveEnabled"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-lg border p-4">
-                  <div className="space-y-0.5 pr-4">
-                    <FormLabel>Activer la diffusion</FormLabel>
-                    <FormDescription>
-                      Une page dédiée au direct est créée pour ce concours.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
+            {/*
+              Dans le parcours diffusion, l'interrupteur n'a pas de sens : la
+              diffusion est l'objet même de l'événement. Le proposer laisserait
+              croire qu'on peut l'éteindre — ce que la base refuse, un événement
+              devant porter un vote ou une diffusion.
+            */}
+            {!isLiveMode && (
+              <FormField
+                control={form.control}
+                name="liveEnabled"
+                render={({ field }) => (
+                  <FormItem className="flex items-center justify-between rounded-lg border p-4">
+                    <div className="space-y-0.5 pr-4">
+                      <FormLabel>Activer la diffusion</FormLabel>
+                      <FormDescription>
+                        Une page dédiée au direct est créée pour ce concours.
+                      </FormDescription>
+                    </div>
+                    <FormControl>
+                      <Switch checked={field.value} onCheckedChange={field.onChange} />
+                    </FormControl>
+                  </FormItem>
+                )}
+              />
+            )}
 
             {liveEnabled && (
               <>

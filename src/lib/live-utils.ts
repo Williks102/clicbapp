@@ -95,3 +95,19 @@ export const COMPETITION_STATUS_LABELS: Record<string, string> = {
   closed: 'Votes clôturés',
   finished: 'Terminé',
 };
+
+/**
+ * Statuts d'un événement diffusé sans scrutin.
+ *
+ * « Votes ouverts » et « Votes clôturés » décrivent l'état d'un vote : ils
+ * n'ont pas de sens pour une retransmission, et la base les refuse. Ils
+ * figurent tout de même ici pour qu'une donnée héritée reste lisible plutôt
+ * que d'afficher un identifiant brut.
+ */
+export const LIVE_EVENT_STATUS_LABELS: Record<string, string> = {
+  draft: 'Brouillon',
+  published: 'Annoncé',
+  voting: 'Annoncé',
+  closed: 'Terminé',
+  finished: 'Terminé',
+};

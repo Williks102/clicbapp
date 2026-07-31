@@ -170,6 +170,16 @@ concours : on ne propose pas de voter là où il n'y a rien à voter. Le refus e
 également porté par la base — `cast_free_vote` lève `VOTING_DISABLED` — de sorte
 qu'aucune voie d'appel ne peut enregistrer un vote sur une retransmission.
 
+Côté organisateur, les deux natures ont leur propre parcours : *Mes concours* et
+*Créer un concours* d'un côté, *Mes directs* et *Créer un direct* de l'autre.
+Le formulaire est le même — `CompetitionForm` avec `mode="live"` — mais il ne
+demande pas de réglages de vote pour une simple retransmission.
+
+Les statuts `voting` et `closed` décrivent l'état d'un scrutin : ils sont
+refusés sur un événement sans vote, qui passe de `draft` à `published` puis
+`finished`. La contrainte `live_event_status_is_valid` l'impose en base, et
+`LIVE_EVENT_STATUS_LABELS` fournit les libellés correspondants.
+
 ## Entretien périodique
 
 `/api/cron/maintenance` clôt les commandes abandonnées et purge les compteurs
