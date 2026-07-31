@@ -46,5 +46,15 @@ console.log('\nMessage d’erreur :');
 const refused = checkLiveUrl('youtube', 'https://exemple.ci/video');
 check('une cause est fournie', refused.ok === false && typeof refused.error === 'string' && refused.error.length > 0);
 
+console.log('\nMessage d’aide quand la plateforme ne correspond pas :');
+const mismatch = checkLiveUrl('youtube', 'https://www.facebook.com/page/videos/12345');
+check('la bonne plateforme est nommée',
+  mismatch.ok === false && /Facebook Live/.test(mismatch.error));
+const custom = checkLiveUrl('youtube', 'https://stream.exemple.ci/live');
+check('le repli HLS est indiqué',
+  custom.ok === false && /HLS/.test(custom.error));
+check('un flux HLS sur un hébergeur quelconque reste accepté',
+  checkLiveUrl('hls', 'https://stream.exemple.ci/live/master.m3u8').ok === true);
+
 console.log(ko === 0 ? '\nToutes les vérifications passent.' : `\n${ko} échec(s).`);
 process.exit(ko === 0 ? 0 : 1);

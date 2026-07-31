@@ -37,6 +37,22 @@ const ALLOWED_HOSTS: Record<Exclude<LiveProvider, 'hls'>, readonly string[]> = {
 
 export type LiveUrlCheck = { ok: true } | { ok: false; error: string };
 
+const PROVIDER_LABELS: Record<LiveProvider, string> = {
+  youtube: 'YouTube Live',
+  facebook: 'Facebook Live',
+  vimeo: 'Vimeo',
+  hls: 'Flux HLS',
+  iframe: 'Autre',
+};
+
+/** À quelle plateforme cet hôte appartient-il ? */
+function detectProvider(host: string): Exclude<LiveProvider, 'hls' | 'iframe'> | null {
+  for (const candidate of ['youtube', 'facebook', 'vimeo'] as const) {
+    if (ALLOWED_HOSTS[candidate].includes(host)) return candidate;
+  }
+  return null;
+}
+
 /**
  * Vérifie qu'une URL est diffusable par le fournisseur choisi.
  *
@@ -78,9 +94,22 @@ export function checkLiveUrl(provider: LiveProvider, rawUrl: string): LiveUrlChe
   }
 
   if (!ALLOWED_HOSTS[provider].includes(host)) {
+    /*
+     * YouTube étant la plateforme par défaut, l'erreur la plus fréquente est
+     * de coller une adresse d'une autre plateforme sans changer le sélecteur.
+     * Le message le dit plutôt que d'énumérer des domaines.
+     */
+    const actual = detectProvider(host);
+    if (actual && actual !== provider) {
+      return {
+        ok: false,
+        error: `Cette adresse est un lien ${PROVIDER_LABELS[actual]} : sélectionnez « ${PROVIDER_LABELS[actual]} » dans le champ Plateforme.`,
+      };
+    }
+
     return {
       ok: false,
-      error: `Le domaine « ${host} » n'est pas autorisé pour ce type de diffusion. Domaines acceptés : ${ALLOWED_HOSTS[provider].join(', ')}.`,
+      error: `Le domaine « ${host} » n'est pas diffusable. Plateformes acceptées : YouTube, Facebook et Vimeo. Pour toute autre source, utilisez un flux HLS (.m3u8).`,
     };
   }
 
