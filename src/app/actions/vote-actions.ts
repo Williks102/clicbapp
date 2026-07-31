@@ -39,7 +39,7 @@ export async function getFreeVoteStatus(competitionId: string): Promise<{
 
   const { data: competitionData } = await supabase
     .from('competitions')
-    .select('status, voting_starts_at, voting_ends_at, free_vote_enabled, free_vote_cooldown_hours')
+    .select('status, voting_enabled, voting_starts_at, voting_ends_at, free_vote_enabled, free_vote_cooldown_hours')
     .eq('id', competitionId)
     .maybeSingle();
 
@@ -48,6 +48,7 @@ export async function getFreeVoteStatus(competitionId: string): Promise<{
   const competition = competitionData as Pick<
     CompetitionRow,
     | 'status'
+    | 'voting_enabled'
     | 'voting_starts_at'
     | 'voting_ends_at'
     | 'free_vote_enabled'
@@ -55,7 +56,11 @@ export async function getFreeVoteStatus(competitionId: string): Promise<{
   >;
 
   const now = Date.now();
+  // Un événement de diffusion pure n'ouvre aucun vote, gratuit compris.
   const votingOpen =
+    competition.voting_enabled &&
+    !!competition.voting_starts_at &&
+    !!competition.voting_ends_at &&
     competition.status === 'voting' &&
     now >= new Date(competition.voting_starts_at).getTime() &&
     now <= new Date(competition.voting_ends_at).getTime();

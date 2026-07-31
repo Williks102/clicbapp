@@ -113,6 +113,24 @@ supabase/
 └── seed.sql              Catégories de référence
 ```
 
+## Dépendances forcées
+
+Le bloc `overrides` de `package.json` impose des versions corrigées à quatre
+dépendances transitives. Elles ne remontent pas d'elles-mêmes : `dotprompt`
+reste figé et entraîne un `handlebars` vulnérable jusque dans la dernière
+version de Genkit, et le reste vient de la chaîne Firebase que Genkit
+réintroduit pour l'assistant de rédaction.
+
+| Paquet | Vulnérabilité corrigée | Amené par |
+| --- | --- | --- |
+| `handlebars` | injection de code via templates partiels | `genkit → dotprompt` |
+| `websocket-driver` | contournement des limites de ressources | `genkit → firebase` |
+| `fast-xml-parser` | expansion d'entités et dépassement de pile | `genkit → firebase-admin` |
+| `protobufjs` | exécution de code arbitraire | `genkit-cli` (développement) |
+
+Ces contraintes sont à réexaminer à chaque montée de Genkit : elles deviendront
+inutiles le jour où l'amont livrera les versions corrigées.
+
 ## Modèle de sécurité
 
 L'authentification repose sur NextAuth (mots de passe hachés en bcrypt dans la
@@ -139,6 +157,18 @@ Garanties portées par la base, et non par le code applicatif :
 - **Commandes abandonnées** — `expire_stale_orders` clôt les commandes restées
   en attente au-delà de 24 h. Le statut `EXPIRED` reste réversible : un
   règlement confirmé tardivement par Paystack crédite quand même les votes.
+
+## Événements sans vote
+
+Le vote est facultatif. Un événement peut se limiter à une diffusion en direct :
+la fenêtre de scrutin devient alors inutile, aucun candidat n'est attendu, et
+les packs de votes ne sont pas demandés. La contrainte `event_offers_something`
+impose seulement qu'un événement porte l'un des deux — vote ou diffusion.
+
+Ces événements apparaissent sur `/live` mais **pas** dans le catalogue des
+concours : on ne propose pas de voter là où il n'y a rien à voter. Le refus est
+également porté par la base — `cast_free_vote` lève `VOTING_DISABLED` — de sorte
+qu'aucune voie d'appel ne peut enregistrer un vote sur une retransmission.
 
 ## Entretien périodique
 

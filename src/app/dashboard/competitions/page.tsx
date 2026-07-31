@@ -82,13 +82,18 @@ export default async function DashboardCompetitionsPage() {
                       <VoteIcon className="h-4 w-4" />
                       {formatVotes(competition.stats?.totalVotes ?? 0)} votes
                     </span>
-                    <span className="flex items-center gap-1.5">
-                      <Users className="h-4 w-4" />
-                      {competition.stats?.candidatesCount ?? 0} candidats
-                    </span>
+                    {competition.votingEnabled && (
+                      <span className="flex items-center gap-1.5">
+                        <Users className="h-4 w-4" />
+                        {competition.stats?.candidatesCount ?? 0} candidats
+                      </span>
+                    )}
                     <span>
-                      Clôture le{' '}
-                      {new Date(competition.votingEndsAt).toLocaleDateString('fr-FR')}
+                      {competition.votingEndsAt
+                        ? `Clôture le ${new Date(
+                            competition.votingEndsAt
+                          ).toLocaleDateString('fr-FR')}`
+                        : 'Diffusion sans vote'}
                     </span>
                   </div>
                 </div>

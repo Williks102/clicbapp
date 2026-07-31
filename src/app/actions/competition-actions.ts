@@ -30,13 +30,14 @@ const competitionSchema = z
     category: z.string().min(1, 'La catégorie est requise.'),
     description: z.string().min(10, 'La description est trop courte.'),
     coverImage: z.string().optional(),
-    votingStartsAt: z.string().min(1, "La date d'ouverture des votes est requise."),
-    votingEndsAt: z.string().min(1, 'La date de clôture des votes est requise.'),
+    votingEnabled: z.boolean().default(true),
+    votingStartsAt: z.string().default(''),
+    votingEndsAt: z.string().default(''),
     status: z
       .enum(['draft', 'published', 'voting', 'closed', 'finished'])
       .default('draft'),
     hideResults: z.boolean().default(false),
-    votePacks: z.array(votePackSchema).min(1, 'Au moins un pack de votes est requis.'),
+    votePacks: z.array(votePackSchema).default([]),
     freeVoteEnabled: z.boolean().default(true),
     freeVoteCooldownHours: z.coerce.number().int().min(1).max(720).default(24),
     liveEnabled: z.boolean().default(false),
@@ -51,13 +52,52 @@ const competitionSchema = z
     liveChatEnabled: z.boolean().default(true),
     liveReplayUrl: z.string().optional(),
   })
-  .refine(
-    (data) => new Date(data.votingEndsAt).getTime() > new Date(data.votingStartsAt).getTime(),
-    {
-      message: 'La clôture des votes doit être postérieure à leur ouverture.',
-      path: ['votingEndsAt'],
+  /*
+   * Le vote est facultatif : un événement peut se limiter à une diffusion.
+   * Ces règles ne s'appliquent donc qu'aux événements qui organisent un
+   * scrutin.
+   */
+  .superRefine((data, ctx) => {
+    if (!data.votingEnabled) return;
+
+    if (!data.votingStartsAt) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "La date d'ouverture des votes est requise.",
+        path: ['votingStartsAt'],
+      });
     }
-  )
+    if (!data.votingEndsAt) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'La date de clôture des votes est requise.',
+        path: ['votingEndsAt'],
+      });
+    }
+    if (
+      data.votingStartsAt &&
+      data.votingEndsAt &&
+      new Date(data.votingEndsAt).getTime() <= new Date(data.votingStartsAt).getTime()
+    ) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'La clôture des votes doit être postérieure à leur ouverture.',
+        path: ['votingEndsAt'],
+      });
+    }
+    if (data.votePacks.length === 0) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Au moins un pack de votes est requis.',
+        path: ['votePacks'],
+      });
+    }
+  })
+  // Un événement sans vote ni diffusion n'aurait aucun contenu.
+  .refine((data) => data.votingEnabled || data.liveEnabled, {
+    message: 'Activez au moins le vote ou la diffusion en direct.',
+    path: ['liveEnabled'],
+  })
   .refine((data) => !data.liveEnabled || !!data.liveTitle, {
     message: 'Le titre du direct est requis lorsque la diffusion est activée.',
     path: ['liveTitle'],
@@ -127,8 +167,13 @@ function toCompetitionColumns(values: z.infer<typeof competitionSchema>) {
     category: values.category,
     description: values.description,
     status: values.status,
-    voting_starts_at: new Date(values.votingStartsAt).toISOString(),
-    voting_ends_at: new Date(values.votingEndsAt).toISOString(),
+    voting_enabled: values.votingEnabled,
+    voting_starts_at: values.votingEnabled
+      ? new Date(values.votingStartsAt).toISOString()
+      : null,
+    voting_ends_at: values.votingEnabled
+      ? new Date(values.votingEndsAt).toISOString()
+      : null,
     hide_results: values.hideResults,
     free_vote_enabled: values.freeVoteEnabled,
     free_vote_cooldown_hours: values.freeVoteCooldownHours,
@@ -459,10 +504,18 @@ export async function getCompetitionsForOrganizer(
   return (data as unknown as CompetitionRow[]).map(toCompetition);
 }
 
+/**
+ * Catalogue des concours.
+ *
+ * Les événements de diffusion pure en sont exclus : ils n'ont ni candidats ni
+ * classement, et les proposer ici inviterait à voter là où il n'y a rien à
+ * voter. Ils sont listés sur la page des diffusions.
+ */
 export async function getPublicCompetitions(): Promise<Competition[]> {
   const { data, error } = await getSupabaseAdmin()
     .from('competitions')
     .select(COMPETITION_COLUMNS)
+    .eq('voting_enabled', true)
     .in('status', [...PUBLIC_COMPETITION_STATUSES])
     .order('created_at', { ascending: false });
 

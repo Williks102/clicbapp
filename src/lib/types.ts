@@ -58,10 +58,15 @@ export type Competition = {
   organizerId: string;
   organizerName?: string;
   status: CompetitionStatus;
-  /** Ouverture des votes (ISO). */
-  votingStartsAt: string;
-  /** Fermeture des votes (ISO). */
-  votingEndsAt: string;
+  /**
+   * Un événement peut se limiter à une diffusion. Quand le vote est désactivé,
+   * la fenêtre de scrutin est absente et aucun candidat n'est attendu.
+   */
+  votingEnabled: boolean;
+  /** Ouverture des votes (ISO). Absente si le vote est désactivé. */
+  votingStartsAt?: string;
+  /** Fermeture des votes (ISO). Absente si le vote est désactivé. */
+  votingEndsAt?: string;
   votePacks: VotePack[];
   freeVote: FreeVoteConfig;
   live: LiveConfig;

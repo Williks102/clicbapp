@@ -27,6 +27,8 @@ finale en direct, avec classement temps réel et chat modéré.
 
 - Création et cycle de vie du concours (brouillon → publié → votes ouverts →
   clôturé → terminé).
+- **Diffusion seule** : un événement peut être retransmis sans scrutin. Il
+  figure alors sur la page des diffusions, hors du catalogue des concours.
 - Gestion des candidats : dossard unique, photo, présentation, élimination.
 - Configuration des packs de votes et du vote gratuit.
 - Régie du direct : lancement/arrêt de l'antenne, changement de flux à chaud,

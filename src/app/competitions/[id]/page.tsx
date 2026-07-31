@@ -92,19 +92,23 @@ export default async function CompetitionPage({ params }: PageProps) {
               <VoteIcon className="h-4 w-4 text-primary" />
               {formatVotes(totalVotes)} votes
             </span>
-            <span className="flex items-center gap-1.5">
-              <Users className="h-4 w-4" />
-              {candidates.length} candidats
-            </span>
-            <span className="flex items-center gap-1.5">
-              <CalendarClock className="h-4 w-4" />
-              Clôture le{' '}
-              {new Date(competition.votingEndsAt).toLocaleDateString('fr-FR', {
-                day: 'numeric',
-                month: 'long',
-                year: 'numeric',
-              })}
-            </span>
+            {competition.votingEnabled && (
+              <span className="flex items-center gap-1.5">
+                <Users className="h-4 w-4" />
+                {candidates.length} candidats
+              </span>
+            )}
+            {competition.votingEndsAt && (
+              <span className="flex items-center gap-1.5">
+                <CalendarClock className="h-4 w-4" />
+                Clôture le{' '}
+                {new Date(competition.votingEndsAt).toLocaleDateString('fr-FR', {
+                  day: 'numeric',
+                  month: 'long',
+                  year: 'numeric',
+                })}
+              </span>
+            )}
             {competition.organizerName && (
               <span>Organisé par {competition.organizerName}</span>
             )}
@@ -176,6 +180,7 @@ export default async function CompetitionPage({ params }: PageProps) {
             </Card>
 
             {/* ---------- Candidats ---------- */}
+            {competition.votingEnabled && (
             <div id="candidats" className="scroll-mt-20">
               <div className="mb-4 flex items-center justify-between">
                 <h2 className="font-headline text-2xl font-bold">
@@ -208,20 +213,35 @@ export default async function CompetitionPage({ params }: PageProps) {
                 </div>
               )}
             </div>
+            )}
           </div>
 
           {/* ---------- Colonne latérale ---------- */}
           <aside className="space-y-6">
-            {votingOpen ? (
+            {!competition.votingEnabled ? (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base">Événement en diffusion</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-muted-foreground">
+                    Cet événement est retransmis en direct. Il ne comporte pas de
+                    vote.
+                  </p>
+                </CardContent>
+              </Card>
+            ) : votingOpen ? (
               <Card className="border-primary/30 bg-primary/5">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-base">Les votes sont ouverts</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <Countdown
-                    target={competition.votingEndsAt}
-                    label="Fin des votes dans"
-                  />
+                  {competition.votingEndsAt && (
+                    <Countdown
+                      target={competition.votingEndsAt}
+                      label="Fin des votes dans"
+                    />
+                  )}
                   {competition.freeVote?.enabled && (
                     <p className="flex items-start gap-2 text-sm text-muted-foreground">
                       <Gift className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -250,7 +270,7 @@ export default async function CompetitionPage({ params }: PageProps) {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {competition.status === 'published' ? (
+                  {competition.status === 'published' && competition.votingStartsAt ? (
                     <Countdown
                       target={competition.votingStartsAt}
                       label="Ouverture des votes dans"
