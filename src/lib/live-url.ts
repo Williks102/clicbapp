@@ -22,6 +22,7 @@ const ALLOWED_HOSTS: Record<Exclude<LiveProvider, 'hls'>, readonly string[]> = {
   youtube: ['youtube.com', 'www.youtube.com', 'm.youtube.com', 'youtu.be', 'www.youtube-nocookie.com'],
   facebook: ['facebook.com', 'www.facebook.com', 'web.facebook.com', 'fb.watch'],
   vimeo: ['vimeo.com', 'player.vimeo.com'],
+  tiktok: ['tiktok.com', 'www.tiktok.com', 'm.tiktok.com'],
   // Le mode « iframe » sert les diffusions hébergées ailleurs, mais reste borné
   // aux hôtes que la CSP laisse passer.
   iframe: [
@@ -32,6 +33,7 @@ const ALLOWED_HOSTS: Record<Exclude<LiveProvider, 'hls'>, readonly string[]> = {
     'www.facebook.com',
     'web.facebook.com',
     'player.vimeo.com',
+    'www.tiktok.com',
   ],
 };
 
@@ -41,13 +43,14 @@ const PROVIDER_LABELS: Record<LiveProvider, string> = {
   youtube: 'YouTube Live',
   facebook: 'Facebook Live',
   vimeo: 'Vimeo',
+  tiktok: 'TikTok',
   hls: 'Flux HLS',
   iframe: 'Autre',
 };
 
 /** À quelle plateforme cet hôte appartient-il ? */
 function detectProvider(host: string): Exclude<LiveProvider, 'hls' | 'iframe'> | null {
-  for (const candidate of ['youtube', 'facebook', 'vimeo'] as const) {
+  for (const candidate of ['youtube', 'facebook', 'vimeo', 'tiktok'] as const) {
     if (ALLOWED_HOSTS[candidate].includes(host)) return candidate;
   }
   return null;
@@ -122,6 +125,29 @@ export function checkLiveUrl(provider: LiveProvider, rawUrl: string): LiveUrlChe
     };
   }
 
+  /*
+   * TikTok n'expose pas d'iframe pour les directs : son lecteur intégré ne
+   * sert que les publications. Une adresse `/live` serait acceptée puis
+   * afficherait un cadre vide — autant le dire à la saisie.
+   */
+  if (provider === 'tiktok') {
+    if (/\/live\/?($|\?)/.test(parsed.pathname + parsed.search)) {
+      return {
+        ok: false,
+        error:
+          "TikTok ne permet pas d'intégrer un direct sur un autre site. Diffusez la vidéo TikTok une fois publiée, ou utilisez un flux HLS pour le direct.",
+      };
+    }
+    if (!extractTikTokId(url)) {
+      return {
+        ok: false,
+        error:
+          "Aucun identifiant de publication TikTok n'a été trouvé. L'adresse doit ressembler à https://www.tiktok.com/@compte/video/1234567890.",
+      };
+    }
+    return { ok: true };
+  }
+
   if (provider === 'vimeo' && !/vimeo\.com\/(?:video\/)?\d+/.test(url)) {
     return {
       ok: false,
@@ -130,6 +156,11 @@ export function checkLiveUrl(provider: LiveProvider, rawUrl: string): LiveUrlChe
   }
 
   return { ok: true };
+}
+
+/** Identifiant numérique d'une publication TikTok. */
+export function extractTikTokId(url: string): string | null {
+  return url.match(/tiktok\.com\/(?:@[\w.-]+\/)?(?:video|player\/v1)\/(\d{6,})/)?.[1] ?? null;
 }
 
 /** Reprend les formes d'URL reconnues par `resolveEmbedUrl`. */

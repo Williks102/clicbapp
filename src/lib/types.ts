@@ -23,7 +23,13 @@ export type FreeVoteConfig = {
   cooldownHours: number; // délai avant de pouvoir revoter gratuitement
 };
 
-export type LiveProvider = 'youtube' | 'facebook' | 'vimeo' | 'hls' | 'iframe';
+export type LiveProvider =
+  | 'youtube'
+  | 'facebook'
+  | 'vimeo'
+  | 'tiktok'
+  | 'hls'
+  | 'iframe';
 
 /**
  * Configuration de la diffusion en direct d'un concours.

@@ -185,6 +185,29 @@ refusés sur un événement sans vote, qui passe de `draft` à `published` puis
 `finished`. La contrainte `live_event_status_is_valid` l'impose en base, et
 `LIVE_EVENT_STATUS_LABELS` fournit les libellés correspondants.
 
+## Plateformes de diffusion
+
+`frame-src` dans `next.config.ts` borne les hôtes embarquables : une adresse
+hors de cette liste est bloquée par le navigateur, sans message pour
+l'organisateur. `checkLiveUrl` la refuse donc à la saisie, en nommant la
+plateforme détectée quand elle ne correspond pas au sélecteur.
+
+| Plateforme | Adresse attendue |
+| --- | --- |
+| YouTube | `watch?v=`, `youtu.be/`, `/live/`, `/embed/` |
+| Facebook | page ou vidéo `facebook.com` |
+| Vimeo | `vimeo.com/<identifiant>` |
+| TikTok | `tiktok.com/@compte/video/<identifiant>` — **publications seulement** |
+| HLS | n'importe quel `https://…/….m3u8` |
+
+TikTok n'expose pas d'iframe pour les directs : son lecteur ne sert que les
+publications. Une adresse `/live` est refusée à la saisie plutôt que d'aboutir
+à un cadre vide le soir de la diffusion.
+
+Ajouter une plateforme suppose trois modifications conjointes : `frame-src`,
+`ALLOWED_HOSTS` dans `src/lib/live-url.ts`, et le format d'intégration dans
+`resolveEmbedUrl`.
+
 ## Entretien périodique
 
 `/api/cron/maintenance` clôt les commandes abandonnées et purge les compteurs

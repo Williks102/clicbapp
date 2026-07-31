@@ -43,7 +43,7 @@ const competitionSchema = z
     liveEnabled: z.boolean().default(false),
     liveTitle: z.string().optional(),
     liveProvider: z
-      .enum(['youtube', 'facebook', 'vimeo', 'hls', 'iframe'])
+      .enum(['youtube', 'facebook', 'vimeo', 'tiktok', 'hls', 'iframe'])
       .default('youtube'),
     liveUrl: z.string().optional(),
     liveScheduledAt: z.string().optional(),

@@ -9,7 +9,7 @@ import type { NextConfig } from 'next';
  *  - Cloudinary : API d'envoi des images et diffusion des visuels. L'envoi se
  *    fait depuis notre propre page, sans iframe ni script tiers ;
  *  - Paystack : page de paiement hébergée, atteinte par redirection ;
- *  - YouTube, Facebook, Vimeo : lecteurs de diffusion embarqués.
+ *  - YouTube, Facebook, Vimeo, TikTok : lecteurs de diffusion embarqués.
  */
 const cspHeader = `
     default-src 'self';
@@ -20,7 +20,7 @@ const cspHeader = `
     media-src 'self' blob: https:;
     connect-src 'self' https://*.supabase.co wss://*.supabase.co https://api.cloudinary.com https://res.cloudinary.com vitals.vercel-insights.com https://vercel.live;
     worker-src 'self' blob:;
-    frame-src 'self' https://checkout.paystack.com https://vercel.live https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://www.facebook.com https://web.facebook.com https://player.vimeo.com;
+    frame-src 'self' https://checkout.paystack.com https://vercel.live https://www.youtube.com https://youtube.com https://www.youtube-nocookie.com https://www.facebook.com https://web.facebook.com https://player.vimeo.com https://www.tiktok.com;
     object-src 'none';
     base-uri 'self';
     form-action 'self' https://checkout.paystack.com;

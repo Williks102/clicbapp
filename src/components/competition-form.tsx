@@ -69,7 +69,7 @@ const formSchema = z
     freeVoteCooldownHours: z.coerce.number().int().min(1).max(720),
     liveEnabled: z.boolean().default(false),
     liveTitle: z.string().optional(),
-    liveProvider: z.enum(['youtube', 'facebook', 'vimeo', 'hls', 'iframe']),
+    liveProvider: z.enum(['youtube', 'facebook', 'vimeo', 'tiktok', 'hls', 'iframe']),
     liveUrl: z.string().optional(),
     liveScheduledAt: z.string().optional(),
     livePaid: z.boolean().default(false),
@@ -830,6 +830,7 @@ export function CompetitionForm({
                             <SelectItem value="youtube">YouTube Live</SelectItem>
                             <SelectItem value="facebook">Facebook Live</SelectItem>
                             <SelectItem value="vimeo">Vimeo</SelectItem>
+                            <SelectItem value="tiktok">TikTok</SelectItem>
                             <SelectItem value="hls">Flux HLS (.m3u8)</SelectItem>
                             <SelectItem value="iframe">Autre lecteur embarqué</SelectItem>
                           </SelectContent>
