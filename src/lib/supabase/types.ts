@@ -151,6 +151,7 @@ export type LiveAccessRow = {
   order_id: string | null;
   price_paid: number;
   purchase_date: string;
+  access_code: string;
 };
 
 export type ChatMessageRow = {

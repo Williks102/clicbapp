@@ -174,6 +174,11 @@ export type LiveAccess = {
   orderId?: string;
   pricePaid: number;
   purchaseDate: string;
+  /**
+   * Référence lisible de l'achat, communiquée à l'acheteur. Elle ne débloque
+   * rien à elle seule : l'accès reste rattaché au compte.
+   */
+  accessCode: string;
 };
 
 // ==================== CHAT LIVE ====================

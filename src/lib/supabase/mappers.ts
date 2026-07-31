@@ -159,6 +159,7 @@ export function toLiveAccess(row: LiveAccessRow): LiveAccess {
     orderId: row.order_id ?? undefined,
     pricePaid: num(row.price_paid),
     purchaseDate: row.purchase_date,
+    accessCode: row.access_code,
   };
 }
 

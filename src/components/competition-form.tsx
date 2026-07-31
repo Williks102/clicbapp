@@ -353,7 +353,7 @@ export function CompetitionForm({
           <CardHeader>
             <CardTitle>{isLiveMode ? "Informations de l'événement" : 'Informations du concours'}</CardTitle>
             <CardDescription>
-              Ces éléments sont affichés sur la page publique du concours.
+              Ces éléments sont affichés sur la page publique de {isLiveMode ? "l'événement" : 'ce concours'}.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -362,7 +362,7 @@ export function CompetitionForm({
               name="title"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Titre du concours</FormLabel>
+                  <FormLabel>{isLiveMode ? "Titre de l'événement" : 'Titre du concours'}</FormLabel>
                   <FormControl>
                     <Input placeholder="Miss Côte d'Ivoire 2026" {...field} />
                   </FormControl>
@@ -451,7 +451,7 @@ export function CompetitionForm({
                   <FormControl>
                     <Textarea
                       rows={6}
-                      placeholder="Présentez le concours, son déroulé et ses enjeux…"
+                      placeholder={isLiveMode ? "Présentez l’événement, son déroulé et ses temps forts…" : "Présentez le concours, son déroulé et ses enjeux…"}
                       {...field}
                     />
                   </FormControl>
@@ -950,7 +950,11 @@ export function CompetitionForm({
         <div className="flex flex-wrap gap-3">
           <Button type="submit" size="lg" disabled={isSubmitting}>
             {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {competition ? 'Enregistrer les modifications' : 'Créer le concours'}
+            {competition
+              ? 'Enregistrer les modifications'
+              : isLiveMode
+                ? 'Créer le direct'
+                : 'Créer le concours'}
           </Button>
           <Button
             type="button"

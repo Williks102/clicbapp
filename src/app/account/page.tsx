@@ -115,6 +115,11 @@ export default async function AccountPage() {
                       {new Date(access.purchaseDate).toLocaleDateString('fr-FR')} ·{' '}
                       {formatFCFA(access.pricePaid)}
                     </p>
+                    {access.accessCode && (
+                      <p className="mt-1 font-mono text-xs tracking-wider text-muted-foreground">
+                        {access.accessCode}
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {competition?.live?.isLive && (

@@ -118,20 +118,27 @@ export default async function LiveCompetitionPage({ params }: PageProps) {
               </CardContent>
             </Card>
 
-            <div className="lg:hidden">
-              <LiveVotePanel competition={competition} votingOpen={votingOpen} />
-            </div>
+            {/* Une retransmission sans scrutin n'a ni candidats ni classement. */}
+            {competition.votingEnabled && (
+              <>
+                <div className="lg:hidden">
+                  <LiveVotePanel competition={competition} votingOpen={votingOpen} />
+                </div>
 
-            <LiveLeaderboard
-              competitionId={competition.id}
-              hideResults={competition.hideResults}
-            />
+                <LiveLeaderboard
+                  competitionId={competition.id}
+                  hideResults={competition.hideResults}
+                />
+              </>
+            )}
           </div>
 
           <aside className="space-y-6">
-            <div className="hidden lg:block">
-              <LiveVotePanel competition={competition} votingOpen={votingOpen} />
-            </div>
+            {competition.votingEnabled && (
+              <div className="hidden lg:block">
+                <LiveVotePanel competition={competition} votingOpen={votingOpen} />
+              </div>
+            )}
 
             {competition.live.chatEnabled && (
               <LiveChat competitionId={competition.id} canModerate={canModerate} />
