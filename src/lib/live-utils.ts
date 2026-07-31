@@ -1,4 +1,5 @@
 import type { Competition, LiveProvider } from '@/lib/types';
+import { extractTikTokId } from '@/lib/live-url';
 
 /**
  * Convertit l'URL saisie par l'organisateur en URL embarquable dans une iframe.
@@ -30,6 +31,15 @@ export function resolveEmbedUrl(
       const id = url.match(/vimeo\.com\/(?:video\/)?(\d+)/)?.[1];
       if (!id) return null;
       return { kind: 'iframe', src: `https://player.vimeo.com/video/${id}?autoplay=1` };
+    }
+    case 'tiktok': {
+      // Lecteur officiel : www.tiktok.com/player/v1/<id>
+      const id = extractTikTokId(url);
+      if (!id) return null;
+      return {
+        kind: 'iframe',
+        src: `https://www.tiktok.com/player/v1/${id}?autoplay=1&description=0&music_info=0`,
+      };
     }
     case 'hls':
       return { kind: 'hls', src: url };

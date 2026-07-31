@@ -46,5 +46,29 @@ console.log('\nMessage d’erreur :');
 const refused = checkLiveUrl('youtube', 'https://exemple.ci/video');
 check('une cause est fournie', refused.ok === false && typeof refused.error === 'string' && refused.error.length > 0);
 
+console.log('\nMessage d’aide quand la plateforme ne correspond pas :');
+const mismatch = checkLiveUrl('youtube', 'https://www.facebook.com/page/videos/12345');
+check('la bonne plateforme est nommée',
+  mismatch.ok === false && /Facebook Live/.test(mismatch.error));
+const custom = checkLiveUrl('youtube', 'https://stream.exemple.ci/live');
+check('le repli HLS est indiqué',
+  custom.ok === false && /HLS/.test(custom.error));
+check('un flux HLS sur un hébergeur quelconque reste accepté',
+  checkLiveUrl('hls', 'https://stream.exemple.ci/live/master.m3u8').ok === true);
+
+console.log('\nTikTok :');
+check('publication acceptée',
+  ok('tiktok', 'https://www.tiktok.com/@compte/video/6718335390845095173'));
+check('lien de direct refusé avec explication', (() => {
+  const r = checkLiveUrl('tiktok', 'https://www.tiktok.com/@compte/live');
+  return r.ok === false && /flux HLS/.test(r.error);
+})());
+check('profil sans publication refusé', ko_('tiktok', 'https://www.tiktok.com/@compte'));
+check('hôte usurpé refusé', ko_('tiktok', 'https://www.tiktok.com.exemple.ci/@c/video/123456'));
+check('lien TikTok sur le mauvais sélecteur oriente vers TikTok', (() => {
+  const r = checkLiveUrl('youtube', 'https://www.tiktok.com/@compte/video/6718335390845095173');
+  return r.ok === false && /TikTok/.test(r.error);
+})());
+
 console.log(ko === 0 ? '\nToutes les vérifications passent.' : `\n${ko} échec(s).`);
 process.exit(ko === 0 ? 0 : 1);

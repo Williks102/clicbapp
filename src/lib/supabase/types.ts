@@ -68,7 +68,7 @@ export type CompetitionRow = {
 
   live_enabled: boolean;
   live_title: string;
-  live_provider: 'youtube' | 'facebook' | 'vimeo' | 'hls' | 'iframe';
+  live_provider: 'youtube' | 'facebook' | 'vimeo' | 'tiktok' | 'hls' | 'iframe';
   live_url: string;
   live_is_live: boolean;
   live_scheduled_at: string | null;

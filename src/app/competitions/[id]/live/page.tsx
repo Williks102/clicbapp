@@ -93,6 +93,18 @@ export default async function LiveCompetitionPage({ params }: PageProps) {
       ) : (
         <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
           <div className="space-y-6">
+            {/*
+              Un accès accordé par le rôle se voit : sans cela, un organisateur
+              qui teste ses propres directs peut croire qu'un accès acheté vaut
+              pour tous les événements.
+            */}
+            {(access.reason === 'organizer' || access.reason === 'admin') && (
+              <div className="rounded-lg border border-dashed bg-muted/40 px-4 py-3 text-sm text-muted-foreground">
+                {access.reason === 'organizer'
+                  ? "Vous voyez ce direct en tant qu'organisateur de l'événement. Le public doit acheter un accès."
+                  : 'Vous voyez ce direct en tant qu’administrateur. Le public doit acheter un accès.'}
+              </div>
+            )}
             <LivePlayer live={competition.live} competitionTitle={competition.title} />
 
             <Card>
