@@ -153,7 +153,12 @@ Garanties portées par la base, et non par le code applicatif :
 - **Paiements** — `confirm_order_payment` est idempotente et revalide le
   montant ; un webhook rejoué ne crédite jamais deux fois, et un montant
   incohérent bascule la commande en `FLAGGED` sans créditer de votes.
-- **Accès aux directs** — `unique (user_id, competition_id)`.
+- **Accès aux directs** — `unique (user_id, competition_id)`. Chaque achat
+  reçoit un code lisible (`LIVE-A3F1B-9C2D0`), affiché sur la confirmation, dans
+  l'e-mail et sur « Mon activité ». C'est une **référence**, pas un secret
+  suffisant : l'accès reste rattaché au compte, et un code qui circule ne
+  débloque rien. Il est tiré de `gen_random_bytes` — un générateur prévisible
+  permettrait d'énumérer les achats d'autrui.
 - **Commandes abandonnées** — `expire_stale_orders` clôt les commandes restées
   en attente au-delà de 24 h. Le statut `EXPIRED` reste réversible : un
   règlement confirmé tardivement par Paystack crédite quand même les votes.

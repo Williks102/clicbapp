@@ -110,7 +110,17 @@ export async function settleOrder(
         if (order.type === 'VOTE_PACK') {
           await sendVoteConfirmationEmail(order);
         } else {
-          await sendLiveAccessEmail(order);
+          // Le code est généré par la base à l'insertion de l'accès.
+          const { data: access } = await supabase
+            .from('live_access')
+            .select('access_code')
+            .eq('order_id', reference)
+            .maybeSingle();
+
+          await sendLiveAccessEmail(
+            order,
+            (access as { access_code?: string } | null)?.access_code
+          );
         }
       } catch (emailError) {
         console.error(`${tag} ⚠️ Envoi de l'e-mail échoué :`, emailError);

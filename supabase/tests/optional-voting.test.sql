@@ -4,6 +4,10 @@
  *   psql -v ON_ERROR_STOP=1 -d clicvote -f supabase/tests/optional-voting.test.sql
  *
  * Chaque échec lève une exception : un retour sans erreur vaut succès.
+ *
+ * À exécuter sur une base fraîchement migrée. Le jeu d'essai utilise des
+ * adresses fixes : un second passage sur la même base échoue sur l'unicité,
+ * ce qui n'indique pas une régression.
  */
 
 \set QUIET on
@@ -175,6 +179,50 @@ begin
                               voting_enabled, live_enabled, live_title, status)
     values ('Direct terminé', 'desc', %L, 'Sport', 'img', false, true, 'Finale', 'finished')
   $f$, v_orga)));
+end;
+$$;
+
+\echo ''
+\echo 'Code d''accès au direct :'
+
+do $$
+declare
+  v_orga uuid := (select id from users limit 1);
+  v_comp uuid;
+  v_user uuid;
+  v_a    text;
+  v_b    text;
+begin
+  insert into competitions (title, description, organizer_id, category, cover_image,
+                            voting_enabled, live_enabled, live_title, live_paid,
+                            live_price, status)
+  values ('Direct payant', 'desc', v_orga, 'Sport', 'img',
+          false, true, 'Finale', true, 2000, 'published')
+  returning id into v_comp;
+
+  insert into users (name, email, password_hash, role)
+  values ('Acheteur', 'acheteur@test.ci', 'x', 'customer') returning id into v_user;
+
+  insert into live_access (user_id, competition_id, price_paid)
+  values (v_user, v_comp, 2000) returning access_code into v_a;
+
+  perform assert('code attribué automatiquement', v_a is not null);
+  perform assert('format LIVE-XXXXX-XXXXX', v_a ~ '^LIVE-[0-9A-F]{5}-[0-9A-F]{5}$');
+
+  -- Deux achats distincts ne peuvent pas partager un code.
+  insert into users (name, email, password_hash, role)
+  values ('Acheteur 2', 'acheteur2@test.ci', 'x', 'customer') returning id into v_user;
+  insert into live_access (user_id, competition_id, price_paid)
+  values (v_user, v_comp, 2000) returning access_code into v_b;
+
+  perform assert('codes distincts entre deux achats', v_a <> v_b);
+  perform assert('unicité imposée en base', fails(format(
+    'update live_access set access_code = %L where access_code = %L', v_a, v_b)));
+
+  perform assert('un compte n''achète pas deux fois le même direct', fails(format($f$
+    insert into live_access (user_id, competition_id, price_paid)
+    values (%L, %L, 2000)
+  $f$, v_user, v_comp)));
 end;
 $$;
 

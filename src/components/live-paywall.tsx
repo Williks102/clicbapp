@@ -114,7 +114,9 @@ export function LivePaywall({ competition, requiresLogin }: LivePaywallProps) {
           </div>
           <CardTitle>{competition.live.title || competition.title}</CardTitle>
           <CardDescription>
-            Accédez à la diffusion intégrale et votez pendant l&apos;émission.
+            {competition.votingEnabled
+              ? "Accédez à la diffusion intégrale et votez pendant l'émission."
+              : 'Accédez à la diffusion intégrale de cet événement.'}
           </CardDescription>
         </CardHeader>
 

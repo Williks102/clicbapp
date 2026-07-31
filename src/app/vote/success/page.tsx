@@ -107,6 +107,11 @@ function VoteSuccessContent() {
           ['Référence', reference],
           ['Montant', formatFCFA(order.amount ?? 0)],
           ['Concours', order.competitionTitle ?? '—'],
+          // Remis uniquement pour un accès au direct : c'est la référence que
+          // l'acheteur conserve, également envoyée par e-mail.
+          ...(order.accessCode
+            ? ([["Code d'accès", order.accessCode]] as Array<[string, string]>)
+            : []),
         ]}
         action={
           isVotePack && order.competitionId && order.candidateId

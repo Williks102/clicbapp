@@ -321,6 +321,8 @@ export async function getOrderStatus(reference: string): Promise<{
   candidateName?: string;
   competitionId?: string;
   competitionTitle?: string;
+  /** Référence de l'accès au direct, remise à l'acheteur. */
+  accessCode?: string;
 }> {
   const supabase = getSupabaseAdmin();
 
@@ -370,10 +372,23 @@ export async function getOrderStatus(reference: string): Promise<{
     | 'competition_title'
   >;
 
+  // Le code n'est lu que pour une commande d'accès réglée : sur une commande
+  // en attente ou échouée, aucun accès n'existe.
+  let accessCode: string | undefined;
+  if (order.type === 'LIVE_ACCESS' && order.status === 'PAID') {
+    const { data: access } = await supabase
+      .from('live_access')
+      .select('access_code')
+      .eq('order_id', reference)
+      .maybeSingle();
+    accessCode = (access as { access_code?: string } | null)?.access_code;
+  }
+
   return {
     found: true,
     status: order.status,
     type: order.type,
+    accessCode,
     amount: Number(order.amount),
     votes: order.votes ?? undefined,
     candidateId: order.candidate_id ?? undefined,

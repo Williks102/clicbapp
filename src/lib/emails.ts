@@ -92,7 +92,7 @@ export async function sendVoteConfirmationEmail(order: Order) {
 }
 
 /** Confirmation d'achat d'un accès au direct. */
-export async function sendLiveAccessEmail(order: Order) {
+export async function sendLiveAccessEmail(order: Order, accessCode?: string) {
   if (!order.customerEmail) return;
 
   const liveUrl = `${baseUrl()}/competitions/${order.competitionId}/live`;
@@ -105,12 +105,21 @@ export async function sendLiveAccessEmail(order: Order) {
       ${row('Montant payé', formatFCFA(order.amount))}
       ${row('Référence', order.id)}
     </table>
+    ${
+      accessCode
+        ? `<div style="margin:20px 0;padding:16px;border:1px dashed #ff9f1c;border-radius:12px;text-align:center;background:#fff8f0;">
+             <div style="font-size:12px;color:#6b7280;text-transform:uppercase;letter-spacing:1px;">Code d'accès</div>
+             <div style="font-family:monospace;font-size:22px;font-weight:700;letter-spacing:2px;margin-top:6px;">${accessCode}</div>
+             <div style="font-size:12px;color:#6b7280;margin-top:8px;">Conservez-le : c'est la référence de votre achat.</div>
+           </div>`
+        : ''
+    }
     <p style="text-align:center;margin:28px 0;">
       <a href="${liveUrl}" style="background:#ff6b2c;color:#fff;text-decoration:none;padding:14px 24px;border-radius:10px;font-weight:700;display:inline-block;">
         Accéder au direct
       </a>
     </p>
-    <p style="color:#6b7280;font-size:13px;">Connectez-vous avec ce même compte le jour du direct pour y accéder.</p>
+    <p style="color:#6b7280;font-size:13px;">L'accès est rattaché à votre compte : connectez-vous avec cette même adresse le jour du direct.</p>
   `;
 
   await getResend()?.emails.send({
