@@ -227,4 +227,40 @@ end;
 $$;
 
 \echo ''
+\echo 'Un accès acheté ne vaut que pour son événement :'
+
+do $$
+declare
+  v_orga uuid := (select id from users limit 1);
+  v_a    uuid;
+  v_b    uuid;
+  v_user uuid;
+begin
+  insert into competitions (title, description, organizer_id, category, cover_image,
+                            voting_enabled, live_enabled, live_title, live_paid,
+                            live_price, status)
+  values ('Direct A', 'desc', v_orga, 'Sport', 'img', false, true, 'A', true, 2000, 'published')
+  returning id into v_a;
+
+  insert into competitions (title, description, organizer_id, category, cover_image,
+                            voting_enabled, live_enabled, live_title, live_paid,
+                            live_price, status)
+  values ('Direct B', 'desc', v_orga, 'Sport', 'img', false, true, 'B', true, 2000, 'published')
+  returning id into v_b;
+
+  insert into users (name, email, password_hash, role)
+  values ('Spectateur', 'spectateur@test.ci', 'x', 'customer') returning id into v_user;
+
+  insert into live_access (user_id, competition_id, price_paid) values (v_user, v_a, 2000);
+
+  perform assert('accès enregistré sur l''événement acheté',
+    exists (select 1 from live_access where user_id = v_user and competition_id = v_a));
+  perform assert('aucun accès sur l''autre événement',
+    not exists (select 1 from live_access where user_id = v_user and competition_id = v_b));
+  perform assert('un seul accès pour ce compte',
+    (select count(*) from live_access where user_id = v_user) = 1);
+end;
+$$;
+
+\echo ''
 \echo 'Toutes les vérifications passent.'

@@ -122,13 +122,25 @@ export async function updateLiveUrl(
 }
 
 /**
- * L'utilisateur courant peut-il regarder le direct ?
- * Un direct gratuit est ouvert à tous ; un direct payant exige un accès acheté.
+ * Pourquoi l'accès est-il accordé ?
+ *
+ * Rendre la raison explicite évite une confusion coûteuse : un organisateur
+ * qui teste ses propres événements y accède toujours, et pouvait croire qu'un
+ * accès acheté valait pour tous les directs.
+ */
+export type LiveAccessReason = 'free' | 'purchased' | 'organizer' | 'admin' | 'none';
+
+/**
+ * L'utilisateur courant peut-il regarder ce direct ?
+ *
+ * Un direct gratuit est ouvert à tous ; un direct payant exige un accès acheté
+ * **pour cet événement précis**. Un accès n'est jamais transversal.
  */
 export async function checkLiveAccess(competitionId: string): Promise<{
   hasAccess: boolean;
   requiresLogin: boolean;
   price: number;
+  reason: LiveAccessReason;
 }> {
   const supabase = getSupabaseAdmin();
 
@@ -138,7 +150,7 @@ export async function checkLiveAccess(competitionId: string): Promise<{
     .eq('id', competitionId)
     .maybeSingle();
 
-  if (!data) return { hasAccess: false, requiresLogin: false, price: 0 };
+  if (!data) return { hasAccess: false, requiresLogin: false, price: 0, reason: 'none' };
 
   const competition = data as Pick<
     CompetitionRow,
@@ -146,20 +158,26 @@ export async function checkLiveAccess(competitionId: string): Promise<{
   >;
   const price = Number(competition.live_price);
 
+  // Sans prix, la diffusion est en accès libre pour tout le monde.
   if (!competition.live_paid || price <= 0) {
-    return { hasAccess: true, requiresLogin: false, price: 0 };
+    return { hasAccess: true, requiresLogin: false, price: 0, reason: 'free' };
   }
 
   const session = await auth();
   if (!session?.user?.id) {
-    return { hasAccess: false, requiresLogin: true, price };
+    return { hasAccess: false, requiresLogin: true, price, reason: 'none' };
   }
 
-  // L'organisateur et les administrateurs accèdent toujours à la diffusion.
-  if (competition.organizer_id === session.user.id || session.user.role === 'admin') {
-    return { hasAccess: true, requiresLogin: false, price };
+  // L'organisateur accède à ses propres directs, l'administrateur à tous.
+  if (competition.organizer_id === session.user.id) {
+    return { hasAccess: true, requiresLogin: false, price, reason: 'organizer' };
+  }
+  if (session.user.role === 'admin') {
+    return { hasAccess: true, requiresLogin: false, price, reason: 'admin' };
   }
 
+  // L'accès acheté ne vaut que pour cet événement : les deux critères sont
+  // exigés, et la contrainte `live_access_is_granted_once` interdit le doublon.
   const { data: access } = await supabase
     .from('live_access')
     .select('id')
@@ -167,7 +185,12 @@ export async function checkLiveAccess(competitionId: string): Promise<{
     .eq('competition_id', competitionId)
     .maybeSingle();
 
-  return { hasAccess: !!access, requiresLogin: false, price };
+  return {
+    hasAccess: !!access,
+    requiresLogin: false,
+    price,
+    reason: access ? 'purchased' : 'none',
+  };
 }
 
 /** Accès live achetés par l'utilisateur connecté. */
