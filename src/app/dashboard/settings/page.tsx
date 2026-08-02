@@ -48,6 +48,7 @@ export default function SettingsPage() {
   });
   const [emailData, setEmailData] = useState({
     newEmail: '',
+    currentPassword: '',
   });
   const [passwordData, setPasswordData] = useState({
     currentPassword: '',
@@ -103,6 +104,7 @@ export default function SettingsPage() {
     try {
       const result = await updateUserEmail({
         newEmail: emailData.newEmail,
+        currentPassword: emailData.currentPassword,
       });
 
       if (result.success) {
@@ -110,7 +112,7 @@ export default function SettingsPage() {
           title: 'Email mis à jour',
           description: result.message,
         });
-        setEmailData({ newEmail: '' });
+        setEmailData({ newEmail: '', currentPassword: '' });
       } else {
         toast({
           title: 'Erreur',
@@ -287,15 +289,36 @@ export default function SettingsPage() {
               id="new-email"
               type="email"
               value={emailData.newEmail}
-              onChange={(e) => setEmailData({ newEmail: e.target.value })}
+              onChange={(e) =>
+                setEmailData((prev) => ({ ...prev, newEmail: e.target.value }))
+              }
               placeholder="nouvelle@email.com"
             />
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="email-current-password">Mot de passe actuel</Label>
+            <Input
+              id="email-current-password"
+              type="password"
+              autoComplete="current-password"
+              value={emailData.currentPassword}
+              onChange={(e) =>
+                setEmailData((prev) => ({ ...prev, currentPassword: e.target.value }))
+              }
+              placeholder="••••••••"
+            />
+            <p className="text-xs text-muted-foreground">
+              L&apos;adresse e-mail sert à vous connecter : sa modification est
+              confirmée par votre mot de passe.
+            </p>
           </div>
         </CardContent>
         <CardFooter className="border-t px-6 py-4">
           <Button 
             onClick={handleUpdateEmail}
-            disabled={isUpdatingEmail || !emailData.newEmail}
+            disabled={
+              isUpdatingEmail || !emailData.newEmail || !emailData.currentPassword
+            }
           >
             {isUpdatingEmail && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Mettre à jour l'email

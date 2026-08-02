@@ -140,6 +140,36 @@ publiques : concours publiés, candidats, chat, catégories, profils
 d'organisateurs. Toutes les écritures passent par des Server Actions qui
 vérifient session et rôle avec la clé `service_role`.
 
+### Ce que `anon` peut lire, colonne par colonne
+
+La clé `anon` figure en clair dans le code du site : **tout ce qu'elle peut
+lire est public de fait**, quelles que soient les précautions prises côté
+interface. Or RLS filtre les lignes, pas les colonnes — une ligne visible
+l'était donc en entier.
+
+Les privilèges sont désormais accordés colonne par colonne. `live_url`,
+`live_replay_url` et `total_revenue` en sont exclus : sans cela, l'adresse
+d'un flux payant s'obtenait par un simple appel à l'API REST, et le paywall
+ne protégeait rien.
+
+La politique du chat exclut les messages masqués : la modération était
+auparavant appliquée par le seul composant d'affichage, et un message masqué
+restait lisible en interrogeant l'API.
+
+`PUBLIC_COMPETITION_COLUMNS` (navigateur) et `COMPETITION_COLUMNS` (serveur)
+doivent rester alignés sur ces privilèges : réclamer une colonne non accordée
+fait échouer toute la requête.
+
+`supabase/tests/anon-exposure.test.sql` vérifie ces limites.
+
+### Modification de l'adresse e-mail
+
+L'adresse sert d'identifiant de connexion **et** rattache les commandes
+passées sans compte (`getMyOrders` filtre sur `customer_email`). Sa
+modification exige donc le mot de passe : sans cela, une session dérobée
+suffisait à s'approprier le compte, et prendre l'adresse d'un acheteur non
+inscrit donnait accès à ses commandes.
+
 ## Intégrité du scrutin
 
 Garanties portées par la base, et non par le code applicatif :

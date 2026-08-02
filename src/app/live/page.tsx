@@ -13,7 +13,7 @@ import { PageHeader } from '@/components/page-header';
 import { DataError } from '@/components/data-error';
 import { useRealtimeQuery } from '@/hooks/use-realtime-query';
 import { toCompetition } from '@/lib/supabase/mappers';
-import { COMPETITION_COLUMNS, type CompetitionRow } from '@/lib/supabase/types';
+import { PUBLIC_COMPETITION_COLUMNS, type CompetitionRow } from '@/lib/supabase/types';
 import { PUBLIC_COMPETITION_STATUSES } from '@/lib/live-utils';
 import { formatFCFA } from '@/lib/utils';
 import type { Competition } from '@/lib/types';
@@ -26,7 +26,7 @@ export default function LivePage() {
     Competition
   >({
     table: 'competitions',
-    select: COMPETITION_COLUMNS,
+    select: PUBLIC_COMPETITION_COLUMNS,
     inFilter: { column: 'status', values: PUBLIC_COMPETITION_STATUSES },
     orderBy: { column: 'created_at', ascending: false },
     map: toCompetition,

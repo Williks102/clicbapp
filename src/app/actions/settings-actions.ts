@@ -15,8 +15,17 @@ const updateProfileSchema = z.object({
   avatar: z.string().optional(),
 });
 
+/*
+ * L'adresse e-mail est l'identifiant de connexion, et sert aussi à rattacher
+ * les commandes passées sans compte (`getMyOrders` filtre sur
+ * `customer_email`). La changer sans preuve d'identité permettrait à quiconque
+ * disposant d'une session — appareil laissé ouvert, cookie dérobé — de
+ * s'approprier le compte, et de récupérer les commandes d'un tiers en prenant
+ * son adresse.
+ */
 const updateEmailSchema = z.object({
   newEmail: z.string().email('Email invalide'),
+  currentPassword: z.string().min(1, 'Votre mot de passe est requis'),
 });
 
 const updatePasswordSchema = z
@@ -119,6 +128,14 @@ export async function updateUserEmail(data: UpdateEmailData): Promise<ActionResu
     }
 
     const validated = updateEmailSchema.parse(data);
+
+    const isPasswordValid = await verifyPasswordForUser(
+      session.user.id,
+      validated.currentPassword
+    );
+    if (!isPasswordValid) {
+      return { success: false, error: 'Le mot de passe est incorrect' };
+    }
 
     const { error } = await getSupabaseAdmin()
       .from('users')

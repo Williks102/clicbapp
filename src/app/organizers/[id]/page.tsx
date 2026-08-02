@@ -13,7 +13,7 @@ import CompetitionCard from '@/components/competition-card';
 import { useRealtimeQuery, useRealtimeRow } from '@/hooks/use-realtime-query';
 import { toCompetition, toOrganizer } from '@/lib/supabase/mappers';
 import {
-  COMPETITION_COLUMNS,
+  PUBLIC_COMPETITION_COLUMNS,
   type CompetitionRow,
   type OrganizerRow,
 } from '@/lib/supabase/types';
@@ -37,7 +37,7 @@ export default function OrganizerPage() {
     error: competitionsError,
   } = useRealtimeQuery<CompetitionRow, Competition>({
     table: 'competitions',
-    select: COMPETITION_COLUMNS,
+    select: PUBLIC_COMPETITION_COLUMNS,
     match: { organizer_id: organizerId },
     inFilter: { column: 'status', values: PUBLIC_COMPETITION_STATUSES },
     orderBy: { column: 'created_at', ascending: false },
