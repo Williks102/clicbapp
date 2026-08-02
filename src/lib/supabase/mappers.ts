@@ -26,6 +26,7 @@ import type {
   OrganizerRow,
   UserRow,
   VotePackRow,
+  SafeUserRow,
   VoteRow,
 } from '@/lib/supabase/types';
 
@@ -74,19 +75,19 @@ export function toCompetition(row: CompetitionRow): Competition {
       enabled: row.live_enabled,
       title: row.live_title,
       provider: row.live_provider,
-      url: row.live_url,
+      url: row.live_url ?? '',
       isLive: row.live_is_live,
       scheduledAt: row.live_scheduled_at ?? '',
       paid: row.live_paid,
       price: num(row.live_price),
       chatEnabled: row.live_chat_enabled,
-      replayUrl: row.live_replay_url,
+      replayUrl: row.live_replay_url ?? '',
     },
     stats: {
       totalVotes: num(row.total_votes),
       freeVotes: num(row.free_votes),
       paidVotes: num(row.paid_votes),
-      totalRevenue: num(row.total_revenue),
+      totalRevenue: num(row.total_revenue ?? 0),
       candidatesCount: row.candidates_count,
     },
     createdAt: row.created_at,
@@ -176,7 +177,7 @@ export function toChatMessage(row: ChatMessageRow): ChatMessage {
   };
 }
 
-export function toUser(row: UserRow): User {
+export function toUser(row: SafeUserRow): User {
   return {
     id: row.id,
     name: row.name,

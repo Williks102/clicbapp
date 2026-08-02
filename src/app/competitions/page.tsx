@@ -10,7 +10,7 @@ import CompetitionCard from '@/components/competition-card';
 import { DataError } from '@/components/data-error';
 import { useRealtimeQuery } from '@/hooks/use-realtime-query';
 import { toCompetition } from '@/lib/supabase/mappers';
-import { COMPETITION_COLUMNS, type CompetitionRow } from '@/lib/supabase/types';
+import { PUBLIC_COMPETITION_COLUMNS, type CompetitionRow } from '@/lib/supabase/types';
 import {
   COMPETITION_STATUS_LABELS,
   PUBLIC_COMPETITION_STATUSES,
@@ -35,7 +35,7 @@ export default function CompetitionsPage() {
     Competition
   >({
     table: 'competitions',
-    select: COMPETITION_COLUMNS,
+    select: PUBLIC_COMPETITION_COLUMNS,
     inFilter: { column: 'status', values: PUBLIC_COMPETITION_STATUSES },
     orderBy: { column: 'created_at', ascending: false },
     map: toCompetition,

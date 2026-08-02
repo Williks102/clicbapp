@@ -38,6 +38,14 @@ export type CategoryRow = {
   name: string;
 };
 
+/**
+ * Ligne `users` sans son empreinte de mot de passe.
+ *
+ * Le type rend le retrait explicite : une requête qui omet `password_hash`
+ * reste convertible, et une qui le rapatrie inutilement se remarque.
+ */
+export type SafeUserRow = Omit<UserRow, 'password_hash'>;
+
 export type VotePackRow = {
   id: string;
   competition_id: string;
@@ -69,6 +77,7 @@ export type CompetitionRow = {
   live_enabled: boolean;
   live_title: string;
   live_provider: 'youtube' | 'facebook' | 'vimeo' | 'tiktok' | 'hls' | 'iframe';
+  /** Absent des lectures navigateur : non accordé à `anon`. */
   live_url: string;
   live_is_live: boolean;
   live_scheduled_at: string | null;
@@ -174,4 +183,50 @@ export type PlatformSettingsRow = {
 };
 
 /** Colonnes du concours, packs joints inclus. */
+/**
+ * Colonnes lues **côté serveur**, avec la clé `service_role`.
+ * Inclut l'URL du flux et le chiffre d'affaires : ces données ne quittent
+ * jamais le serveur.
+ */
 export const COMPETITION_COLUMNS = '*, vote_packs(*)';
+
+/**
+ * Colonnes lues **par le navigateur**, avec la clé `anon`.
+ *
+ * `live_url`, `live_replay_url` et `total_revenue` en sont absents : demander
+ * `*` livrait l'adresse du flux payant à quiconque ouvrait la page, rendant le
+ * paywall décoratif. La liste doit rester alignée sur les privilèges de
+ * colonne accordés à `anon` (voir `supabase/migrations/…_restrict_anon_reads`) :
+ * réclamer une colonne non accordée fait échouer toute la requête.
+ */
+export const PUBLIC_COMPETITION_COLUMNS = [
+  'id',
+  'organizer_id',
+  'organizer_name',
+  'title',
+  'category',
+  'description',
+  'cover_image',
+  'status',
+  'voting_enabled',
+  'voting_starts_at',
+  'voting_ends_at',
+  'hide_results',
+  'winner_candidate_id',
+  'free_vote_enabled',
+  'free_vote_cooldown_hours',
+  'live_enabled',
+  'live_title',
+  'live_provider',
+  'live_is_live',
+  'live_scheduled_at',
+  'live_paid',
+  'live_price',
+  'live_chat_enabled',
+  'total_votes',
+  'free_votes',
+  'paid_votes',
+  'candidates_count',
+  'created_at',
+  'updated_at',
+].join(', ') + ', vote_packs(*)';

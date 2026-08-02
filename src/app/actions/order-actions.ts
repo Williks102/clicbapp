@@ -9,6 +9,7 @@ import { generateId } from '@/lib/utils';
 import { initializeTransaction } from '@/lib/paystack';
 import { settleOrder } from '@/lib/settle-order';
 import { resolveBaseUrl } from '@/lib/base-url';
+import { consumeRateLimit } from '@/lib/rate-limit';
 import type { Order, PaymentInitResult } from '@/lib/types';
 
 /** URL publique du site, utilisée comme page de retour après paiement. */
@@ -344,14 +345,28 @@ export async function getOrderStatus(reference: string): Promise<{
    */
   if ((data as { status: Order['status'] }).status === 'PENDING') {
     try {
-      const outcome = await settleOrder(reference, 'callback');
-      if (outcome === 'paid' || outcome === 'already_processed') {
-        const { data: refreshed } = await supabase
-          .from('orders')
-          .select(columns)
-          .eq('id', reference)
-          .maybeSingle();
-        if (refreshed) data = refreshed;
+      /*
+       * Ce point d'entrée est public : la référence suffit à le déclencher, et
+       * chaque appel interroge Paystack. Sans borne, une référence connue
+       * permettrait de marteler leur API depuis n'importe où. Un rapprochement
+       * par minute et par commande suffit largement — le webhook reste la voie
+       * normale, celle-ci n'est qu'un filet.
+       */
+      const throttle = await consumeRateLimit(`settle:${reference}`, {
+        max: 1,
+        windowSeconds: 60,
+      });
+
+      if (throttle.allowed) {
+        const outcome = await settleOrder(reference, 'callback');
+        if (outcome === 'paid' || outcome === 'already_processed') {
+          const { data: refreshed } = await supabase
+            .from('orders')
+            .select(columns)
+            .eq('id', reference)
+            .maybeSingle();
+          if (refreshed) data = refreshed;
+        }
       }
     } catch (error) {
       // Un rapprochement en échec laisse la commande en attente : le webhook
