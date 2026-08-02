@@ -38,6 +38,14 @@ export type CategoryRow = {
   name: string;
 };
 
+/**
+ * Ligne `users` sans son empreinte de mot de passe.
+ *
+ * Le type rend le retrait explicite : une requête qui omet `password_hash`
+ * reste convertible, et une qui le rapatrie inutilement se remarque.
+ */
+export type SafeUserRow = Omit<UserRow, 'password_hash'>;
+
 export type VotePackRow = {
   id: string;
   competition_id: string;

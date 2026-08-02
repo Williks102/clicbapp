@@ -131,4 +131,35 @@ end;
 $$;
 
 \echo ''
+\echo 'Le bannissement du chat est local à la diffusion :'
+
+do $$
+declare
+  v_orga uuid := (select id from users where email = 'orga@test.ci');
+  v_a    uuid := (select id from competitions where title = 'Direct payant');
+  v_b    uuid;
+  v_user uuid;
+begin
+  insert into competitions (title, description, organizer_id, category, cover_image,
+                            voting_enabled, live_enabled, live_title, status)
+  values ('Autre direct', 'desc', v_orga, 'Sport', 'img', false, true, 'B', 'published')
+  returning id into v_b;
+
+  insert into users (name, email, password_hash, role)
+  values ('Spectateur', 'spec@test.ci', 'x', 'customer') returning id into v_user;
+
+  insert into chat_bans (user_id, competition_id, banned_by) values (v_user, v_a, v_orga);
+
+  perform assert('banni sur la diffusion visée',
+    exists (select 1 from chat_bans where user_id = v_user and competition_id = v_a));
+  perform assert('non banni sur les autres diffusions',
+    not exists (select 1 from chat_bans where user_id = v_user and competition_id = v_b));
+  perform assert('aucun bannissement global induit',
+    (select not chat_banned from users where id = v_user));
+  perform assert('liste des bannis non lisible par anon',
+    anon_denied('select * from chat_bans'));
+end;
+$$;
+
+\echo ''
 \echo 'Toutes les vérifications passent.'

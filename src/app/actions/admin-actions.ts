@@ -5,7 +5,11 @@ import { checkCredentials } from '@/lib/paystack';
 import { resolveBaseUrl } from '@/lib/base-url';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
 import { toCompetition, toUser } from '@/lib/supabase/mappers';
-import { COMPETITION_COLUMNS, type CompetitionRow, type UserRow } from '@/lib/supabase/types';
+import {
+  COMPETITION_COLUMNS,
+  type CompetitionRow,
+  type SafeUserRow,
+} from '@/lib/supabase/types';
 import type { Competition, User } from '@/lib/types';
 
 async function ensureAdmin() {
@@ -43,14 +47,22 @@ export async function getAllUsers(): Promise<User[]> {
   try {
     await ensureAdmin();
 
+    /*
+     * Colonnes explicites plutôt que `*` : rapatrier `password_hash` pour
+     * afficher une liste d'utilisateurs n'apporte rien et l'expose au moindre
+     * accident de journalisation ou de sérialisation.
+     */
     const { data, error } = await getSupabaseAdmin()
       .from('users')
-      .select('*')
+      .select(
+        'id, name, email, role, avatar, bio, phone, disabled, deleted, deleted_at, ' +
+          'chat_banned, notification_preferences, created_at, updated_at'
+      )
       .order('created_at', { ascending: false });
 
     if (error) throw new Error(error.message);
 
-    return (data as UserRow[]).map(toUser);
+    return (data as unknown as SafeUserRow[]).map(toUser);
   } catch (error) {
     console.error('[ADMIN USERS] ❌', error);
     if (error instanceof Error && error.message.includes('Accès non autorisé')) {

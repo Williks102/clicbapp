@@ -26,6 +26,7 @@ import type {
   OrganizerRow,
   UserRow,
   VotePackRow,
+  SafeUserRow,
   VoteRow,
 } from '@/lib/supabase/types';
 
@@ -176,7 +177,7 @@ export function toChatMessage(row: ChatMessageRow): ChatMessage {
   };
 }
 
-export function toUser(row: UserRow): User {
+export function toUser(row: SafeUserRow): User {
   return {
     id: row.id,
     name: row.name,
