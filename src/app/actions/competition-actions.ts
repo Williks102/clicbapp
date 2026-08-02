@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { UserFacingError, userMessage } from '@/lib/errors';
 import { checkLiveUrl } from '@/lib/live-url';
 import { toCandidate, toCompetition } from '@/lib/supabase/mappers';
 import {
@@ -127,10 +128,10 @@ export type CompetitionFormValues = z.input<typeof competitionSchema>;
 async function requireOrganizer() {
   const session = await auth();
   if (!session?.user?.id) {
-    throw new Error('Vous devez être connecté.');
+    throw new UserFacingError('Vous devez être connecté.');
   }
   if (session.user.role !== 'organizer' && session.user.role !== 'admin') {
-    throw new Error('Seuls les organisateurs peuvent gérer des concours.');
+    throw new UserFacingError('Seuls les organisateurs peuvent gérer des concours.');
   }
   return session.user;
 }
@@ -146,7 +147,7 @@ async function requireCompetitionAccess(competitionId: string) {
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  if (!data) throw new Error('Concours introuvable.');
+  if (!data) throw new UserFacingError('Concours introuvable.');
 
   const competition = data as Pick<
     CompetitionRow,
@@ -154,7 +155,7 @@ async function requireCompetitionAccess(competitionId: string) {
   >;
 
   if (competition.organizer_id !== user.id && user.role !== 'admin') {
-    throw new Error("Vous n'êtes pas autorisé à modifier ce concours.");
+    throw new UserFacingError("Vous n'êtes pas autorisé à modifier ce concours.");
   }
 
   return { user, competition };
@@ -253,7 +254,7 @@ export async function createCompetition(
     console.error('[CREATE COMPETITION] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }
@@ -307,7 +308,7 @@ export async function updateCompetition(
     console.error('[UPDATE COMPETITION] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }
@@ -334,7 +335,7 @@ export async function setCompetitionStatus(
     console.error('[SET COMPETITION STATUS] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }
@@ -375,7 +376,7 @@ export async function declareWinner(
     console.error('[DECLARE WINNER] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }
@@ -402,7 +403,7 @@ export async function deleteCompetition(competitionId: string): Promise<ActionRe
     console.error('[DELETE COMPETITION] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }

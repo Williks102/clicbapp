@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { auth } from '@/auth';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { userMessage } from '@/lib/errors';
 import { toOrder } from '@/lib/supabase/mappers';
 import type { CandidateRow, CompetitionRow, OrderRow, VotePackRow } from '@/lib/supabase/types';
 import { generateId } from '@/lib/utils';
@@ -167,7 +168,7 @@ export async function initializeVotePackOrder(
     console.error('[INIT VOTE ORDER] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }
@@ -277,7 +278,7 @@ export async function initializeLiveAccessOrder(
     console.error('[INIT LIVE ORDER] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }

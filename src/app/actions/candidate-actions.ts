@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { UserFacingError, userMessage } from '@/lib/errors';
 import { toCandidate } from '@/lib/supabase/mappers';
 import type { CandidateRow, CompetitionRow } from '@/lib/supabase/types';
 import type { ActionResult, Candidate } from '@/lib/types';
@@ -21,7 +22,7 @@ export type CandidateFormValues = z.input<typeof candidateSchema>;
 async function requireCompetitionAccess(competitionId: string) {
   const session = await auth();
   if (!session?.user?.id) {
-    throw new Error('Vous devez être connecté.');
+    throw new UserFacingError('Vous devez être connecté.');
   }
 
   const { data, error } = await getSupabaseAdmin()
@@ -31,11 +32,11 @@ async function requireCompetitionAccess(competitionId: string) {
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  if (!data) throw new Error('Concours introuvable.');
+  if (!data) throw new UserFacingError('Concours introuvable.');
 
   const competition = data as Pick<CompetitionRow, 'id' | 'organizer_id'>;
   if (competition.organizer_id !== session.user.id && session.user.role !== 'admin') {
-    throw new Error("Vous n'êtes pas autorisé à gérer ce concours.");
+    throw new UserFacingError("Vous n'êtes pas autorisé à gérer ce concours.");
   }
 
   return { user: session.user, competition };
@@ -104,7 +105,7 @@ export async function createCandidate(
     console.error('[CREATE CANDIDATE] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }
@@ -164,7 +165,7 @@ export async function updateCandidate(
     console.error('[UPDATE CANDIDATE] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }
@@ -205,7 +206,7 @@ export async function setCandidateEliminated(
     console.error('[SET CANDIDATE ELIMINATED] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }
@@ -247,7 +248,7 @@ export async function deleteCandidate(candidateId: string): Promise<ActionResult
     console.error('[DELETE CANDIDATE] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }

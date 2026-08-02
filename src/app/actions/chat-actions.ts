@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import { auth } from '@/auth';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { UserFacingError, userMessage } from '@/lib/errors';
 import type { CompetitionRow, UserRow } from '@/lib/supabase/types';
 import { consumeRateLimit } from '@/lib/rate-limit';
 import type { ActionResult } from '@/lib/types';
@@ -99,7 +100,7 @@ export async function sendChatMessage(
     console.error('[SEND CHAT MESSAGE] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }
@@ -107,7 +108,7 @@ export async function sendChatMessage(
 async function requireModerator(competitionId: string) {
   const session = await auth();
   if (!session?.user?.id) {
-    throw new Error('Vous devez être connecté.');
+    throw new UserFacingError('Vous devez être connecté.');
   }
 
   const { data, error } = await getSupabaseAdmin()
@@ -117,11 +118,11 @@ async function requireModerator(competitionId: string) {
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  if (!data) throw new Error('Concours introuvable.');
+  if (!data) throw new UserFacingError('Concours introuvable.');
 
   const competition = data as Pick<CompetitionRow, 'id' | 'organizer_id'>;
   if (competition.organizer_id !== session.user.id && session.user.role !== 'admin') {
-    throw new Error("Vous n'êtes pas modérateur de ce direct.");
+    throw new UserFacingError("Vous n'êtes pas modérateur de ce direct.");
   }
 
   return session.user;
@@ -148,7 +149,7 @@ export async function hideChatMessage(
     console.error('[HIDE CHAT MESSAGE] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }
@@ -199,7 +200,7 @@ export async function banUserFromChat(
     console.error('[BAN USER FROM CHAT] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }
@@ -231,7 +232,7 @@ export async function unbanUserFromChat(
     console.error('[UNBAN USER FROM CHAT] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }
@@ -262,7 +263,7 @@ export async function setPlatformChatBan(
     console.error('[PLATFORM CHAT BAN] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }
@@ -284,7 +285,7 @@ export async function clearChat(competitionId: string): Promise<ActionResult> {
     console.error('[CLEAR CHAT] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }

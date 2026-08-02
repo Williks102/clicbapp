@@ -3,6 +3,7 @@
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { UserFacingError, userMessage } from '@/lib/errors';
 import { toCompetition, toLiveAccess } from '@/lib/supabase/mappers';
 import {
   COMPETITION_COLUMNS,
@@ -16,7 +17,7 @@ import type { ActionResult, Competition, LiveAccess } from '@/lib/types';
 async function requireLiveControl(competitionId: string) {
   const session = await auth();
   if (!session?.user?.id) {
-    throw new Error('Vous devez être connecté.');
+    throw new UserFacingError('Vous devez être connecté.');
   }
 
   const { data, error } = await getSupabaseAdmin()
@@ -26,7 +27,7 @@ async function requireLiveControl(competitionId: string) {
     .maybeSingle();
 
   if (error) throw new Error(error.message);
-  if (!data) throw new Error('Concours introuvable.');
+  if (!data) throw new UserFacingError('Concours introuvable.');
 
   const competition = data as Pick<
     CompetitionRow,
@@ -34,7 +35,7 @@ async function requireLiveControl(competitionId: string) {
   >;
 
   if (competition.organizer_id !== session.user.id && session.user.role !== 'admin') {
-    throw new Error("Vous n'êtes pas autorisé à piloter ce direct.");
+    throw new UserFacingError("Vous n'êtes pas autorisé à piloter ce direct.");
   }
 
   return { user: session.user, competition };
@@ -80,7 +81,7 @@ export async function setLiveStatus(
     console.error('[SET LIVE STATUS] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }
@@ -116,7 +117,7 @@ export async function updateLiveUrl(
     console.error('[UPDATE LIVE URL] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }

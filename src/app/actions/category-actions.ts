@@ -2,6 +2,7 @@
 
 import { auth } from '@/auth';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { UserFacingError } from '@/lib/errors';
 import type { CategoryRow } from '@/lib/supabase/types';
 import type { Category } from '@/lib/types';
 
@@ -26,7 +27,7 @@ export async function getCategories(): Promise<Category[]> {
 async function ensureAdmin() {
   const session = await auth();
   if (session?.user?.role !== 'admin') {
-    throw new Error('Action réservée aux administrateurs.');
+    throw new UserFacingError('Action réservée aux administrateurs.');
   }
 }
 

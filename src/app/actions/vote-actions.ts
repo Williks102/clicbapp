@@ -3,6 +3,7 @@
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { userMessage } from '@/lib/errors';
 import { toVote } from '@/lib/supabase/mappers';
 import type { CompetitionRow, VoteRow } from '@/lib/supabase/types';
 import type { Vote, VoteResult } from '@/lib/types';
@@ -151,7 +152,7 @@ export async function castFreeVote(
     console.error('[CAST FREE VOTE] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur inconnue.',
+      error: userMessage(error, 'Erreur inconnue.'),
     };
   }
 }

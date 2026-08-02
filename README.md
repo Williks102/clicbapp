@@ -84,7 +84,7 @@ d'évaluer les politiques RLS, et l'application ne peut rien lire ni écrire.
 | `SUPABASE_SERVICE_ROLE_KEY` | Clé serveur, contourne RLS — **ne jamais exposer au client** |
 | `AUTH_SECRET` | Secret de signature des sessions NextAuth |
 | `PAYSTACK_SECRET_KEY` | Clé secrète Paystack — une seule variable pour les deux modes : `sk_test_…` en recette, `sk_live_…` en production. **Jamais préfixée `NEXT_PUBLIC_`** |
-| `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` | Nom du cloud Cloudinary — **requis** par le widget d'envoi d'images |
+| `NEXT_PUBLIC_CLOUDINARY_CLOUD_NAME` | Nom du cloud Cloudinary — **requis** par l'envoi d'images |
 | `NEXT_PUBLIC_CLOUDINARY_UPLOAD_PRESET` | Preset d'upload Cloudinary, en mode **unsigned** — obligatoire, l'envoi n'est pas signé côté serveur |
 | `RESEND_API_KEY` | Envoi des e-mails de confirmation |
 | `NEXT_PUBLIC_BASE_URL` | URL publique du site : retour après paiement et liens des e-mails. À défaut, le domaine exposé par Vercel est utilisé |
@@ -161,6 +161,18 @@ doivent rester alignés sur ces privilèges : réclamer une colonne non accordé
 fait échouer toute la requête.
 
 `supabase/tests/anon-exposure.test.sql` vérifie ces limites.
+
+### Messages d'erreur
+
+Les actions renvoyaient `error.message` tel quel. Ce message vient aussi bien
+d'un refus délibéré — « Vous n'êtes pas autorisé à modifier ce concours. » —
+que de PostgreSQL, qui nomme volontiers la contrainte, la colonne ou la
+relation en cause.
+
+`UserFacingError` rend la distinction explicite : seul ce qui est levé sous ce
+type est montré, le reste est journalisé côté serveur et remplacé par un
+message neutre. Les points d'entrée HTTP (`/api/payment/webhook`,
+`/api/cron/maintenance`) ne renvoient plus non plus le détail.
 
 ### Modification de l'adresse e-mail
 

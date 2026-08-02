@@ -69,7 +69,8 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     console.error('[Cron] ❌ Entretien échoué :', error);
-    const message = error instanceof Error ? error.message : 'Internal Server Error';
-    return NextResponse.json({ error: message }, { status: 500 });
+    // Le détail reste dans les journaux : le renvoyer livrerait des noms de
+    // contraintes ou de colonnes PostgreSQL à l'appelant.
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

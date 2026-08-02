@@ -4,6 +4,7 @@ import { auth } from '@/auth';
 import { checkCredentials } from '@/lib/paystack';
 import { resolveBaseUrl } from '@/lib/base-url';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { UserFacingError, userMessage } from '@/lib/errors';
 import { toCompetition, toUser } from '@/lib/supabase/mappers';
 import {
   COMPETITION_COLUMNS,
@@ -15,7 +16,7 @@ import type { Competition, User } from '@/lib/types';
 async function ensureAdmin() {
   const session = await auth();
   if (!session?.user || session.user.role !== 'admin') {
-    throw new Error('Accès non autorisé. Seuls les administrateurs sont permis.');
+    throw new UserFacingError('Accès non autorisé. Seuls les administrateurs sont permis.');
   }
   return session.user;
 }
@@ -35,7 +36,7 @@ export async function getAllCompetitions(): Promise<Competition[]> {
     return (data as unknown as CompetitionRow[]).map(toCompetition);
   } catch (error) {
     console.error('[ADMIN COMPETITIONS] ❌', error);
-    if (error instanceof Error && error.message.includes('Accès non autorisé')) {
+    if (error instanceof UserFacingError) {
       throw error;
     }
     return [];
@@ -65,7 +66,7 @@ export async function getAllUsers(): Promise<User[]> {
     return (data as unknown as SafeUserRow[]).map(toUser);
   } catch (error) {
     console.error('[ADMIN USERS] ❌', error);
-    if (error instanceof Error && error.message.includes('Accès non autorisé')) {
+    if (error instanceof UserFacingError) {
       throw error;
     }
     return [];
@@ -95,7 +96,7 @@ export async function deleteCompetitionAsAdmin(
     console.error('[ADMIN DELETE COMPETITION] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur lors de la suppression',
+      error: userMessage(error, 'Erreur lors de la suppression'),
     };
   }
 }
@@ -120,7 +121,7 @@ export async function updateUserStatus(
     console.error('[ADMIN UPDATE USER] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur lors de la mise à jour',
+      error: userMessage(error, 'Erreur lors de la mise à jour'),
     };
   }
 }

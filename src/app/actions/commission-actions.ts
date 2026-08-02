@@ -3,6 +3,7 @@
 import { auth } from '@/auth';
 import { revalidatePath } from 'next/cache';
 import { getSupabaseAdmin } from '@/lib/supabase/server';
+import { UserFacingError, userMessage } from '@/lib/errors';
 import type { OrderRow, PlatformSettingsRow } from '@/lib/supabase/types';
 
 // ==================== TYPES ====================
@@ -46,7 +47,7 @@ const DEFAULT_SETTINGS: CommissionSettings = {
 async function ensureAdmin() {
   const session = await auth();
   if (!session?.user || session.user.role !== 'admin') {
-    throw new Error('Accès non autorisé. Seuls les administrateurs sont permis.');
+    throw new UserFacingError('Accès non autorisé. Seuls les administrateurs sont permis.');
   }
   return session.user;
 }
@@ -117,7 +118,7 @@ export async function updateCommissionSettings(
     console.error('[UPDATE COMMISSION] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur lors de la mise à jour',
+      error: userMessage(error, 'Erreur lors de la mise à jour'),
     };
   }
 }
@@ -242,7 +243,7 @@ export async function fundOrganizer(
     console.error('[FUND ORGANIZER] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur lors du traitement',
+      error: userMessage(error, 'Erreur lors du traitement'),
     };
   }
 }
@@ -308,7 +309,7 @@ export async function refundTransaction(
     console.error('[REFUND TRANSACTION] ❌', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Erreur lors du remboursement',
+      error: userMessage(error, 'Erreur lors du remboursement'),
     };
   }
 }
